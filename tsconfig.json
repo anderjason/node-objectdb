@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "outDir": "./dist/",
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "target": "es2017",
+    "typeRoots": ["node_modules/@types"]
+  },
+  "exclude": ["src/**/*.test.ts"],
+  "include": ["src/**/*"]
+}
