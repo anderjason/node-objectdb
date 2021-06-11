@@ -86,7 +86,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS entries (
         key text PRIMARY KEY,
-        data TEXT NOT NULL
+        data TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL
       )
     `);
 
@@ -359,22 +361,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const time = Instant.ofNow();
+    const now = Instant.ofNow();
 
     let entry: Entry<T> = this.toOptionalEntryGivenKey(entryKey);
-
-    const tagKeys: string[] = this.props.tagKeysGivenEntryData(entryData);
-    const metricValues = this.props.metricsGivenEntryData(entryData);
 
     if (entry == null) {
       entry = new Entry({
         key: entryKey,
         db: this._db,
-        createdAt: time,
-        updatedAt: time,
+        createdAt: now,
+        updatedAt: now,
       });
     } else {
-      entry.updatedAt = time;
+      entry.updatedAt = now;
     }
 
     entry.data = entryData;

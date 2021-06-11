@@ -54,7 +54,9 @@ class ObjectDb extends skytree_1.Actor {
         db.runQuery(`
       CREATE TABLE IF NOT EXISTS entries (
         key text PRIMARY KEY,
-        data TEXT NOT NULL
+        data TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL
       )
     `);
         db.runQuery(`
@@ -255,20 +257,18 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        const time = time_1.Instant.ofNow();
+        const now = time_1.Instant.ofNow();
         let entry = this.toOptionalEntryGivenKey(entryKey);
-        const tagKeys = this.props.tagKeysGivenEntryData(entryData);
-        const metricValues = this.props.metricsGivenEntryData(entryData);
         if (entry == null) {
             entry = new Entry_1.Entry({
                 key: entryKey,
                 db: this._db,
-                createdAt: time,
-                updatedAt: time,
+                createdAt: now,
+                updatedAt: now,
             });
         }
         else {
-            entry.updatedAt = time;
+            entry.updatedAt = now;
         }
         entry.data = entryData;
         entry.save();

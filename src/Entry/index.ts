@@ -1,6 +1,5 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { Instant } from "@anderjason/time";
-import { PortableEntry } from "../ObjectDb/Types";
 import { PropsObject } from "../PropsObject";
 import { DbInstance } from "../SqlClient";
 
@@ -27,39 +26,32 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
   }
 
   load(): boolean {
-    const row = this.props.db.toFirstRow("SELECT data FROM entries WHERE key = ?", [this.key]);
+    const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
     if (row == null) {
       return false;
     }
 
-    const portableEntry: PortableEntry = JSON.parse(row.data);
-    this.data = portableEntry.data;
-    this.createdAt = Instant.givenEpochMilliseconds(portableEntry.createdAtMs);
-    this.updatedAt = Instant.givenEpochMilliseconds(portableEntry.updatedAtMs);
+    this.data = JSON.parse(row.data);
+    this.createdAt = Instant.givenEpochMilliseconds(row.createdAt);
+    this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAt);
 
     return true;
   }
 
   save(): void {
-    const data = JSON.stringify(this.toPortableObject());
+    const data = JSON.stringify(this.data);
+
+    const createdAtMs = this.createdAt.toEpochMilliseconds();
+    const updatedAtMs = this.updatedAt.toEpochMilliseconds();
 
     this.props.db.runQuery(
       `
-      INSERT INTO entries (key, data)
-      VALUES(?, ?)
+      INSERT INTO entries (key, data, createdAt, updatedAt)
+      VALUES(?, ?, ?, ?)
       ON CONFLICT(key) 
-      DO UPDATE SET data=?;
+      DO UPDATE SET data=?, createdAt=?, updatedAt=?;
       `,
-      [this.key, data, data]
+      [this.key, data, createdAtMs, updatedAtMs, data, createdAtMs, updatedAtMs]
     );
-  }
-  
-  toPortableObject(): PortableEntry {
-    return {
-      key: this.key,
-      createdAtMs: this.createdAt.toEpochMilliseconds(),
-      updatedAtMs: this.updatedAt.toEpochMilliseconds(),
-      data: this.data,
-    };
   }
 }

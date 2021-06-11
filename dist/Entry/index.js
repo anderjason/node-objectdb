@@ -12,32 +12,25 @@ class Entry extends PropsObject_1.PropsObject {
         this.updatedAt = props.updatedAt || props.createdAt || time_1.Instant.ofNow();
     }
     load() {
-        const row = this.props.db.toFirstRow("SELECT data FROM entries WHERE key = ?", [this.key]);
+        const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
         if (row == null) {
             return false;
         }
-        const portableEntry = JSON.parse(row.data);
-        this.data = portableEntry.data;
-        this.createdAt = time_1.Instant.givenEpochMilliseconds(portableEntry.createdAtMs);
-        this.updatedAt = time_1.Instant.givenEpochMilliseconds(portableEntry.updatedAtMs);
+        this.data = JSON.parse(row.data);
+        this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAt);
+        this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAt);
         return true;
     }
     save() {
-        const data = JSON.stringify(this.toPortableObject());
+        const data = JSON.stringify(this.data);
+        const createdAtMs = this.createdAt.toEpochMilliseconds();
+        const updatedAtMs = this.updatedAt.toEpochMilliseconds();
         this.props.db.runQuery(`
-      INSERT INTO entries (key, data)
-      VALUES(?, ?)
+      INSERT INTO entries (key, data, createdAt, updatedAt)
+      VALUES(?, ?, ?, ?)
       ON CONFLICT(key) 
-      DO UPDATE SET data=?;
-      `, [this.key, data, data]);
-    }
-    toPortableObject() {
-        return {
-            key: this.key,
-            createdAtMs: this.createdAt.toEpochMilliseconds(),
-            updatedAtMs: this.updatedAt.toEpochMilliseconds(),
-            data: this.data,
-        };
+      DO UPDATE SET data=?, createdAt=?, updatedAt=?;
+      `, [this.key, data, createdAtMs, updatedAtMs, data, createdAtMs, updatedAtMs]);
     }
 }
 exports.Entry = Entry;
