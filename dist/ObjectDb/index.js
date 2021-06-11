@@ -189,12 +189,53 @@ class ObjectDb extends skytree_1.Actor {
         this._entryCache.put(entryKey, result);
         return result;
     }
+    rebuildMetadata() {
+        this.toEntryKeys().forEach(entryKey => {
+            const entry = this.toOptionalEntryGivenKey(entryKey);
+            if (entry != null) {
+                this.rebuildMetadataGivenEntry(entry);
+            }
+        });
+    }
+    rebuildMetadataGivenEntry(entry) {
+        entry.tagKeys.forEach(tagKey => {
+            const tag = this.tagGivenTagKey(tagKey);
+            tag.entryKeys.addValue(entry.key);
+        });
+        Object.keys(entry.metricValues).forEach((metricKey) => {
+            const metric = this.metricGivenMetricKey(metricKey);
+            const metricValue = entry.metricValues[metricKey];
+            metric.entryMetricValues.setValue(entry.key, metricValue);
+        });
+    }
     writeEntry(entry) {
         if (entry == null) {
             throw new Error("Entry is required");
         }
         this.writeEntryData(entry.data, entry.key);
         return entry;
+    }
+    tagGivenTagKey(tagKey) {
+        let tag = this._tags.get(tagKey);
+        if (tag == null) {
+            tag = this.addActor(new Tag_1.Tag({
+                tagKey,
+                db: this._db,
+            }));
+            this._tags.set(tagKey, tag);
+        }
+        return tag;
+    }
+    metricGivenMetricKey(metricKey) {
+        let metric = this._metrics.get(metricKey);
+        if (metric == null) {
+            metric = this.addActor(new Metric_1.Metric({
+                metricKey,
+                db: this._db,
+            }));
+            this._metrics.set(metricKey, metric);
+        }
+        return metric;
     }
     writeEntryData(entryData, entryKey) {
         if (entryKey == null) {
@@ -225,30 +266,7 @@ class ObjectDb extends skytree_1.Actor {
         entry.save();
         this._entryCache.put(entryKey, entry);
         this._allEntryKeys.add(entryKey);
-        entry.tagKeys.forEach((tagKey) => {
-            let tag = this._tags.get(tagKey);
-            if (tag == null) {
-                tag = this.addActor(new Tag_1.Tag({
-                    tagKey,
-                    db: this._db,
-                }));
-                this._tags.set(tagKey, tag);
-            }
-            tag.entryKeys.addValue(entryKey);
-        });
-        const metricKeys = Object.keys(entry.metricValues);
-        metricKeys.forEach((metricKey) => {
-            let metric = this._metrics.get(metricKey);
-            if (metric == null) {
-                metric = this.addActor(new Metric_1.Metric({
-                    metricKey,
-                    db: this._db,
-                }));
-                this._metrics.set(metricKey, metric);
-            }
-            const metricValue = entry.metricValues[metricKey];
-            metric.entryMetricValues.setValue(entryKey, metricValue);
-        });
+        this.rebuildMetadataGivenEntry(entry);
         return entry;
     }
     deleteEntryKey(entryKey) {
@@ -261,13 +279,11 @@ class ObjectDb extends skytree_1.Actor {
         if (existingRecord == null) {
             return;
         }
-        const changedMetrics = new Set();
         existingRecord.tagKeys.forEach((tagKey) => {
             const tag = this._tags.get(tagKey);
             tag.entryKeys.removeValue(entryKey);
         });
-        const metricKeys = Object.keys(existingRecord.metricValues);
-        metricKeys.forEach((metricKey) => {
+        Object.keys(existingRecord.metricValues).forEach((metricKey) => {
             const metric = this._metrics.get(metricKey);
             metric.entryMetricValues.removeKey(entryKey);
         });

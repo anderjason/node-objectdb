@@ -36,7 +36,11 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Entry<T> | undefined;
     toEntryGivenKey(entryKey: string): Entry<T>;
     toOptionalEntryGivenKey(entryKey: string): Entry<T> | undefined;
+    rebuildMetadata(): void;
+    rebuildMetadataGivenEntry(entry: Entry<T>): void;
     writeEntry(entry: Entry<T>): Entry<T>;
+    tagGivenTagKey(tagKey: string): Tag;
+    metricGivenMetricKey(metricKey: string): Metric;
     writeEntryData(entryData: T, entryKey?: string): Entry<T>;
     deleteEntryKey(entryKey: string): void;
 }

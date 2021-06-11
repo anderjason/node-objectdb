@@ -273,6 +273,29 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
+  rebuildMetadata(): void {
+    this.toEntryKeys().forEach(entryKey => {
+      const entry = this.toOptionalEntryGivenKey(entryKey);
+      if (entry != null) {
+        this.rebuildMetadataGivenEntry(entry);
+      }
+    });
+  }
+
+  rebuildMetadataGivenEntry(entry: Entry<T>): void {
+    entry.tagKeys.forEach(tagKey => {
+      const tag = this.tagGivenTagKey(tagKey);
+      tag.entryKeys.addValue(entry.key);
+    });
+
+    Object.keys(entry.metricValues).forEach((metricKey) => {
+      const metric = this.metricGivenMetricKey(metricKey);
+
+      const metricValue = entry.metricValues[metricKey];
+      metric.entryMetricValues.setValue(entry.key, metricValue);
+    });
+  }
+
   writeEntry(entry: Entry<T>): Entry<T> {
     if (entry == null) {
       throw new Error("Entry is required");
@@ -280,6 +303,36 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.writeEntryData(entry.data, entry.key);
     return entry;
+  }
+
+  tagGivenTagKey(tagKey: string): Tag {
+    let tag = this._tags.get(tagKey);
+    if (tag == null) {
+      tag = this.addActor(
+        new Tag({
+          tagKey,
+          db: this._db,
+        })
+      );
+      this._tags.set(tagKey, tag);
+    }
+
+    return tag;
+  }
+
+  metricGivenMetricKey(metricKey: string): Metric {
+    let metric = this._metrics.get(metricKey);
+      if (metric == null) {
+        metric = this.addActor(
+          new Metric({
+            metricKey,
+            db: this._db,
+          })
+        );
+        this._metrics.set(metricKey, metric);
+      }
+
+      return metric;
   }
 
   writeEntryData(entryData: T, entryKey?: string): Entry<T> {
@@ -318,39 +371,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._entryCache.put(entryKey, entry);
     this._allEntryKeys.add(entryKey);
 
-    entry.tagKeys.forEach((tagKey) => {
-      let tag = this._tags.get(tagKey);
-      if (tag == null) {
-        tag = this.addActor(
-          new Tag({
-            tagKey,
-            db: this._db,
-          })
-        );
-        this._tags.set(tagKey, tag);
-      }
-
-      tag.entryKeys.addValue(entryKey);
-    });
-
-    const metricKeys = Object.keys(entry.metricValues);
-
-    metricKeys.forEach((metricKey) => {
-      let metric = this._metrics.get(metricKey);
-      if (metric == null) {
-        metric = this.addActor(
-          new Metric({
-            metricKey,
-            db: this._db,
-          })
-        );
-        this._metrics.set(metricKey, metric);
-      }
-
-      const metricValue = entry.metricValues[metricKey];
-      metric.entryMetricValues.setValue(entryKey, metricValue);
-    });
-
+    this.rebuildMetadataGivenEntry(entry);
+    
     return entry;
   }
 
@@ -367,16 +389,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-    const changedMetrics = new Set<Metric>();
-
     existingRecord.tagKeys.forEach((tagKey) => {
       const tag = this._tags.get(tagKey);
 
       tag.entryKeys.removeValue(entryKey);
     });
 
-    const metricKeys = Object.keys(existingRecord.metricValues);
-    metricKeys.forEach((metricKey) => {
+    Object.keys(existingRecord.metricValues).forEach((metricKey) => {
       const metric = this._metrics.get(metricKey);
 
       metric.entryMetricValues.removeKey(entryKey);
