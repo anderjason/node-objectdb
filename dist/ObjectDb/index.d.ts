@@ -1,4 +1,5 @@
 import { Actor } from "skytree";
+import { Instant } from "@anderjason/time";
 import { Metric } from "../Metric";
 import { Tag } from "../Tag";
 import { Entry } from "../Entry";
@@ -42,6 +43,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     writeEntry(entry: Entry<T>): Entry<T>;
     tagGivenTagKey(tagKey: string): Tag;
     metricGivenMetricKey(metricKey: string): Metric;
-    writeEntryData(entryData: T, entryKey?: string): Entry<T>;
+    writeEntryData(entryData: T, entryKey?: string, createdAt?: Instant): Entry<T>;
     deleteEntryKey(entryKey: string): void;
 }

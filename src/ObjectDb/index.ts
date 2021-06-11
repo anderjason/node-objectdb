@@ -318,7 +318,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry is required");
     }
 
-    this.writeEntryData(entry.data, entry.key);
+    this.writeEntryData(entry.data, entry.key, entry.createdAt);
     return entry;
   }
 
@@ -352,7 +352,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return metric;
   }
 
-  writeEntryData(entryData: T, entryKey?: string): Entry<T> {
+  writeEntryData(entryData: T, entryKey?: string, createdAt?: Instant): Entry<T> {
     if (entryKey == null) {
       entryKey = UniqueId.ofRandom().toUUIDString();
     }
@@ -363,18 +363,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const now = Instant.ofNow();
 
-    let entry: Entry<T> = this.toOptionalEntryGivenKey(entryKey);
-
-    if (entry == null) {
-      entry = new Entry({
-        key: entryKey,
-        db: this._db,
-        createdAt: now,
-        updatedAt: now,
-      });
-    } else {
-      entry.updatedAt = now;
-    }
+    const entry = new Entry<T>({
+      key: entryKey,
+      db: this._db,
+      createdAt: createdAt || now,
+      updatedAt: now
+    });
 
     entry.data = entryData;
     entry.save();

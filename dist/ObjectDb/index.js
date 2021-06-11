@@ -225,7 +225,7 @@ class ObjectDb extends skytree_1.Actor {
         if (entry == null) {
             throw new Error("Entry is required");
         }
-        this.writeEntryData(entry.data, entry.key);
+        this.writeEntryData(entry.data, entry.key, entry.createdAt);
         return entry;
     }
     tagGivenTagKey(tagKey) {
@@ -250,7 +250,7 @@ class ObjectDb extends skytree_1.Actor {
         }
         return metric;
     }
-    writeEntryData(entryData, entryKey) {
+    writeEntryData(entryData, entryKey, createdAt) {
         if (entryKey == null) {
             entryKey = node_crypto_1.UniqueId.ofRandom().toUUIDString();
         }
@@ -258,18 +258,12 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("Entry key length must be at least 5 characters");
         }
         const now = time_1.Instant.ofNow();
-        let entry = this.toOptionalEntryGivenKey(entryKey);
-        if (entry == null) {
-            entry = new Entry_1.Entry({
-                key: entryKey,
-                db: this._db,
-                createdAt: now,
-                updatedAt: now,
-            });
-        }
-        else {
-            entry.updatedAt = now;
-        }
+        const entry = new Entry_1.Entry({
+            key: entryKey,
+            db: this._db,
+            createdAt: createdAt || now,
+            updatedAt: now
+        });
         entry.data = entryData;
         entry.save();
         this._entryCache.put(entryKey, entry);
