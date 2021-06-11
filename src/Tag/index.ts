@@ -45,18 +45,13 @@ export class Tag extends Actor<TagProps> {
   onActivate() {
     const { db } = this.props;
 
-    this._insertEntryKeyQuery = db.connection
-      .prepare<[string, string]>("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
+    this._insertEntryKeyQuery = db.prepareCached("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
+    this._deleteEntryKeyQuery = db.prepareCached("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
 
-    this._deleteEntryKeyQuery = db.connection
-      .prepare<[string, string]>("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
-
-    db.connection
-      .prepare("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)")
+    db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)")
       .run(this.key, this.tagPrefix, this.tagValue);
 
-    const rows = db.connection
-      .prepare<[string]>("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
+    const rows = db.prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
       .all(this.key);
 
     this.entryKeys.sync(rows.map((row) => row.entryKey));

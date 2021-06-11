@@ -95,7 +95,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         tagKey TEXT NOT NULL,
         entryKey TEXT NOT NULL,
         FOREIGN KEY(tagKey) REFERENCES tags(key),
-        FOREIGN KEY(entryKey) REFERENCES entries(key)
+        FOREIGN KEY(entryKey) REFERENCES entries(key),
+        UNIQUE(tagKey, entryKey) ON CONFLICT IGNORE
       )
     `);
 

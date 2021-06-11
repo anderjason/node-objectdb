@@ -9,6 +9,7 @@ export interface Sqlite3ActorProps {
 
 export class DbInstance extends Actor<Sqlite3ActorProps> {
   private _db: BetterSqlite3.Database;
+  private _preparedStatements = new Map<string, Statement>();
 
   get connection(): BetterSqlite3.Database {
     return this._db;
@@ -27,12 +28,20 @@ export class DbInstance extends Actor<Sqlite3ActorProps> {
     this._db.prepare;
   }
 
+  prepareCached(sql: string): Statement {
+    if (!this._preparedStatements.has(sql)) {
+      this._preparedStatements.set(sql, this._db.prepare(sql));
+    }
+
+    return this._preparedStatements.get(sql);
+  }
+
   runQuery(sql: string, params: any[] = []): void {
     if (this._db == null) {
       throw new Error("Sql is not activated");
     }
 
-    this._db.prepare(sql).run(params);
+    this.prepareCached(sql).run(params);
   }
 
   runTransaction(fn: () => void): void {
@@ -48,7 +57,7 @@ export class DbInstance extends Actor<Sqlite3ActorProps> {
       throw new Error("Sql is not activated");
     }
 
-    return this._db.prepare(sql).all(params);
+    return this.prepareCached(sql).all(params);
   }
 
   toFirstRow(sql: string, params: any[] = []): any {

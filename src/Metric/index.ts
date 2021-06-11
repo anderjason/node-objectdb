@@ -33,37 +33,42 @@ export class Metric extends Actor<MetricProps> {
   onActivate() {
     const { db } = this.props;
 
-    this._upsertEntryMetricValueQuery = db.connection
-      .prepare<[string, string, number]>(`
+    this._upsertEntryMetricValueQuery = db.prepareCached(`
         INSERT INTO metricValues (metricKey, entryKey, metricValue)
         VALUES (?, ?, ?)
       `);
 
-    this._deleteEntryMetricValueQuery = db.connection
-      .prepare<[string, string]>("DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?");
+    this._deleteEntryMetricValueQuery = db.prepareCached(
+      "DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?"
+    );
 
-    db.connection
-      .prepare("INSERT OR IGNORE INTO metrics (key) VALUES (?)")
+    db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)")
       .run(this.key);
 
-    const rows = db.connection
-      .prepare("SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?")
+    const rows = db
+      .prepareCached(
+        "SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?"
+      )
       .all(this.key);
-  
+
     const values: Dict<number> = {};
-    rows.forEach(row => {
+    rows.forEach((row) => {
       values[row.entryKey] = row.metricValue;
     });
 
     this.entryMetricValues.sync(values);
 
     this.cancelOnDeactivate(
-      this.entryMetricValues.didChangeSteps.subscribe(steps => {
-        steps.forEach(step => {
+      this.entryMetricValues.didChangeSteps.subscribe((steps) => {
+        steps.forEach((step) => {
           switch (step.type) {
             case "add":
             case "update":
-              this._upsertEntryMetricValueQuery.run(this.key, step.key, step.newValue);
+              this._upsertEntryMetricValueQuery.run(
+                this.key,
+                step.key,
+                step.newValue
+              );
               break;
             case "remove":
               this._deleteEntryMetricValueQuery.run(this.key, step.key);
@@ -71,7 +76,7 @@ export class Metric extends Actor<MetricProps> {
             default:
               break;
           }
-        })
+        });
       })
     );
   }

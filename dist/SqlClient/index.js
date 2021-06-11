@@ -8,6 +8,10 @@ const skytree_1 = require("skytree");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const observable_1 = require("@anderjason/observable");
 class DbInstance extends skytree_1.Actor {
+    constructor() {
+        super(...arguments);
+        this._preparedStatements = new Map();
+    }
     get connection() {
         return this._db;
     }
@@ -19,11 +23,17 @@ class DbInstance extends skytree_1.Actor {
         }));
         this._db.prepare;
     }
+    prepareCached(sql) {
+        if (!this._preparedStatements.has(sql)) {
+            this._preparedStatements.set(sql, this._db.prepare(sql));
+        }
+        return this._preparedStatements.get(sql);
+    }
     runQuery(sql, params = []) {
         if (this._db == null) {
             throw new Error("Sql is not activated");
         }
-        this._db.prepare(sql).run(params);
+        this.prepareCached(sql).run(params);
     }
     runTransaction(fn) {
         if (this._db == null) {
@@ -35,7 +45,7 @@ class DbInstance extends skytree_1.Actor {
         if (this._db == null) {
             throw new Error("Sql is not activated");
         }
-        return this._db.prepare(sql).all(params);
+        return this.prepareCached(sql).all(params);
     }
     toFirstRow(sql, params = []) {
         const rows = this.toRows(sql, params);
