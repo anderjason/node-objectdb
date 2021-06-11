@@ -20,8 +20,6 @@ class Entry extends PropsObject_1.PropsObject {
         this.data = portableEntry.data;
         this.createdAt = time_1.Instant.givenEpochMilliseconds(portableEntry.createdAtMs);
         this.updatedAt = time_1.Instant.givenEpochMilliseconds(portableEntry.updatedAtMs);
-        this.tagKeys = portableEntry.tagKeys || [];
-        this.metricValues = portableEntry.metricValues || {};
         return true;
     }
     save() {
@@ -36,8 +34,6 @@ class Entry extends PropsObject_1.PropsObject {
     toPortableObject() {
         return {
             key: this.key,
-            tagKeys: this.tagKeys || [],
-            metricValues: this.metricValues || {},
             createdAtMs: this.createdAt.toEpochMilliseconds(),
             updatedAtMs: this.updatedAt.toEpochMilliseconds(),
             data: this.data,

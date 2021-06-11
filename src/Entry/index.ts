@@ -1,5 +1,4 @@
 import { UniqueId } from "@anderjason/node-crypto";
-import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { PortableEntry } from "../ObjectDb/Types";
 import { PropsObject } from "../PropsObject";
@@ -18,8 +17,6 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
   createdAt: Instant;
   updatedAt: Instant;
   data: T;
-  tagKeys: string[];
-  metricValues: Dict<number>;
   
   constructor(props: EntryProps<T>) {
     super(props);
@@ -39,8 +36,6 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.data = portableEntry.data;
     this.createdAt = Instant.givenEpochMilliseconds(portableEntry.createdAtMs);
     this.updatedAt = Instant.givenEpochMilliseconds(portableEntry.updatedAtMs);
-    this.tagKeys = portableEntry.tagKeys || [];
-    this.metricValues = portableEntry.metricValues || {};
 
     return true;
   }
@@ -62,8 +57,6 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
   toPortableObject(): PortableEntry {
     return {
       key: this.key,
-      tagKeys: this.tagKeys || [],
-      metricValues: this.metricValues || {},
       createdAtMs: this.createdAt.toEpochMilliseconds(),
       updatedAtMs: this.updatedAt.toEpochMilliseconds(),
       data: this.data,

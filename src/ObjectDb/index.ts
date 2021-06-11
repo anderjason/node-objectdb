@@ -273,6 +273,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
+  removeMetadataGivenEntryKey(entryKey: string): void {
+    this._tags.forEach(tag => {
+      tag.entryKeys.removeValue(entryKey);
+    });
+
+    this._metrics.forEach(metric => {
+      metric.entryMetricValues.removeKey(entryKey);
+    })
+  }
+
   rebuildMetadata(): void {
     this.toEntryKeys().forEach(entryKey => {
       const entry = this.toOptionalEntryGivenKey(entryKey);
@@ -283,15 +293,20 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   rebuildMetadataGivenEntry(entry: Entry<T>): void {
-    entry.tagKeys.forEach(tagKey => {
+    this.removeMetadataGivenEntryKey(entry.key);
+
+    const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
+    const metricValues = this.props.metricsGivenEntryData(entry.data);
+
+    tagKeys.forEach(tagKey => {
       const tag = this.tagGivenTagKey(tagKey);
       tag.entryKeys.addValue(entry.key);
     });
 
-    Object.keys(entry.metricValues).forEach((metricKey) => {
+    Object.keys(metricValues).forEach((metricKey) => {
       const metric = this.metricGivenMetricKey(metricKey);
 
-      const metricValue = entry.metricValues[metricKey];
+      const metricValue = metricValues[metricKey];
       metric.entryMetricValues.setValue(entry.key, metricValue);
     });
   }
@@ -362,9 +377,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       entry.updatedAt = time;
     }
 
-    entry.tagKeys = tagKeys;
-    entry.metricValues = metricValues;
-    entry.metricValues.createdAt = entry.createdAt.toEpochMilliseconds();
     entry.data = entryData;
     entry.save();
 
@@ -389,17 +401,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-    existingRecord.tagKeys.forEach((tagKey) => {
-      const tag = this._tags.get(tagKey);
-
-      tag.entryKeys.removeValue(entryKey);
-    });
-
-    Object.keys(existingRecord.metricValues).forEach((metricKey) => {
-      const metric = this._metrics.get(metricKey);
-
-      metric.entryMetricValues.removeKey(entryKey);
-    });
+    this.removeMetadataGivenEntryKey(entryKey);
 
     this._db.runQuery(
       `

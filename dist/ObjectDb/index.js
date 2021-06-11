@@ -189,6 +189,14 @@ class ObjectDb extends skytree_1.Actor {
         this._entryCache.put(entryKey, result);
         return result;
     }
+    removeMetadataGivenEntryKey(entryKey) {
+        this._tags.forEach(tag => {
+            tag.entryKeys.removeValue(entryKey);
+        });
+        this._metrics.forEach(metric => {
+            metric.entryMetricValues.removeKey(entryKey);
+        });
+    }
     rebuildMetadata() {
         this.toEntryKeys().forEach(entryKey => {
             const entry = this.toOptionalEntryGivenKey(entryKey);
@@ -198,13 +206,16 @@ class ObjectDb extends skytree_1.Actor {
         });
     }
     rebuildMetadataGivenEntry(entry) {
-        entry.tagKeys.forEach(tagKey => {
+        this.removeMetadataGivenEntryKey(entry.key);
+        const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
+        const metricValues = this.props.metricsGivenEntryData(entry.data);
+        tagKeys.forEach(tagKey => {
             const tag = this.tagGivenTagKey(tagKey);
             tag.entryKeys.addValue(entry.key);
         });
-        Object.keys(entry.metricValues).forEach((metricKey) => {
+        Object.keys(metricValues).forEach((metricKey) => {
             const metric = this.metricGivenMetricKey(metricKey);
-            const metricValue = entry.metricValues[metricKey];
+            const metricValue = metricValues[metricKey];
             metric.entryMetricValues.setValue(entry.key, metricValue);
         });
     }
@@ -259,9 +270,6 @@ class ObjectDb extends skytree_1.Actor {
         else {
             entry.updatedAt = time;
         }
-        entry.tagKeys = tagKeys;
-        entry.metricValues = metricValues;
-        entry.metricValues.createdAt = entry.createdAt.toEpochMilliseconds();
         entry.data = entryData;
         entry.save();
         this._entryCache.put(entryKey, entry);
@@ -279,14 +287,7 @@ class ObjectDb extends skytree_1.Actor {
         if (existingRecord == null) {
             return;
         }
-        existingRecord.tagKeys.forEach((tagKey) => {
-            const tag = this._tags.get(tagKey);
-            tag.entryKeys.removeValue(entryKey);
-        });
-        Object.keys(existingRecord.metricValues).forEach((metricKey) => {
-            const metric = this._metrics.get(metricKey);
-            metric.entryMetricValues.removeKey(entryKey);
-        });
+        this.removeMetadataGivenEntryKey(entryKey);
         this._db.runQuery(`
       DELETE FROM entries WHERE key = ?
     `, [entryKey]);
