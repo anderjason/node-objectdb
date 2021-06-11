@@ -3,13 +3,13 @@ import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { PortableEntry } from "../ObjectDb/Types";
 import { PropsObject } from "../PropsObject";
-import { SqlClient } from "../SqlClient";
+import { DbInstance } from "../SqlClient";
 
 export interface EntryProps<T> {
   key?: string;
   createdAt?: Instant;
   updatedAt?: Instant;
-  db: SqlClient;
+  db: DbInstance;
 }
 
 export class Entry<T> extends PropsObject<EntryProps<T>> {
@@ -29,10 +29,10 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.updatedAt = props.updatedAt || props.createdAt || Instant.ofNow();
   }
 
-  load(): void {
+  load(): boolean {
     const row = this.props.db.toFirstRow("SELECT data FROM entries WHERE key = ?", [this.key]);
     if (row == null) {
-      return;
+      return false;
     }
 
     const portableEntry: PortableEntry = JSON.parse(row.data);
@@ -41,6 +41,8 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.updatedAt = Instant.givenEpochMilliseconds(portableEntry.updatedAtMs);
     this.tagKeys = portableEntry.tagKeys || [];
     this.metricValues = portableEntry.metricValues || {};
+
+    return true;
   }
 
   save(): void {

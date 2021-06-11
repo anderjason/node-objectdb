@@ -14,7 +14,7 @@ class Entry extends PropsObject_1.PropsObject {
     load() {
         const row = this.props.db.toFirstRow("SELECT data FROM entries WHERE key = ?", [this.key]);
         if (row == null) {
-            return;
+            return false;
         }
         const portableEntry = JSON.parse(row.data);
         this.data = portableEntry.data;
@@ -22,6 +22,7 @@ class Entry extends PropsObject_1.PropsObject {
         this.updatedAt = time_1.Instant.givenEpochMilliseconds(portableEntry.updatedAtMs);
         this.tagKeys = portableEntry.tagKeys || [];
         this.metricValues = portableEntry.metricValues || {};
+        return true;
     }
     save() {
         const data = JSON.stringify(this.toPortableObject());

@@ -1,17 +1,22 @@
-import { PropsObject } from "../PropsObject";
-import { SqlClient } from "../SqlClient";
+import { ObservableSet } from "@anderjason/observable";
+import { Statement } from "better-sqlite3";
+import { Actor } from "skytree";
+import { DbInstance } from "../SqlClient";
 
 export interface TagProps {
   tagKey: string;
-  db: SqlClient;
+  db: DbInstance;
 }
 
-export class Tag extends PropsObject<TagProps> {
+export class Tag extends Actor<TagProps> {
   readonly tagPrefix: string;
   readonly tagValue: string;
   readonly key: string;
 
-  entryKeys = new Set<string>();
+  readonly entryKeys = ObservableSet.ofEmpty<string>();
+
+  private _insertEntryKeyQuery: Statement<[string, string]>;
+  private _deleteEntryKeyQuery: Statement<[string, string]>;
 
   constructor(props: TagProps) {
     super(props);
@@ -25,7 +30,9 @@ export class Tag extends PropsObject<TagProps> {
     }
 
     if (!props.tagKey.includes(":")) {
-      throw new Error(`Tags must be in the form PREFIX:VALUE (got '${props.tagKey}')`);
+      throw new Error(
+        `Tags must be in the form PREFIX:VALUE (got '${props.tagKey}')`
+      );
     }
 
     this.key = props.tagKey;
@@ -35,48 +42,40 @@ export class Tag extends PropsObject<TagProps> {
     this.tagValue = parts[1];
   }
 
-  load(): void {
-    const rows = this.props.db.toRows("SELECT entryKey FROM tagEntries WHERE tagKey = ?", [this.key]);
-  
-    this.entryKeys = new Set(rows.map(row => row.entryKey));
-  }
-
-  save(): void {
+  onActivate() {
     const { db } = this.props;
 
-    db.runTransaction(() => {
-      this.props.db.runQuery(
-        `
-        DELETE FROM tagEntries WHERE tagKey = ?
-        `,
-        [this.key]
-      );
-  
-      if (this.entryKeys.size > 0) {
-        db.runQuery(
-          `
-          INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)
-          `,
-          [this.key, this.tagPrefix, this.tagValue]
-        );
-      } else {
-        db.runQuery(
-          `
-          DELETE FROM tags
-          WHERE key = ?
-        `,
-          [this.key]
-        );
-      }
-  
-      this.entryKeys.forEach(entryKey => {
-        db.runQuery(
-          `
-          INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)
-          `,
-          [this.key, entryKey]
-        );
+    this._insertEntryKeyQuery = db.connection
+      .prepare<[string, string]>("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
+
+    this._deleteEntryKeyQuery = db.connection
+      .prepare<[string, string]>("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
+
+    db.connection
+      .prepare("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)")
+      .run(this.key, this.tagPrefix, this.tagValue);
+
+    const rows = db.connection
+      .prepare<[string]>("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
+      .all(this.key);
+
+    this.entryKeys.sync(rows.map((row) => row.entryKey));
+
+    this.cancelOnDeactivate(
+      this.entryKeys.didChangeSteps.subscribe(steps => {
+        steps.forEach(step => {
+          switch (step.type) {
+            case "add":
+              this._insertEntryKeyQuery.run(this.key, step.value);
+              break;
+            case "remove":
+              this._deleteEntryKeyQuery.run(this.key, step.value);
+              break;
+            default:
+              break;
+          }
+        })
       })
-    })
+    );
   }
 }

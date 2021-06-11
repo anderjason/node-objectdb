@@ -22,7 +22,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private _tags;
     private _metrics;
     private _allEntryKeys;
-    private _instructions;
     private _db;
     constructor(props: ObjectDbProps<T>);
     onActivate(): void;
@@ -30,19 +29,14 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     get metrics(): Metric[];
     get tagPrefixes(): string[];
     private load;
-    toEntryKeys(options?: ObjectDbReadOptions): Promise<string[]>;
-    hasEntry(entryKey: string): Promise<boolean>;
-    toEntryCount(requireTagKeys?: string[]): Promise<number>;
-    toEntries(options?: ObjectDbReadOptions): Promise<Entry<T>[]>;
-    toOptionalFirstEntry(options?: ObjectDbReadOptions): Promise<Entry<T> | undefined>;
-    toEntryGivenKey(entryKey: string): Promise<Entry<T>>;
-    toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined>;
-    writeEntry(entryData: T, entryKey?: string): Promise<Entry<T>>;
-    deleteEntryKey(entryKey: string): Promise<void>;
-    private _deleteEntry;
-    private _readEntry;
-    private _writeEntry;
-    private _listRecordKeys;
-    private _listRecords;
-    private _nextInstruction;
+    toEntryKeys(options?: ObjectDbReadOptions): string[];
+    hasEntry(entryKey: string): boolean;
+    toEntryCount(requireTagKeys?: string[]): number;
+    toEntries(options?: ObjectDbReadOptions): Entry<T>[];
+    toOptionalFirstEntry(options?: ObjectDbReadOptions): Entry<T> | undefined;
+    toEntryGivenKey(entryKey: string): Entry<T>;
+    toOptionalEntryGivenKey(entryKey: string): Entry<T> | undefined;
+    writeEntry(entry: Entry<T>): Entry<T>;
+    writeEntryData(entryData: T, entryKey?: string): Entry<T>;
+    deleteEntryKey(entryKey: string): void;
 }

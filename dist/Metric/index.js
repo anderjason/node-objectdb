@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Metric = void 0;
-const PropsObject_1 = require("../PropsObject");
-class Metric extends PropsObject_1.PropsObject {
+const observable_1 = require("@anderjason/observable");
+const skytree_1 = require("skytree");
+class Metric extends skytree_1.Actor {
     constructor(props) {
         super(props);
-        this.entryMetricValues = {};
+        this.entryMetricValues = observable_1.ObservableDict.ofEmpty();
         if (props.metricKey == null) {
             throw new Error("metricKey is required");
         }
@@ -14,59 +15,41 @@ class Metric extends PropsObject_1.PropsObject {
         }
         this.key = props.metricKey;
     }
-    toOptionalValueGivenEntryKey(entryKey) {
-        if (this.entryMetricValues == null) {
-            return undefined;
-        }
-        return this.entryMetricValues[entryKey];
-    }
-    setEntryMetricValue(entryKey, value) {
-        if (this.entryMetricValues == null) {
-            this.entryMetricValues = {};
-        }
-        this.entryMetricValues[entryKey] = value;
-    }
-    hasValueGivenEntryKey(entryKey) {
-        return this.toOptionalValueGivenEntryKey(entryKey) != null;
-    }
-    removeValueGivenEntryKey(metricKey) {
-        if (this.entryMetricValues == null) {
-            return;
-        }
-        delete this.entryMetricValues[metricKey];
-    }
-    load() {
-        const rows = this.props.db.toRows("SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?", [this.key]);
-        this.entryMetricValues = {};
-        rows.forEach(row => {
-            this.entryMetricValues[row.entryKey] = row.metricValue;
-        });
-    }
-    save() {
+    onActivate() {
         const { db } = this.props;
-        // db.runTransaction(() => {
-        this.props.db.runQuery(`
-        DELETE FROM metricValues WHERE metricKey = ?
-        `, [this.key]);
-        if (Object.keys(this.entryMetricValues).length > 0) {
-            db.runQuery(`
-          INSERT OR IGNORE INTO metrics (key) VALUES (?)
-          `, [this.key]);
-        }
-        else {
-            db.runQuery(`
-          DELETE FROM metrics
-          WHERE key = ?
-        `, [this.key]);
-        }
-        Object.keys(this.entryMetricValues).forEach(entryKey => {
-            db.runQuery(`
-          INSERT INTO metricValues
-          (metricKey, entryKey, metricValue) 
-          VALUES (?, ?, ?)
-          `, [this.key, entryKey, this.entryMetricValues[entryKey]]);
+        this._upsertEntryMetricValueQuery = db.connection
+            .prepare(`
+        INSERT INTO metricValues (metricKey, entryKey, metricValue)
+        VALUES (?, ?, ?)
+      `);
+        this._deleteEntryMetricValueQuery = db.connection
+            .prepare("DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?");
+        db.connection
+            .prepare("INSERT OR IGNORE INTO metrics (key) VALUES (?)")
+            .run(this.key);
+        const rows = db.connection
+            .prepare("SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?")
+            .all(this.key);
+        const values = {};
+        rows.forEach(row => {
+            values[row.entryKey] = row.metricValue;
         });
-        // })
+        this.entryMetricValues.sync(values);
+        this.cancelOnDeactivate(this.entryMetricValues.didChangeSteps.subscribe(steps => {
+            steps.forEach(step => {
+                switch (step.type) {
+                    case "add":
+                    case "update":
+                        this._upsertEntryMetricValueQuery.run(this.key, step.key, step.newValue);
+                        break;
+                    case "remove":
+                        this._deleteEntryMetricValueQuery.run(this.key, step.key);
+                        break;
+                    default:
+                        break;
+                }
+            });
+        }));
     }
 }
 exports.Metric = Metric;

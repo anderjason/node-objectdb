@@ -1,15 +1,17 @@
-import { PropsObject } from "../PropsObject";
-import { SqlClient } from "../SqlClient";
+import { ObservableSet } from "@anderjason/observable";
+import { Actor } from "skytree";
+import { DbInstance } from "../SqlClient";
 export interface TagProps {
     tagKey: string;
-    db: SqlClient;
+    db: DbInstance;
 }
-export declare class Tag extends PropsObject<TagProps> {
+export declare class Tag extends Actor<TagProps> {
     readonly tagPrefix: string;
     readonly tagValue: string;
     readonly key: string;
-    entryKeys: Set<string>;
+    readonly entryKeys: ObservableSet<string>;
+    private _insertEntryKeyQuery;
+    private _deleteEntryKeyQuery;
     constructor(props: TagProps);
-    load(): void;
-    save(): void;
+    onActivate(): void;
 }

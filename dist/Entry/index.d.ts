@@ -2,12 +2,12 @@ import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { PortableEntry } from "../ObjectDb/Types";
 import { PropsObject } from "../PropsObject";
-import { SqlClient } from "../SqlClient";
+import { DbInstance } from "../SqlClient";
 export interface EntryProps<T> {
     key?: string;
     createdAt?: Instant;
     updatedAt?: Instant;
-    db: SqlClient;
+    db: DbInstance;
 }
 export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     readonly key: string;
@@ -17,7 +17,7 @@ export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     tagKeys: string[];
     metricValues: Dict<number>;
     constructor(props: EntryProps<T>);
-    load(): void;
+    load(): boolean;
     save(): void;
     toPortableObject(): PortableEntry;
 }

@@ -1,15 +1,14 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { Actor } from "skytree";
 import { Instant } from "@anderjason/time";
-import { ArrayUtil, PromiseUtil, SetUtil } from "@anderjason/util";
+import { ArrayUtil, SetUtil } from "@anderjason/util";
 import { LRUCache } from "../LRUCache";
 import { Metric } from "../Metric";
 import { Tag } from "../Tag";
 import { Entry } from "../Entry";
 import { Dict } from "@anderjason/observable";
 import { LocalFile } from "@anderjason/node-filesystem";
-import { SqlClient } from "../SqlClient";
-import { PortableEntry } from "./Types";
+import { DbInstance } from "../SqlClient";
 
 export interface ObjectDbReadOptions {
   requireTagKeys?: string[];
@@ -17,50 +16,6 @@ export interface ObjectDbReadOptions {
   limit?: number;
   offset?: number;
 }
-
-interface ObjectDbWriteInstruction<T> {
-  type: "write";
-  time: Instant;
-  key?: string;
-  data: T;
-  resolve: (result: Entry<T>) => void;
-  reject: (reason?: any) => void;
-}
-
-interface ObjectDbReadInstruction<T> {
-  type: "read";
-  key: string;
-  resolve: (result: Entry<T> | undefined) => void;
-  reject: (reason?: any) => void;
-}
-
-interface ObjectDbDeleteInstruction {
-  type: "delete";
-  key: string;
-  resolve: () => void;
-  reject: (reason?: any) => void;
-}
-
-interface ObjectDbListEntryKeysInstruction {
-  type: "listEntryKeys";
-  options?: ObjectDbReadOptions;
-  resolve: (result: string[]) => void;
-  reject: (reason?: any) => void;
-}
-
-interface ObjectDbListEntriesInstruction<T> {
-  type: "listEntries";
-  options?: ObjectDbReadOptions;
-  resolve: (result: Entry<T>[]) => void;
-  reject: (reason?: any) => void;
-}
-
-type ObjectDbInstruction<T> =
-  | ObjectDbWriteInstruction<T>
-  | ObjectDbReadInstruction<T>
-  | ObjectDbDeleteInstruction
-  | ObjectDbListEntryKeysInstruction
-  | ObjectDbListEntriesInstruction<T>;
 
 export interface ObjectDbProps<T> {
   localFile: LocalFile;
@@ -77,8 +32,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
   private _allEntryKeys = new Set<string>();
-  private _instructions: ObjectDbInstruction<T>[] = [];
-  private _db: SqlClient;
+  private _db: DbInstance;
 
   constructor(props: ObjectDbProps<T>) {
     super(props);
@@ -88,7 +42,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   onActivate(): void {
     this._db = this.addActor(
-      new SqlClient({
+      new DbInstance({
         localFile: this.props.localFile,
       })
     );
@@ -152,6 +106,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         metricValue INTEGER NOT NULL,
         FOREIGN KEY(metricKey) REFERENCES metrics(key),
         FOREIGN KEY(entryKey) REFERENCES entries(key)
+        UNIQUE(metricKey, entryKey) ON CONFLICT REPLACE
       )
     `);
 
@@ -166,24 +121,24 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       .map((row) => row.key);
 
     tagKeys.forEach((tagKey) => {
-      const tag = new Tag({
-        tagKey,
-        db: this._db,
-      });
-
-      tag.load();
+      const tag = this.addActor(
+        new Tag({
+          tagKey,
+          db: this._db,
+        })
+      );
 
       this._tags.set(tagKey, tag);
       this._tagPrefixes.add(tag.tagPrefix);
     });
 
     metricKeys.forEach((metricKey) => {
-      const metric = new Metric({
-        metricKey,
-        db: this._db,
-      });
-
-      metric.load();
+      const metric = this.addActor(
+        new Metric({
+          metricKey,
+          db: this._db,
+        })
+      );
 
       this._metrics.set(metricKey, metric);
     });
@@ -191,57 +146,88 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._allEntryKeys = new Set(entryKeys);
   }
 
-  async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
-    return new Promise((resolve, reject) => {
-      const instruction: ObjectDbListEntryKeysInstruction = {
-        type: "listEntryKeys",
-        options,
-        resolve,
-        reject,
-      };
+  toEntryKeys(options: ObjectDbReadOptions = {}): string[] {
+    let entryKeys: string[];
 
-      this._instructions.push(instruction);
+    if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
+      entryKeys = Array.from(this._allEntryKeys);
+    } else {
+      const sets = options.requireTagKeys.map((tagKey) => {
+        const tag = this._tags.get(tagKey);
+        if (tag == null) {
+          return new Set<string>();
+        }
 
-      if (this._instructions.length === 1) {
-        this._nextInstruction();
+        return tag.entryKeys.toSet();
+      });
+
+      entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
+    }
+
+    const metricKey = options.orderByMetricKey;
+    if (metricKey != null) {
+      const metric = this._metrics.get(metricKey);
+      if (metric == null) {
+        throw new Error(`Metric is not defined '${metricKey}'`);
       }
-    });
+
+      entryKeys = ArrayUtil.arrayWithOrderFromValue(
+        entryKeys,
+        (entryKey) => {
+          const metricValue =
+            metric.entryMetricValues.toOptionalValueGivenKey(entryKey);
+          return metricValue || 0;
+        },
+        "ascending"
+      );
+    }
+
+    let start = 0;
+    let end = entryKeys.length;
+
+    if (options.offset != null) {
+      start = parseInt(options.offset as any, 10);
+    }
+
+    if (options.limit != null) {
+      end = Math.min(end, start + parseInt(options.limit as any, 10));
+    }
+
+    return entryKeys.slice(start, end);
   }
 
-  async hasEntry(entryKey: string): Promise<boolean> {
-    const keys = await this.toEntryKeys();
+  hasEntry(entryKey: string): boolean {
+    const keys = this.toEntryKeys();
     return keys.includes(entryKey);
   }
 
-  async toEntryCount(requireTagKeys?: string[]): Promise<number> {
-    const keys = await this.toEntryKeys({
+  toEntryCount(requireTagKeys?: string[]): number {
+    const keys = this.toEntryKeys({
       requireTagKeys: requireTagKeys,
     });
 
     return keys.length;
   }
 
-  async toEntries(options: ObjectDbReadOptions = {}): Promise<Entry<T>[]> {
-    return new Promise((resolve, reject) => {
-      const instruction: ObjectDbListEntriesInstruction<T> = {
-        type: "listEntries",
-        options,
-        resolve,
-        reject,
-      };
+  toEntries(options: ObjectDbReadOptions = {}): Entry<T>[] {
+    const entryKeys = this.toEntryKeys(options);
 
-      this._instructions.push(instruction);
+    const entries: Entry<T>[] = [];
 
-      if (this._instructions.length === 1) {
-        this._nextInstruction();
+    entryKeys.forEach((entryKey) => {
+      const result = this.toOptionalEntryGivenKey(entryKey);
+      if (result != null) {
+        entries.push(result);
       }
     });
+
+    return entries;
   }
 
-  async toOptionalFirstEntry(
+  toOptionalFirstEntry(
     options: ObjectDbReadOptions = {}
-  ): Promise<Entry<T> | undefined> {
-    const results = await this.toEntries({
+  ): Entry<T> | undefined {
+    const results = this.toEntries({
       ...options,
       limit: 1,
     });
@@ -249,8 +235,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return results[0];
   }
 
-  async toEntryGivenKey(entryKey: string): Promise<Entry<T>> {
-    const result = await this.toOptionalEntryGivenKey(entryKey);
+  toEntryGivenKey(entryKey: string): Entry<T> {
+    const result = this.toOptionalEntryGivenKey(entryKey);
     if (result == null) {
       throw new Error(`Entry not found for key '${entryKey}'`);
     }
@@ -258,119 +244,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
-  toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined> {
-    return new Promise((resolve, reject) => {
-      const instruction: ObjectDbReadInstruction<T> = {
-        type: "read",
-        key: entryKey,
-        resolve,
-        reject,
-      };
-
-      this._instructions.push(instruction);
-
-      if (this._instructions.length === 1) {
-        this._nextInstruction();
-      }
-    });
-  }
-
-  writeEntry(entryData: T, entryKey?: string): Promise<Entry<T>> {
-    return new Promise((resolve, reject) => {
-      const instruction: ObjectDbWriteInstruction<T> = {
-        type: "write",
-        time: Instant.ofNow(),
-        key: entryKey,
-        data: entryData,
-        resolve,
-        reject,
-      };
-
-      this._instructions.push(instruction);
-
-      if (this._instructions.length === 1) {
-        this._nextInstruction();
-      }
-    });
-  }
-
-  deleteEntryKey(entryKey: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const instruction: ObjectDbDeleteInstruction = {
-        type: "delete",
-        key: entryKey,
-        resolve,
-        reject,
-      };
-
-      this._instructions.push(instruction);
-
-      if (this._instructions.length === 1) {
-        this._nextInstruction();
-      }
-    });
-  }
-
-  private _deleteEntry = async (entryKey: string): Promise<void> => {
-    if (entryKey.length < 5) {
-      throw new Error("Entry key length must be at least 5 characters");
-    }
-
-    this._entryCache.remove(entryKey);
-    this._allEntryKeys.delete(entryKey);
-
-    const existingRecord = await this.toOptionalEntryGivenKey(entryKey);
-    if (existingRecord == null) {
-      return;
-    }
-
-    const changedTags = new Set<Tag>();
-    const changedMetrics = new Set<Metric>();
-
-    existingRecord.tagKeys.forEach((tagKey) => {
-      const tag = this._tags.get(tagKey);
-
-      if (tag != null && tag.entryKeys.has(entryKey)) {
-        tag.entryKeys.delete(entryKey);
-        changedTags.add(tag);
-      }
-    });
-
-    const metricKeys = Object.keys(existingRecord.metricValues);
-    metricKeys.forEach((metricKey) => {
-      const metric = this._metrics.get(metricKey);
-
-      if (metric != null && metric.hasValueGivenEntryKey(entryKey)) {
-        metric.removeValueGivenEntryKey(entryKey);
-        changedMetrics.add(metric);
-      }
-    });
-
-    await PromiseUtil.asyncSequenceGivenArrayAndCallback(
-      Array.from(changedTags),
-      async (tag) => {
-        await tag.save();
-      }
-    );
-
-    await PromiseUtil.asyncSequenceGivenArrayAndCallback(
-      Array.from(changedMetrics),
-      async (metric) => {
-        await metric.save();
-      }
-    );
-
-    this._db.runQuery(
-      `
-      DELETE FROM entries WHERE key = ?
-    `,
-      [entryKey]
-    );
-  };
-
-  private _readEntry = async (
-    entryKey: string
-  ): Promise<Entry<T> | undefined> => {
+  toOptionalEntryGivenKey(entryKey: string): Entry<T> | undefined {
     if (entryKey == null) {
       throw new Error("Entry key is required");
     }
@@ -388,18 +262,26 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       key: entryKey,
       db: this._db,
     });
-    result.load();
+
+    if (!result.load()) {
+      return undefined;
+    }
 
     this._entryCache.put(entryKey, result);
 
     return result;
-  };
+  }
 
-  private _writeEntry = async (
-    entryData: T,
-    time: Instant,
-    entryKey?: string
-  ): Promise<Entry<T>> => {
+  writeEntry(entry: Entry<T>): Entry<T> {
+    if (entry == null) {
+      throw new Error("Entry is required");
+    }
+
+    this.writeEntryData(entry.data, entry.key);
+    return entry;
+  }
+
+  writeEntryData(entryData: T, entryKey?: string): Entry<T> {
     if (entryKey == null) {
       entryKey = UniqueId.ofRandom().toUUIDString();
     }
@@ -408,7 +290,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    let entry: Entry<T> = await this._readEntry(entryKey);
+    const time = Instant.ofNow();
+
+    let entry: Entry<T> = this.toOptionalEntryGivenKey(entryKey);
 
     const tagKeys: string[] = this.props.tagKeysGivenEntryData(entryData);
     const metricValues = this.props.metricsGivenEntryData(entryData);
@@ -433,23 +317,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._entryCache.put(entryKey, entry);
     this._allEntryKeys.add(entryKey);
 
-    const changedTags = new Set<Tag>();
-    const changedMetrics = new Set<Metric>();
-
     entry.tagKeys.forEach((tagKey) => {
       let tag = this._tags.get(tagKey);
       if (tag == null) {
-        tag = new Tag({
-          tagKey,
-          db: this._db,
-        });
+        tag = this.addActor(
+          new Tag({
+            tagKey,
+            db: this._db,
+          })
+        );
         this._tags.set(tagKey, tag);
       }
 
-      if (!tag.entryKeys.has(entryKey)) {
-        tag.entryKeys.add(entryKey);
-        changedTags.add(tag);
-      }
+      tag.entryKeys.addValue(entryKey);
     });
 
     const metricKeys = Object.keys(entry.metricValues);
@@ -457,152 +337,55 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     metricKeys.forEach((metricKey) => {
       let metric = this._metrics.get(metricKey);
       if (metric == null) {
-        metric = new Metric({
-          metricKey,
-          db: this._db,
-        });
+        metric = this.addActor(
+          new Metric({
+            metricKey,
+            db: this._db,
+          })
+        );
         this._metrics.set(metricKey, metric);
       }
 
       const metricValue = entry.metricValues[metricKey];
-
-      if (metric.toOptionalValueGivenEntryKey(entryKey) !== metricValue) {
-        metric.setEntryMetricValue(entryKey, metricValue);
-        changedMetrics.add(metric);
-      }
+      metric.entryMetricValues.setValue(entryKey, metricValue);
     });
 
-    await PromiseUtil.asyncSequenceGivenArrayAndCallback(
-      Array.from(changedTags),
-      async (tag) => {
-        await tag.save();
-      }
-    );
-
-    await PromiseUtil.asyncSequenceGivenArrayAndCallback(
-      Array.from(changedMetrics),
-      async (metric) => {
-        await metric.save();
-      }
-    );
-
     return entry;
-  };
+  }
 
-  private _listRecordKeys = async (
-    options: ObjectDbReadOptions = {}
-  ): Promise<string[]> => {
-    let entryKeys: string[];
-
-    if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
-      entryKeys = Array.from(this._allEntryKeys);
-    } else {
-      const sets = options.requireTagKeys.map((tagKey) => {
-        const tag = this._tags.get(tagKey);
-        if (tag == null) {
-          return new Set<string>();
-        }
-
-        return tag.entryKeys;
-      });
-
-      entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
+  deleteEntryKey(entryKey: string): void {
+    if (entryKey.length < 5) {
+      throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const metricKey = options.orderByMetricKey;
-    if (metricKey != null) {
-      const metric = this._metrics.get(metricKey);
-      if (metric == null) {
-        throw new Error(`Metric is not defined '${metricKey}'`);
-      }
+    this._entryCache.remove(entryKey);
+    this._allEntryKeys.delete(entryKey);
 
-      entryKeys = ArrayUtil.arrayWithOrderFromValue(
-        entryKeys,
-        (entryKey) => {
-          const metricValue = metric.toOptionalValueGivenEntryKey(entryKey);
-          return metricValue || 0;
-        },
-        "ascending"
-      );
-    }
-
-    let start = 0;
-    let end = entryKeys.length;
-
-    if (options.offset != null) {
-      start = parseInt(options.offset as any, 10);
-    }
-
-    if (options.limit != null) {
-      end = Math.min(end, start + parseInt(options.limit as any, 10));
-    }
-
-    return entryKeys.slice(start, end);
-  };
-
-  private _listRecords = async (
-    options: ObjectDbReadOptions = {}
-  ): Promise<Entry<T>[]> => {
-    const entryKeys = await this._listRecordKeys(options);
-
-    const entries: Entry<T>[] = [];
-
-    await PromiseUtil.asyncSequenceGivenArrayAndCallback(
-      entryKeys,
-      async (entryKey) => {
-        const result = await this._readEntry(entryKey);
-        if (result != null) {
-          entries.push(result);
-        }
-      }
-    );
-
-    return entries;
-  };
-
-  private _nextInstruction = async (): Promise<void> => {
-    const instruction = this._instructions.shift();
-    if (instruction == null) {
+    const existingRecord = this.toOptionalEntryGivenKey(entryKey);
+    if (existingRecord == null) {
       return;
     }
 
-    try {
-      switch (instruction.type) {
-        case "write":
-          const writeResult: Entry<T> = await this._writeEntry(
-            instruction.data,
-            instruction.time,
-            instruction.key
-          );
-          instruction.resolve(writeResult);
-          break;
-        case "read":
-          const readResult: Entry<T> | undefined = await this._readEntry(
-            instruction.key
-          );
-          instruction.resolve(readResult);
-          break;
-        case "delete":
-          await this._deleteEntry(instruction.key);
-          instruction.resolve();
-          break;
-        case "listEntryKeys":
-          const listKeysResult = await this._listRecordKeys(
-            instruction.options
-          );
-          instruction.resolve(listKeysResult);
-          break;
-        case "listEntries":
-          const listRowsResult = await this._listRecords(instruction.options);
-          instruction.resolve(listRowsResult);
-          break;
-      }
-    } catch (err) {
-      instruction.reject(err);
-    }
+    const changedMetrics = new Set<Metric>();
 
-    if (this._instructions.length > 0) {
-      setTimeout(this._nextInstruction, 1);
-    }
-  };
+    existingRecord.tagKeys.forEach((tagKey) => {
+      const tag = this._tags.get(tagKey);
+
+      tag.entryKeys.removeValue(entryKey);
+    });
+
+    const metricKeys = Object.keys(existingRecord.metricValues);
+    metricKeys.forEach((metricKey) => {
+      const metric = this._metrics.get(metricKey);
+
+      metric.entryMetricValues.removeKey(entryKey);
+    });
+
+    this._db.runQuery(
+      `
+      DELETE FROM entries WHERE key = ?
+    `,
+      [entryKey]
+    );
+  }
 }

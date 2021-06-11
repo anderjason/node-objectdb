@@ -1,16 +1,20 @@
-import { PropsObject } from "../PropsObject";
-import { Dict } from "@anderjason/observable";
-import { SqlClient } from "../SqlClient";
+import { Dict, ObservableDict } from "@anderjason/observable";
+import { DbInstance } from "../SqlClient";
+import { Statement } from "better-sqlite3";
+import { Actor } from "skytree";
 
 export interface MetricProps {
   metricKey: string;
-  db: SqlClient;
+  db: DbInstance;
 }
 
-export class Metric extends PropsObject<MetricProps> {
+export class Metric extends Actor<MetricProps> {
   readonly key: string;
 
-  entryMetricValues: Dict<number> = {};
+  readonly entryMetricValues = ObservableDict.ofEmpty<number>();
+
+  private _upsertEntryMetricValueQuery: Statement<[string, string, number]>;
+  private _deleteEntryMetricValueQuery: Statement<[string, string]>;
 
   constructor(props: MetricProps) {
     super(props);
@@ -26,81 +30,49 @@ export class Metric extends PropsObject<MetricProps> {
     this.key = props.metricKey;
   }
 
-  toOptionalValueGivenEntryKey(entryKey: string): number | undefined {
-    if (this.entryMetricValues == null) {
-      return undefined;
-    }
-
-    return this.entryMetricValues[entryKey];
-  }
-
-  setEntryMetricValue(entryKey: string, value: number): void {
-    if (this.entryMetricValues == null) {
-      this.entryMetricValues = {};
-    }
-
-    this.entryMetricValues[entryKey] = value;
-  }
-
-  hasValueGivenEntryKey(entryKey: string): boolean {
-    return this.toOptionalValueGivenEntryKey(entryKey) != null;
-  }
-
-  removeValueGivenEntryKey(metricKey: string): void {
-    if (this.entryMetricValues == null) {
-      return;
-    }
-
-    delete this.entryMetricValues[metricKey];
-  }
-
-  load() {
-    const rows = this.props.db.toRows("SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?", [this.key]);
-  
-    this.entryMetricValues = {};
-    rows.forEach(row => {
-      this.entryMetricValues[row.entryKey] = row.metricValue;
-    });
-  }
-
-  save(): void {
+  onActivate() {
     const { db } = this.props;
 
-    // db.runTransaction(() => {
-      this.props.db.runQuery(
-        `
-        DELETE FROM metricValues WHERE metricKey = ?
-        `,
-        [this.key]
-      );
-  
-      if (Object.keys(this.entryMetricValues).length > 0) {
-        db.runQuery(
-          `
-          INSERT OR IGNORE INTO metrics (key) VALUES (?)
-          `,
-          [this.key]
-        );
-      } else {
-        db.runQuery(
-          `
-          DELETE FROM metrics
-          WHERE key = ?
-        `,
-          [this.key]
-        );
-      }
+    this._upsertEntryMetricValueQuery = db.connection
+      .prepare<[string, string, number]>(`
+        INSERT INTO metricValues (metricKey, entryKey, metricValue)
+        VALUES (?, ?, ?)
+      `);
 
-      Object.keys(this.entryMetricValues).forEach(entryKey => {
-        db.runQuery(
-          `
-          INSERT INTO metricValues
-          (metricKey, entryKey, metricValue) 
-          VALUES (?, ?, ?)
-          `,
-          [this.key, entryKey, this.entryMetricValues[entryKey]]
-        );
+    this._deleteEntryMetricValueQuery = db.connection
+      .prepare<[string, string]>("DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?");
+
+    db.connection
+      .prepare("INSERT OR IGNORE INTO metrics (key) VALUES (?)")
+      .run(this.key);
+
+    const rows = db.connection
+      .prepare("SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?")
+      .all(this.key);
+  
+    const values: Dict<number> = {};
+    rows.forEach(row => {
+      values[row.entryKey] = row.metricValue;
+    });
+
+    this.entryMetricValues.sync(values);
+
+    this.cancelOnDeactivate(
+      this.entryMetricValues.didChangeSteps.subscribe(steps => {
+        steps.forEach(step => {
+          switch (step.type) {
+            case "add":
+            case "update":
+              this._upsertEntryMetricValueQuery.run(this.key, step.key, step.newValue);
+              break;
+            case "remove":
+              this._deleteEntryMetricValueQuery.run(this.key, step.key);
+              break;
+            default:
+              break;
+          }
+        })
       })
-    // })
+    );
   }
 }

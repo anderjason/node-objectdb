@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Tag = void 0;
-const PropsObject_1 = require("../PropsObject");
-class Tag extends PropsObject_1.PropsObject {
+const observable_1 = require("@anderjason/observable");
+const skytree_1 = require("skytree");
+class Tag extends skytree_1.Actor {
     constructor(props) {
         super(props);
-        this.entryKeys = new Set();
+        this.entryKeys = observable_1.ObservableSet.ofEmpty();
         if (props.tagKey == null) {
             throw new Error("tagKey is required");
         }
@@ -20,33 +21,33 @@ class Tag extends PropsObject_1.PropsObject {
         this.tagPrefix = parts[0];
         this.tagValue = parts[1];
     }
-    load() {
-        const rows = this.props.db.toRows("SELECT entryKey FROM tagEntries WHERE tagKey = ?", [this.key]);
-        this.entryKeys = new Set(rows.map(row => row.entryKey));
-    }
-    save() {
+    onActivate() {
         const { db } = this.props;
-        db.runTransaction(() => {
-            this.props.db.runQuery(`
-        DELETE FROM tagEntries WHERE tagKey = ?
-        `, [this.key]);
-            if (this.entryKeys.size > 0) {
-                db.runQuery(`
-          INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)
-          `, [this.key, this.tagPrefix, this.tagValue]);
-            }
-            else {
-                db.runQuery(`
-          DELETE FROM tags
-          WHERE key = ?
-        `, [this.key]);
-            }
-            this.entryKeys.forEach(entryKey => {
-                db.runQuery(`
-          INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)
-          `, [this.key, entryKey]);
+        this._insertEntryKeyQuery = db.connection
+            .prepare("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
+        this._deleteEntryKeyQuery = db.connection
+            .prepare("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
+        db.connection
+            .prepare("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)")
+            .run(this.key, this.tagPrefix, this.tagValue);
+        const rows = db.connection
+            .prepare("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
+            .all(this.key);
+        this.entryKeys.sync(rows.map((row) => row.entryKey));
+        this.cancelOnDeactivate(this.entryKeys.didChangeSteps.subscribe(steps => {
+            steps.forEach(step => {
+                switch (step.type) {
+                    case "add":
+                        this._insertEntryKeyQuery.run(this.key, step.value);
+                        break;
+                    case "remove":
+                        this._deleteEntryKeyQuery.run(this.key, step.value);
+                        break;
+                    default:
+                        break;
+                }
             });
-        });
+        }));
     }
 }
 exports.Tag = Tag;

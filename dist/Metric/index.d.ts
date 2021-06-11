@@ -1,18 +1,15 @@
-import { PropsObject } from "../PropsObject";
-import { Dict } from "@anderjason/observable";
-import { SqlClient } from "../SqlClient";
+import { ObservableDict } from "@anderjason/observable";
+import { DbInstance } from "../SqlClient";
+import { Actor } from "skytree";
 export interface MetricProps {
     metricKey: string;
-    db: SqlClient;
+    db: DbInstance;
 }
-export declare class Metric extends PropsObject<MetricProps> {
+export declare class Metric extends Actor<MetricProps> {
     readonly key: string;
-    entryMetricValues: Dict<number>;
+    readonly entryMetricValues: ObservableDict<number>;
+    private _upsertEntryMetricValueQuery;
+    private _deleteEntryMetricValueQuery;
     constructor(props: MetricProps);
-    toOptionalValueGivenEntryKey(entryKey: string): number | undefined;
-    setEntryMetricValue(entryKey: string, value: number): void;
-    hasValueGivenEntryKey(entryKey: string): boolean;
-    removeValueGivenEntryKey(metricKey: string): void;
-    load(): void;
-    save(): void;
+    onActivate(): void;
 }
