@@ -10,6 +10,8 @@ import { Dict } from "@anderjason/observable";
 import { LocalFile } from "@anderjason/node-filesystem";
 import { DbInstance } from "../SqlClient";
 
+// TODO something takes longer to write the more items there are. what is it?
+
 export interface ObjectDbReadOptions {
   requireTagKeys?: string[];
   orderByMetricKey?: string;
@@ -276,13 +278,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   removeMetadataGivenEntryKey(entryKey: string): void {
-    this._tags.forEach(tag => {
+    const tagKeys = this._db.prepareCached("select distinct tagKey from tagEntries where entryKey = ?").all(entryKey).map(row => row.tagKey);
+    tagKeys.forEach(tagKey => {
+      const tag = this.tagGivenTagKey(tagKey);
       tag.entryKeys.removeValue(entryKey);
     });
-
-    this._metrics.forEach(metric => {
+    
+    const metricKeys = this._db.prepareCached("select distinct metricKeys from metricValues where entryKey = ?").all(entryKey).map(row => row.metricKey);
+    metricKeys.forEach(metricKey => {
+      const metric = this.metricGivenMetricKey(metricKey);
       metric.entryMetricValues.removeKey(entryKey);
-    })
+    });
   }
 
   rebuildMetadata(): void {
@@ -295,8 +301,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   rebuildMetadataGivenEntry(entry: Entry<T>): void {
-    this.removeMetadataGivenEntryKey(entry.key);
-
     const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
     const metricValues = this.props.metricsGivenEntryData(entry.data);
 

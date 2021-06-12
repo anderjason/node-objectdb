@@ -4,7 +4,9 @@ import { Test } from "@anderjason/tests";
 import { ObjectDb } from ".";
 import { DbInstance } from "../SqlClient";
 
-const localFile = LocalFile.givenAbsolutePath("/Users/jason/Desktop/node-objectdb-test.sqlite3");
+const localFile = LocalFile.givenAbsolutePath(
+  "/Users/jason/Desktop/node-objectdb-test.sqlite3"
+);
 
 interface TestEntryData {
   message: string;
@@ -60,17 +62,19 @@ Test.define("ObjectDb can assign tags", () => {
   });
 
   fileDb.deactivate();
-  
+
   const db = new DbInstance({
-    localFile
+    localFile,
   });
   db.activate();
 
-  const rows = db.prepareCached("SELECT tagKey FROM tagEntries WHERE entryKey = ?").all(entry.key);
+  const rows = db
+    .prepareCached("SELECT tagKey FROM tagEntries WHERE entryKey = ?")
+    .all(entry.key);
 
   db.deactivate();
 
-  const actualTagKeys = new Set(rows.map(row => row.tagKey));
+  const actualTagKeys = new Set(rows.map((row) => row.tagKey));
   Test.assert(actualTagKeys.has("color:red"));
   Test.assert(actualTagKeys.has("color:blue"));
   Test.assert(actualTagKeys.size == 2);
@@ -94,14 +98,20 @@ Test.define("ObjectDb can assign metrics", () => {
     message: "hello world",
   });
 
-  
-  // TODO test DB 
-  
-  // Test.assert(entry.metricValues.charCount === 11);
-  
-  // entry.data.message = "test";
-  // fileDb.writeEntry(entry);
-  // Test.assert(entry.metricValues.charCount === 4);
+  fileDb.deactivate();
 
-  // fileDb.deactivate();
+  const db = new DbInstance({
+    localFile,
+  });
+  db.activate();
+
+  const row = db
+    .prepareCached(
+      "SELECT metricValue FROM metricValues WHERE metricKey = ? AND entryKey = ?"
+    )
+    .get("charCount", entry.key);
+
+  db.deactivate();
+
+  Test.assertIsEqual(row.metricValue, 11);
 });

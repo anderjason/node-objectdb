@@ -1,4 +1,5 @@
 import { UniqueId } from "@anderjason/node-crypto";
+import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { PropsObject } from "../PropsObject";
 import { DbInstance } from "../SqlClient";

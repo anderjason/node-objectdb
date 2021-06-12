@@ -17,7 +17,15 @@ class DbInstance extends skytree_1.Actor {
     }
     onActivate() {
         this._db = better_sqlite3_1.default(this.props.localFile.toAbsolutePath(), {});
+        // https://phiresky.github.io/blog/2020/sqlite-performance-tuning/
+        this._db.pragma("journal_mode = WAL");
+        this._db.pragma("synchronous = normal");
+        this._db.pragma("temp_store = memory");
+        this._db.pragma("mmap_size = 30000000000");
+        this._db.pragma("encoding = 'UTF-8'");
+        this._db.pragma("optimize");
         this.cancelOnDeactivate(new observable_1.Receipt(() => {
+            this._db.pragma("optimize");
             this._db.close();
             this._db = undefined;
         }));

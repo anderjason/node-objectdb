@@ -192,10 +192,14 @@ class ObjectDb extends skytree_1.Actor {
         return result;
     }
     removeMetadataGivenEntryKey(entryKey) {
-        this._tags.forEach(tag => {
+        const tagKeys = this._db.prepareCached("select distinct tagKey from tagEntries where entryKey = ?").all(entryKey).map(row => row.tagKey);
+        tagKeys.forEach(tagKey => {
+            const tag = this.tagGivenTagKey(tagKey);
             tag.entryKeys.removeValue(entryKey);
         });
-        this._metrics.forEach(metric => {
+        const metricKeys = this._db.prepareCached("select distinct metricKeys from metricValues where entryKey = ?").all(entryKey).map(row => row.metricKey);
+        metricKeys.forEach(metricKey => {
+            const metric = this.metricGivenMetricKey(metricKey);
             metric.entryMetricValues.removeKey(entryKey);
         });
     }
@@ -208,7 +212,6 @@ class ObjectDb extends skytree_1.Actor {
         });
     }
     rebuildMetadataGivenEntry(entry) {
-        this.removeMetadataGivenEntryKey(entry.key);
         const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
         const metricValues = this.props.metricsGivenEntryData(entry.data);
         tagKeys.forEach(tagKey => {
