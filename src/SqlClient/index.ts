@@ -18,18 +18,13 @@ export class DbInstance extends Actor<Sqlite3ActorProps> {
   onActivate() {
     this._db = BetterSqlite3(this.props.localFile.toAbsolutePath(), {});
 
-    // https://phiresky.github.io/blog/2020/sqlite-performance-tuning/
-    this._db.pragma("journal_mode = WAL");
-    this._db.pragma("synchronous = normal");
-    this._db.pragma("temp_store = memory");
-    this._db.pragma("mmap_size = 30000000000");
     this._db.pragma("encoding = 'UTF-8'");
-    this._db.pragma("optimize");
     
     this.cancelOnDeactivate(
       new Receipt(() => {
         this._db.pragma("optimize");
         this._db.close();
+        console.log("Closed database", this.props.localFile.toAbsolutePath());
         this._db = undefined;
       })
     );
