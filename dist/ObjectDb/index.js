@@ -162,6 +162,9 @@ class ObjectDb extends skytree_1.Actor {
         const keys = this.toEntryKeys();
         return keys.includes(entryKey);
     }
+    runTransaction(fn) {
+        this._db.runTransaction(fn);
+    }
     toEntryCount(requireTagKeys) {
         const keys = this.toEntryKeys({
             requireTagKeys: requireTagKeys,

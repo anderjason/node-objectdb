@@ -32,6 +32,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private load;
     toEntryKeys(options?: ObjectDbReadOptions): string[];
     hasEntry(entryKey: string): boolean;
+    runTransaction(fn: () => void): void;
     toEntryCount(requireTagKeys?: string[]): number;
     toEntries(options?: ObjectDbReadOptions): Entry<T>[];
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Entry<T> | undefined;

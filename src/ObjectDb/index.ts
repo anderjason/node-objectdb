@@ -231,6 +231,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return keys.includes(entryKey);
   }
 
+  runTransaction(fn: () => void): void {
+    this._db.runTransaction(fn);
+  }
+  
   toEntryCount(requireTagKeys?: string[]): number {
     const keys = this.toEntryKeys({
       requireTagKeys: requireTagKeys,
