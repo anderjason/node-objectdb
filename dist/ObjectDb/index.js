@@ -232,7 +232,7 @@ class ObjectDb extends skytree_1.Actor {
             const tag = this.tagGivenTagKey(tagKey);
             tag.entryKeys.removeValue(entryKey);
         });
-        const metricKeys = this._db.prepareCached("select distinct metricKeys from metricValues where entryKey = ?").all(entryKey).map(row => row.metricKey);
+        const metricKeys = this._db.prepareCached("select distinct metricKey from metricValues where entryKey = ?").all(entryKey).map(row => row.metricKey);
         metricKeys.forEach(metricKey => {
             const metric = this.metricGivenMetricKey(metricKey);
             metric.entryMetricValues.removeKey(entryKey);
