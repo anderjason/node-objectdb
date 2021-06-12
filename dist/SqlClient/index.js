@@ -47,7 +47,7 @@ class DbInstance extends skytree_1.Actor {
         if (this._db == null) {
             throw new Error("Sql is not activated");
         }
-        this._db.transaction(fn);
+        this._db.transaction(fn)();
     }
     toRows(sql, params = []) {
         if (this._db == null) {

@@ -58,7 +58,7 @@ export class DbInstance extends Actor<Sqlite3ActorProps> {
       throw new Error("Sql is not activated");
     } 
 
-    this._db.transaction(fn);
+    this._db.transaction(fn)();
   }
 
   toRows(sql: string, params: any[] = []): any[] {
