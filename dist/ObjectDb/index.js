@@ -163,7 +163,19 @@ class ObjectDb extends skytree_1.Actor {
         return keys.includes(entryKey);
     }
     runTransaction(fn) {
-        this._db.runTransaction(fn);
+        let failed = false;
+        this._db.runTransaction(() => {
+            try {
+                fn();
+            }
+            catch (err) {
+                failed = true;
+                console.error(err);
+            }
+        });
+        if (failed) {
+            throw new Error("The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance.");
+        }
     }
     toEntryCount(requireTagKeys) {
         const keys = this.toEntryKeys({
