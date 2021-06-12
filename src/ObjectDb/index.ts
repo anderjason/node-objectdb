@@ -115,6 +115,31 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       )
     `);
 
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagPrefix 
+      ON tags(tagPrefix);
+    `);
+
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagEntriesTagKey 
+      ON tagEntries(tagKey);
+    `);
+
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagEntriesEntryKey
+      ON tagEntries(entryKey);
+    `);
+
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricKey
+      ON metricValues(metricKey);
+    `);
+
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxMetricValuesEntryKey
+      ON metricValues(entryKey);
+    `);
+
     const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
 
     const entryKeys = db
@@ -301,6 +326,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   rebuildMetadataGivenEntry(entry: Entry<T>): void {
+    this.removeMetadataGivenEntryKey(entry.key);
+
     const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
     const metricValues = this.props.metricsGivenEntryData(entry.data);
 

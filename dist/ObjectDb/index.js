@@ -78,6 +78,26 @@ class ObjectDb extends skytree_1.Actor {
         UNIQUE(metricKey, entryKey) ON CONFLICT REPLACE
       )
     `);
+        db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagPrefix 
+      ON tags(tagPrefix);
+    `);
+        db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagEntriesTagKey 
+      ON tagEntries(tagKey);
+    `);
+        db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagEntriesEntryKey
+      ON tagEntries(entryKey);
+    `);
+        db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricKey
+      ON metricValues(metricKey);
+    `);
+        db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxMetricValuesEntryKey
+      ON metricValues(entryKey);
+    `);
         const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
         const entryKeys = db
             .toRows("SELECT key FROM entries")
@@ -212,6 +232,7 @@ class ObjectDb extends skytree_1.Actor {
         });
     }
     rebuildMetadataGivenEntry(entry) {
+        this.removeMetadataGivenEntryKey(entry.key);
         const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
         const metricValues = this.props.metricsGivenEntryData(entry.data);
         tagKeys.forEach(tagKey => {
