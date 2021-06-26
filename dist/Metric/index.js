@@ -34,16 +34,11 @@ class Metric extends skytree_1.Actor {
         this.entryMetricValues.sync(values);
         this.cancelOnDeactivate(this.entryMetricValues.didChangeSteps.subscribe((steps) => {
             steps.forEach((step) => {
-                switch (step.type) {
-                    case "add":
-                    case "update":
-                        this._upsertEntryMetricValueQuery.run(this.key, step.key, step.newValue);
-                        break;
-                    case "remove":
-                        this._deleteEntryMetricValueQuery.run(this.key, step.key);
-                        break;
-                    default:
-                        break;
+                if (step.newValue != null && (step.type == "add" || step.type == "update")) {
+                    this._upsertEntryMetricValueQuery.run(this.key, step.key, step.newValue);
+                }
+                else {
+                    this._deleteEntryMetricValueQuery.run(this.key, step.key);
                 }
             });
         }));
