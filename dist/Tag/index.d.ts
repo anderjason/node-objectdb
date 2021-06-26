@@ -12,6 +12,7 @@ export declare class Tag extends Actor<TagProps> {
     readonly entryKeys: ObservableSet<string>;
     private _insertEntryKeyQuery;
     private _deleteEntryKeyQuery;
+    private _dbId;
     constructor(props: TagProps);
     onActivate(): void;
 }

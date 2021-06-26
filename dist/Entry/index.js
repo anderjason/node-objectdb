@@ -32,6 +32,14 @@ class Entry extends PropsObject_1.PropsObject {
       DO UPDATE SET data=?, createdAt=?, updatedAt=?;
       `, [this.key, data, createdAtMs, updatedAtMs, data, createdAtMs, updatedAtMs]);
     }
+    toPortableEntry() {
+        return {
+            key: this.key,
+            createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
+            updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
+            data: this.data
+        };
+    }
 }
 exports.Entry = Entry;
 //# sourceMappingURL=index.js.map

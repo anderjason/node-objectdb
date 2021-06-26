@@ -17,6 +17,7 @@ export class Tag extends Actor<TagProps> {
 
   private _insertEntryKeyQuery: Statement<[string, string]>;
   private _deleteEntryKeyQuery: Statement<[string, string]>;
+  private _dbId: number;
 
   constructor(props: TagProps) {
     super(props);
@@ -50,7 +51,7 @@ export class Tag extends Actor<TagProps> {
 
     db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)")
       .run(this.key, this.tagPrefix, this.tagValue);
-
+    
     const rows = db.prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
       .all(this.key);
 

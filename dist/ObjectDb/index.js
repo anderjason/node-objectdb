@@ -65,7 +65,7 @@ class ObjectDb extends skytree_1.Actor {
         entryKey TEXT NOT NULL,
         FOREIGN KEY(tagKey) REFERENCES tags(key),
         FOREIGN KEY(entryKey) REFERENCES entries(key),
-        UNIQUE(tagKey, entryKey) ON CONFLICT IGNORE
+        UNIQUE(tagKey, entryKey)
       )
     `);
         db.runQuery(`
@@ -75,7 +75,7 @@ class ObjectDb extends skytree_1.Actor {
         metricValue INTEGER NOT NULL,
         FOREIGN KEY(metricKey) REFERENCES metrics(key),
         FOREIGN KEY(entryKey) REFERENCES entries(key)
-        UNIQUE(metricKey, entryKey) ON CONFLICT REPLACE
+        UNIQUE(metricKey, entryKey)
       )
     `);
         db.runQuery(`

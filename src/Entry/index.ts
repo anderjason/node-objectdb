@@ -1,8 +1,14 @@
 import { UniqueId } from "@anderjason/node-crypto";
-import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { PropsObject } from "../PropsObject";
 import { DbInstance } from "../SqlClient";
+
+export interface PortableEntry<T> {
+  key: string;
+  createdAtEpochMs: number;
+  updatedAtEpochMs: number;
+  data: T;
+}
 
 export interface EntryProps<T> {
   key?: string;
@@ -54,5 +60,14 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
       `,
       [this.key, data, createdAtMs, updatedAtMs, data, createdAtMs, updatedAtMs]
     );
+  }
+
+  toPortableEntry(): PortableEntry<T> {
+    return {
+      key: this.key,
+      createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
+      updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
+      data: this.data
+    };
   }
 }

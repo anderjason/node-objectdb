@@ -1,6 +1,12 @@
 import { Instant } from "@anderjason/time";
 import { PropsObject } from "../PropsObject";
 import { DbInstance } from "../SqlClient";
+export interface PortableEntry<T> {
+    key: string;
+    createdAtEpochMs: number;
+    updatedAtEpochMs: number;
+    data: T;
+}
 export interface EntryProps<T> {
     key?: string;
     createdAt?: Instant;
@@ -15,4 +21,5 @@ export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     constructor(props: EntryProps<T>);
     load(): boolean;
     save(): void;
+    toPortableEntry(): PortableEntry<T>;
 }
