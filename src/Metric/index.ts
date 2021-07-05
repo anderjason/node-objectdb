@@ -54,8 +54,6 @@ export class Metric extends Actor<MetricProps> {
       this.key
     );
 
-    const start = Instant.ofNow();
-
     const rows = db
       .prepareCached(
         "SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?"
@@ -68,12 +66,6 @@ export class Metric extends Actor<MetricProps> {
     });
 
     this._entryMetricValues = ObservableDict.givenValues(values);
-
-    const finish = Instant.ofNow();
-    const duration = Duration.givenInstantRange(start, finish);
-    console.log(
-      `Loaded metric '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`
-    );
 
     this.cancelOnDeactivate(
       this._entryMetricValues.didChangeSteps.subscribe((steps) => {

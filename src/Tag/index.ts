@@ -13,17 +13,17 @@ export class Tag extends Actor<TagProps> {
   readonly tagPrefix: string;
   readonly tagValue: string;
   readonly key: string;
-  
+
   private _entryKeys: ObservableSet<string>;
   private _insertEntryKeyQuery: Statement<[string, string]>;
   private _deleteEntryKeyQuery: Statement<[string, string]>;
 
   get entryKeys(): ObservableSet<string> {
-    this.loadEntryKeysOnce()
-    
+    this.loadEntryKeysOnce();
+
     return this._entryKeys;
   }
-  
+
   constructor(props: TagProps) {
     super(props);
 
@@ -48,8 +48,7 @@ export class Tag extends Actor<TagProps> {
     this.tagValue = parts[1];
   }
 
-  onActivate() {
-  }
+  onActivate() {}
 
   private loadEntryKeysOnce(): void {
     if (this._entryKeys != null) {
@@ -58,26 +57,28 @@ export class Tag extends Actor<TagProps> {
 
     const { db } = this.props;
 
-    this._insertEntryKeyQuery = db.prepareCached("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
-    this._deleteEntryKeyQuery = db.prepareCached("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
+    this._insertEntryKeyQuery = db.prepareCached(
+      "INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)"
+    );
+    this._deleteEntryKeyQuery = db.prepareCached(
+      "DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?"
+    );
 
-    db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)")
-      .run(this.key, this.tagPrefix, this.tagValue);
-    
-    const start = Instant.ofNow();
-    
-    const rows = db.prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
+    db.prepareCached(
+      "INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)"
+    ).run(this.key, this.tagPrefix, this.tagValue);
+
+    const rows = db
+      .prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
       .all(this.key);
 
-    this._entryKeys = ObservableSet.givenValues<string>(rows.map((row) => row.entryKey));
-
-    const finish = Instant.ofNow();
-    const duration = Duration.givenInstantRange(start, finish);
-    console.log(`Loaded tag '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`);
+    this._entryKeys = ObservableSet.givenValues<string>(
+      rows.map((row) => row.entryKey)
+    );
 
     this.cancelOnDeactivate(
-      this._entryKeys.didChangeSteps.subscribe(steps => {
-        steps.forEach(step => {
+      this._entryKeys.didChangeSteps.subscribe((steps) => {
+        steps.forEach((step) => {
           switch (step.type) {
             case "add":
               this._insertEntryKeyQuery.run(this.key, step.value);
@@ -88,7 +89,7 @@ export class Tag extends Actor<TagProps> {
             default:
               break;
           }
-        })
+        });
       })
     );
   }

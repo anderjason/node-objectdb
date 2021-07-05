@@ -150,7 +150,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       .toRows("SELECT key FROM metrics")
       .map((row) => row.key);
 
-    tagKeys.forEach((tagKey) => {
+    const tagKeyCount = tagKeys.length;
+    for (let i = 0; i < tagKeyCount; i++) {
+      const tagKey = tagKeys[i];
       const tag = this.addActor(
         new Tag({
           tagKey,
@@ -160,9 +162,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
       this._tags.set(tagKey, tag);
       this._tagPrefixes.add(tag.tagPrefix);
-    });
+    }
 
-    metricKeys.forEach((metricKey) => {
+    const metricKeyCount = metricKeys.length;
+    for (let i = 0; i < metricKeyCount; i++) {
+      const metricKey = metricKeys[i];
+
       const metric = this.addActor(
         new Metric({
           metricKey,
@@ -171,7 +176,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       );
 
       this._metrics.set(metricKey, metric);
-    });
+    }
 
     this._allEntryKeys = new Set(entryKeys);
   }
