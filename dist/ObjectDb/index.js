@@ -2,14 +2,14 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ObjectDb = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
-const skytree_1 = require("skytree");
 const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
+const skytree_1 = require("skytree");
+const Entry_1 = require("../Entry");
 const LRUCache_1 = require("../LRUCache");
 const Metric_1 = require("../Metric");
-const Tag_1 = require("../Tag");
-const Entry_1 = require("../Entry");
 const SqlClient_1 = require("../SqlClient");
+const Tag_1 = require("../Tag");
 class ObjectDb extends skytree_1.Actor {
     constructor(props) {
         super(props);
@@ -227,19 +227,25 @@ class ObjectDb extends skytree_1.Actor {
         return result;
     }
     removeMetadataGivenEntryKey(entryKey) {
-        const tagKeys = this._db.prepareCached("select distinct tagKey from tagEntries where entryKey = ?").all(entryKey).map(row => row.tagKey);
-        tagKeys.forEach(tagKey => {
+        const tagKeys = this._db
+            .prepareCached("select distinct tagKey from tagEntries where entryKey = ?")
+            .all(entryKey)
+            .map((row) => row.tagKey);
+        tagKeys.forEach((tagKey) => {
             const tag = this.tagGivenTagKey(tagKey);
             tag.entryKeys.removeValue(entryKey);
         });
-        const metricKeys = this._db.prepareCached("select distinct metricKey from metricValues where entryKey = ?").all(entryKey).map(row => row.metricKey);
-        metricKeys.forEach(metricKey => {
+        const metricKeys = this._db
+            .prepareCached("select distinct metricKey from metricValues where entryKey = ?")
+            .all(entryKey)
+            .map((row) => row.metricKey);
+        metricKeys.forEach((metricKey) => {
             const metric = this.metricGivenMetricKey(metricKey);
             metric.entryMetricValues.removeKey(entryKey);
         });
     }
     rebuildMetadata() {
-        this.toEntryKeys().forEach(entryKey => {
+        this.toEntryKeys().forEach((entryKey) => {
             const entry = this.toOptionalEntryGivenKey(entryKey);
             if (entry != null) {
                 this.rebuildMetadataGivenEntry(entry);
@@ -250,7 +256,7 @@ class ObjectDb extends skytree_1.Actor {
         this.removeMetadataGivenEntryKey(entry.key);
         const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
         const metricValues = this.props.metricsGivenEntryData(entry.data);
-        tagKeys.forEach(tagKey => {
+        tagKeys.forEach((tagKey) => {
             const tag = this.tagGivenTagKey(tagKey);
             tag.entryKeys.addValue(entry.key);
         });
@@ -301,7 +307,7 @@ class ObjectDb extends skytree_1.Actor {
             key: entryKey,
             db: this._db,
             createdAt: createdAt || now,
-            updatedAt: now
+            updatedAt: now,
         });
         entry.data = entryData;
         entry.save();

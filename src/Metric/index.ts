@@ -2,6 +2,7 @@ import { Dict, ObservableDict } from "@anderjason/observable";
 import { DbInstance } from "../SqlClient";
 import { Statement } from "better-sqlite3";
 import { Actor } from "skytree";
+import { Duration, Instant } from "@anderjason/time";
 
 export interface MetricProps {
   metricKey: string;
@@ -45,6 +46,8 @@ export class Metric extends Actor<MetricProps> {
     db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)")
       .run(this.key);
 
+      const start = Instant.ofNow();
+      
     const rows = db
       .prepareCached(
         "SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?"
@@ -57,6 +60,10 @@ export class Metric extends Actor<MetricProps> {
     });
 
     this.entryMetricValues.sync(values);
+
+    const finish = Instant.ofNow();
+    const duration = Duration.givenInstantRange(start, finish);
+    console.log(`Loaded metric '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`);
 
     this.cancelOnDeactivate(
       this.entryMetricValues.didChangeSteps.subscribe((steps) => {

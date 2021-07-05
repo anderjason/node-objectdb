@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Tag = void 0;
 const observable_1 = require("@anderjason/observable");
+const time_1 = require("@anderjason/time");
 const skytree_1 = require("skytree");
 class Tag extends skytree_1.Actor {
     constructor(props) {
@@ -27,9 +28,13 @@ class Tag extends skytree_1.Actor {
         this._deleteEntryKeyQuery = db.prepareCached("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
         db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)")
             .run(this.key, this.tagPrefix, this.tagValue);
+        const start = time_1.Instant.ofNow();
         const rows = db.prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
             .all(this.key);
         this.entryKeys.sync(rows.map((row) => row.entryKey));
+        const finish = time_1.Instant.ofNow();
+        const duration = time_1.Duration.givenInstantRange(start, finish);
+        console.log(`Loaded tag '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`);
         this.cancelOnDeactivate(this.entryKeys.didChangeSteps.subscribe(steps => {
             steps.forEach(step => {
                 switch (step.type) {

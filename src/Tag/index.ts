@@ -1,4 +1,5 @@
 import { ObservableSet } from "@anderjason/observable";
+import { Duration, Instant } from "@anderjason/time";
 import { Statement } from "better-sqlite3";
 import { Actor } from "skytree";
 import { DbInstance } from "../SqlClient";
@@ -52,11 +53,17 @@ export class Tag extends Actor<TagProps> {
     db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)")
       .run(this.key, this.tagPrefix, this.tagValue);
     
+    const start = Instant.ofNow();
+    
     const rows = db.prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
       .all(this.key);
 
     this.entryKeys.sync(rows.map((row) => row.entryKey));
 
+    const finish = Instant.ofNow();
+    const duration = Duration.givenInstantRange(start, finish);
+    console.log(`Loaded tag '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`);
+    
     this.cancelOnDeactivate(
       this.entryKeys.didChangeSteps.subscribe(steps => {
         steps.forEach(step => {

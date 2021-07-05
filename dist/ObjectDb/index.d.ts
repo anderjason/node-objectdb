@@ -1,10 +1,10 @@
-import { Actor } from "skytree";
+import { LocalFile } from "@anderjason/node-filesystem";
+import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
+import { Actor } from "skytree";
+import { Entry } from "../Entry";
 import { Metric } from "../Metric";
 import { Tag } from "../Tag";
-import { Entry } from "../Entry";
-import { Dict } from "@anderjason/observable";
-import { LocalFile } from "@anderjason/node-filesystem";
 export interface ObjectDbReadOptions {
     requireTagKeys?: string[];
     orderByMetricKey?: string;

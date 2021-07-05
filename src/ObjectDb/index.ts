@@ -1,14 +1,14 @@
 import { UniqueId } from "@anderjason/node-crypto";
-import { Actor } from "skytree";
+import { LocalFile } from "@anderjason/node-filesystem";
+import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { ArrayUtil, SetUtil } from "@anderjason/util";
+import { Actor } from "skytree";
+import { Entry } from "../Entry";
 import { LRUCache } from "../LRUCache";
 import { Metric } from "../Metric";
-import { Tag } from "../Tag";
-import { Entry } from "../Entry";
-import { Dict } from "@anderjason/observable";
-import { LocalFile } from "@anderjason/node-filesystem";
 import { DbInstance } from "../SqlClient";
+import { Tag } from "../Tag";
 
 // TODO something takes longer to write the more items there are. what is it?
 
@@ -244,10 +244,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
 
     if (failed) {
-      throw new Error("The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance.");
+      throw new Error(
+        "The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance."
+      );
     }
   }
-  
+
   toEntryCount(requireTagKeys?: string[]): number {
     const keys = this.toEntryKeys({
       requireTagKeys: requireTagKeys,
@@ -320,21 +322,31 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   removeMetadataGivenEntryKey(entryKey: string): void {
-    const tagKeys = this._db.prepareCached("select distinct tagKey from tagEntries where entryKey = ?").all(entryKey).map(row => row.tagKey);
-    tagKeys.forEach(tagKey => {
+    const tagKeys = this._db
+      .prepareCached(
+        "select distinct tagKey from tagEntries where entryKey = ?"
+      )
+      .all(entryKey)
+      .map((row) => row.tagKey);
+    tagKeys.forEach((tagKey) => {
       const tag = this.tagGivenTagKey(tagKey);
       tag.entryKeys.removeValue(entryKey);
     });
-    
-    const metricKeys = this._db.prepareCached("select distinct metricKey from metricValues where entryKey = ?").all(entryKey).map(row => row.metricKey);
-    metricKeys.forEach(metricKey => {
+
+    const metricKeys = this._db
+      .prepareCached(
+        "select distinct metricKey from metricValues where entryKey = ?"
+      )
+      .all(entryKey)
+      .map((row) => row.metricKey);
+    metricKeys.forEach((metricKey) => {
       const metric = this.metricGivenMetricKey(metricKey);
       metric.entryMetricValues.removeKey(entryKey);
     });
   }
 
   rebuildMetadata(): void {
-    this.toEntryKeys().forEach(entryKey => {
+    this.toEntryKeys().forEach((entryKey) => {
       const entry = this.toOptionalEntryGivenKey(entryKey);
       if (entry != null) {
         this.rebuildMetadataGivenEntry(entry);
@@ -348,7 +360,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
     const metricValues = this.props.metricsGivenEntryData(entry.data);
 
-    tagKeys.forEach(tagKey => {
+    tagKeys.forEach((tagKey) => {
       const tag = this.tagGivenTagKey(tagKey);
       tag.entryKeys.addValue(entry.key);
     });
@@ -387,20 +399,24 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   metricGivenMetricKey(metricKey: string): Metric {
     let metric = this._metrics.get(metricKey);
-      if (metric == null) {
-        metric = this.addActor(
-          new Metric({
-            metricKey,
-            db: this._db,
-          })
-        );
-        this._metrics.set(metricKey, metric);
-      }
+    if (metric == null) {
+      metric = this.addActor(
+        new Metric({
+          metricKey,
+          db: this._db,
+        })
+      );
+      this._metrics.set(metricKey, metric);
+    }
 
-      return metric;
+    return metric;
   }
 
-  writeEntryData(entryData: T, entryKey?: string, createdAt?: Instant): Entry<T> {
+  writeEntryData(
+    entryData: T,
+    entryKey?: string,
+    createdAt?: Instant
+  ): Entry<T> {
     if (entryKey == null) {
       entryKey = UniqueId.ofRandom().toUUIDString();
     }
@@ -415,7 +431,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       key: entryKey,
       db: this._db,
       createdAt: createdAt || now,
-      updatedAt: now
+      updatedAt: now,
     });
 
     entry.data = entryData;
@@ -425,7 +441,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._allEntryKeys.add(entryKey);
 
     this.rebuildMetadataGivenEntry(entry);
-    
+
     return entry;
   }
 

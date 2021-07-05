@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Metric = void 0;
 const observable_1 = require("@anderjason/observable");
 const skytree_1 = require("skytree");
+const time_1 = require("@anderjason/time");
 class Metric extends skytree_1.Actor {
     constructor(props) {
         super(props);
@@ -24,6 +25,7 @@ class Metric extends skytree_1.Actor {
         this._deleteEntryMetricValueQuery = db.prepareCached("DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?");
         db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)")
             .run(this.key);
+        const start = time_1.Instant.ofNow();
         const rows = db
             .prepareCached("SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?")
             .all(this.key);
@@ -32,6 +34,9 @@ class Metric extends skytree_1.Actor {
             values[row.entryKey] = row.metricValue;
         });
         this.entryMetricValues.sync(values);
+        const finish = time_1.Instant.ofNow();
+        const duration = time_1.Duration.givenInstantRange(start, finish);
+        console.log(`Loaded metric '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`);
         this.cancelOnDeactivate(this.entryMetricValues.didChangeSteps.subscribe((steps) => {
             steps.forEach((step) => {
                 if (step.newValue != null && (step.type == "add" || step.type == "update")) {
