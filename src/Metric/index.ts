@@ -12,8 +12,13 @@ export interface MetricProps {
 export class Metric extends Actor<MetricProps> {
   readonly key: string;
 
-  readonly entryMetricValues = ObservableDict.ofEmpty<number>();
+  get entryMetricValues(): ObservableDict<number> {
+    this.loadOnce();
 
+    return this._entryMetricValues;
+  }
+
+  private _entryMetricValues: ObservableDict<number>;
   private _upsertEntryMetricValueQuery: Statement<[string, string, number]>;
   private _deleteEntryMetricValueQuery: Statement<[string, string]>;
 
@@ -31,7 +36,9 @@ export class Metric extends Actor<MetricProps> {
     this.key = props.metricKey;
   }
 
-  onActivate() {
+  onActivate() {}
+
+  private loadOnce(): void {
     const { db } = this.props;
 
     this._upsertEntryMetricValueQuery = db.prepareCached(`
@@ -43,11 +50,12 @@ export class Metric extends Actor<MetricProps> {
       "DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?"
     );
 
-    db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)")
-      .run(this.key);
+    db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)").run(
+      this.key
+    );
 
-      const start = Instant.ofNow();
-      
+    const start = Instant.ofNow();
+
     const rows = db
       .prepareCached(
         "SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?"
@@ -59,16 +67,21 @@ export class Metric extends Actor<MetricProps> {
       values[row.entryKey] = row.metricValue;
     });
 
-    this.entryMetricValues.sync(values);
+    this._entryMetricValues = ObservableDict.givenValues(values);
 
     const finish = Instant.ofNow();
     const duration = Duration.givenInstantRange(start, finish);
-    console.log(`Loaded metric '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`);
+    console.log(
+      `Loaded metric '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`
+    );
 
     this.cancelOnDeactivate(
-      this.entryMetricValues.didChangeSteps.subscribe((steps) => {
+      this._entryMetricValues.didChangeSteps.subscribe((steps) => {
         steps.forEach((step) => {
-          if (step.newValue != null && (step.type == "add" || step.type == "update")) {
+          if (
+            step.newValue != null &&
+            (step.type == "add" || step.type == "update")
+          ) {
             this._upsertEntryMetricValueQuery.run(
               this.key,
               step.key,

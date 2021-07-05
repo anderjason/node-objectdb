@@ -13,13 +13,17 @@ export class Tag extends Actor<TagProps> {
   readonly tagPrefix: string;
   readonly tagValue: string;
   readonly key: string;
-
-  readonly entryKeys = ObservableSet.ofEmpty<string>();
-
+  
+  private _entryKeys: ObservableSet<string>;
   private _insertEntryKeyQuery: Statement<[string, string]>;
   private _deleteEntryKeyQuery: Statement<[string, string]>;
-  private _dbId: number;
 
+  get entryKeys(): ObservableSet<string> {
+    this.loadEntryKeysOnce()
+    
+    return this._entryKeys;
+  }
+  
   constructor(props: TagProps) {
     super(props);
 
@@ -45,6 +49,13 @@ export class Tag extends Actor<TagProps> {
   }
 
   onActivate() {
+  }
+
+  private loadEntryKeysOnce(): void {
+    if (this._entryKeys != null) {
+      return;
+    }
+
     const { db } = this.props;
 
     this._insertEntryKeyQuery = db.prepareCached("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
@@ -58,14 +69,14 @@ export class Tag extends Actor<TagProps> {
     const rows = db.prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
       .all(this.key);
 
-    this.entryKeys.sync(rows.map((row) => row.entryKey));
+    this._entryKeys = ObservableSet.givenValues<string>(rows.map((row) => row.entryKey));
 
     const finish = Instant.ofNow();
     const duration = Duration.givenInstantRange(start, finish);
     console.log(`Loaded tag '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`);
-    
+
     this.cancelOnDeactivate(
-      this.entryKeys.didChangeSteps.subscribe(steps => {
+      this._entryKeys.didChangeSteps.subscribe(steps => {
         steps.forEach(step => {
           switch (step.type) {
             case "add":

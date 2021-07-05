@@ -9,10 +9,11 @@ export declare class Tag extends Actor<TagProps> {
     readonly tagPrefix: string;
     readonly tagValue: string;
     readonly key: string;
-    readonly entryKeys: ObservableSet<string>;
+    private _entryKeys;
     private _insertEntryKeyQuery;
     private _deleteEntryKeyQuery;
-    private _dbId;
+    get entryKeys(): ObservableSet<string>;
     constructor(props: TagProps);
     onActivate(): void;
+    private loadEntryKeysOnce;
 }

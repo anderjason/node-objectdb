@@ -7,7 +7,6 @@ const skytree_1 = require("skytree");
 class Tag extends skytree_1.Actor {
     constructor(props) {
         super(props);
-        this.entryKeys = observable_1.ObservableSet.ofEmpty();
         if (props.tagKey == null) {
             throw new Error("tagKey is required");
         }
@@ -22,7 +21,16 @@ class Tag extends skytree_1.Actor {
         this.tagPrefix = parts[0];
         this.tagValue = parts[1];
     }
+    get entryKeys() {
+        this.loadEntryKeysOnce();
+        return this._entryKeys;
+    }
     onActivate() {
+    }
+    loadEntryKeysOnce() {
+        if (this._entryKeys != null) {
+            return;
+        }
         const { db } = this.props;
         this._insertEntryKeyQuery = db.prepareCached("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
         this._deleteEntryKeyQuery = db.prepareCached("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
@@ -31,11 +39,11 @@ class Tag extends skytree_1.Actor {
         const start = time_1.Instant.ofNow();
         const rows = db.prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
             .all(this.key);
-        this.entryKeys.sync(rows.map((row) => row.entryKey));
+        this._entryKeys = observable_1.ObservableSet.givenValues(rows.map((row) => row.entryKey));
         const finish = time_1.Instant.ofNow();
         const duration = time_1.Duration.givenInstantRange(start, finish);
         console.log(`Loaded tag '${this.key}' (${rows.length}) in ${duration.toSeconds()}s`);
-        this.cancelOnDeactivate(this.entryKeys.didChangeSteps.subscribe(steps => {
+        this.cancelOnDeactivate(this._entryKeys.didChangeSteps.subscribe(steps => {
             steps.forEach(step => {
                 switch (step.type) {
                     case "add":
