@@ -22,7 +22,8 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private _tagPrefixes;
     private _tags;
     private _metrics;
-    private _entryReferences;
+    private _entryLabelByKey;
+    private _entryKeysSortedByLabel;
     private _db;
     constructor(props: ObjectDbProps<T>);
     onActivate(): void;

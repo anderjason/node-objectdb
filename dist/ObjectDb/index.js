@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ObjectDb = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
+const observable_1 = require("@anderjason/observable");
 const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
@@ -16,13 +17,31 @@ class ObjectDb extends skytree_1.Actor {
         this._tagPrefixes = new Set();
         this._tags = new Map();
         this._metrics = new Map();
-        this._entryReferences = [];
+        this._entryLabelByKey = observable_1.ObservableDict.ofEmpty();
+        this._entryKeysSortedByLabel = [];
         this._entryCache = new LRUCache_1.LRUCache(props.cacheSize || 10);
     }
     onActivate() {
         this._db = this.addActor(new SqlClient_1.DbInstance({
             localFile: this.props.localFile,
         }));
+        this.cancelOnDeactivate(this._entryLabelByKey.didChange.subscribe(dict => {
+            if (dict == null) {
+                this._entryKeysSortedByLabel = [];
+                return;
+            }
+            console.log("sorting entry keys");
+            let objects = Object.keys(dict).map(key => {
+                return {
+                    entryKey: key,
+                    label: dict[key]
+                };
+            });
+            objects = util_1.ArrayUtil.arrayWithOrderFromValue(objects, obj => {
+                return obj.label || "";
+            }, "ascending");
+            this._entryKeysSortedByLabel = objects.map(obj => obj.entryKey);
+        }, true));
         this.load();
     }
     get tags() {
@@ -100,14 +119,13 @@ class ObjectDb extends skytree_1.Actor {
       ON metricValues(entryKey);
     `);
         const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
-        this._entryReferences = db
+        const entryReferences = {};
+        db
             .toRows("SELECT key, label FROM entries ORDER BY label")
-            .map((row) => {
-            return {
-                entryKey: row.key,
-                label: row.label,
-            };
+            .forEach((row) => {
+            entryReferences[row.key] = row.label;
         });
+        this._entryLabelByKey.sync(entryReferences);
         const metricKeys = db
             .toRows("SELECT key FROM metrics")
             .map((row) => row.key);
@@ -134,7 +152,7 @@ class ObjectDb extends skytree_1.Actor {
     toEntryKeys(options = {}) {
         let entryKeys;
         if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
-            entryKeys = this._entryReferences.map((er) => er.entryKey);
+            entryKeys = this._entryKeysSortedByLabel;
         }
         else {
             const sets = options.requireTagKeys.map((tagKey) => {
@@ -321,12 +339,7 @@ class ObjectDb extends skytree_1.Actor {
         entry.data = entryData;
         entry.save();
         this._entryCache.put(entryKey, entry);
-        this._entryReferences.push({
-            entryKey,
-            label,
-        });
-        // sort by label
-        this._entryReferences = util_1.ArrayUtil.arrayWithOrderFromValue(this._entryReferences, (er) => er.label || "", "ascending");
+        this._entryLabelByKey.setValue(entryKey, label);
         this.rebuildMetadataGivenEntry(entry);
         return entry;
     }
@@ -335,7 +348,7 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("Entry key length must be at least 5 characters");
         }
         this._entryCache.remove(entryKey);
-        this._entryReferences = this._entryReferences.filter(er => er.entryKey !== entryKey);
+        this._entryLabelByKey.removeKey(entryKey);
         const existingRecord = this.toOptionalEntryGivenKey(entryKey);
         if (existingRecord == null) {
             return;

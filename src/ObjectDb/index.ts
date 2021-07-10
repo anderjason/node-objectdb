@@ -1,6 +1,6 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
-import { Dict } from "@anderjason/observable";
+import { Dict, ObservableDict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { ArrayUtil, SetUtil } from "@anderjason/util";
 import { Actor } from "skytree";
@@ -38,7 +38,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _tagPrefixes = new Set<string>();
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
-  private _entryReferences: EntryReference[] = [];
+  private _entryLabelByKey = ObservableDict.ofEmpty<string>();
+  private _entryKeysSortedByLabel: string[] = [];
   private _db: DbInstance;
 
   constructor(props: ObjectDbProps<T>) {
@@ -52,6 +53,29 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       new DbInstance({
         localFile: this.props.localFile,
       })
+    );
+
+    this.cancelOnDeactivate(
+      this._entryLabelByKey.didChange.subscribe(dict => {
+        if (dict == null) {
+          this._entryKeysSortedByLabel = [];
+          return;
+        }
+
+        console.log("sorting entry keys");
+        let objects = Object.keys(dict).map(key => {
+          return {
+            entryKey: key,
+            label: dict[key]
+          };
+        });
+
+        objects = ArrayUtil.arrayWithOrderFromValue(objects, obj => {
+          return obj.label || ""
+        }, "ascending");
+
+        this._entryKeysSortedByLabel = objects.map(obj => obj.entryKey);
+      }, true)
     );
 
     this.load();
@@ -148,14 +172,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
 
-    this._entryReferences = db
+    const entryReferences: Dict<string> = {};
+    db
       .toRows("SELECT key, label FROM entries ORDER BY label")
-      .map((row) => {
-        return {
-          entryKey: row.key,
-          label: row.label,
-        };
+      .forEach((row) => {
+        entryReferences[row.key] = row.label;
       });
+    this._entryLabelByKey.sync(entryReferences);
 
     const metricKeys = db
       .toRows("SELECT key FROM metrics")
@@ -194,7 +217,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     let entryKeys: string[];
 
     if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
-      entryKeys = this._entryReferences.map((er) => er.entryKey);
+      entryKeys = this._entryKeysSortedByLabel;
     } else {
       const sets = options.requireTagKeys.map((tagKey) => {
         const tag = this._tags.get(tagKey);
@@ -453,17 +476,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry.save();
 
     this._entryCache.put(entryKey, entry);
-    this._entryReferences.push({
-      entryKey,
-      label,
-    });
-
-    // sort by label
-    this._entryReferences = ArrayUtil.arrayWithOrderFromValue(
-      this._entryReferences,
-      (er) => er.label || "",
-      "ascending"
-    );
+    this._entryLabelByKey.setValue(entryKey, label);
 
     this.rebuildMetadataGivenEntry(entry);
 
@@ -476,8 +489,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     this._entryCache.remove(entryKey);
-    this._entryReferences = this._entryReferences.filter(er => er.entryKey !== entryKey);
-
+    this._entryLabelByKey.removeKey(entryKey);
+    
     const existingRecord = this.toOptionalEntryGivenKey(entryKey);
     if (existingRecord == null) {
       return;
