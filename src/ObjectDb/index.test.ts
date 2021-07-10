@@ -16,8 +16,7 @@ Test.define("ObjectDb can be created", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagKeysGivenEntryData: (data) => [],
-    metricsGivenEntryData: (data) => ({}),
-    labelGivenEntryData: (data) => data.message
+    metricsGivenEntryData: (data) => ({})
   });
   fileDb.activate();
 
@@ -28,8 +27,7 @@ Test.define("ObjectDb can write and read a row", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagKeysGivenEntryData: (data) => [],
-    metricsGivenEntryData: (data) => ({}),
-    labelGivenEntryData: (data) => data.message
+    metricsGivenEntryData: (data) => ({})
   });
   fileDb.activate();
 
@@ -55,8 +53,7 @@ Test.define("ObjectDb can assign tags", () => {
     tagKeysGivenEntryData: (data) => {
       return ["color:red", "color:blue"];
     },
-    metricsGivenEntryData: (data) => ({}),
-    labelGivenEntryData: data => data.message
+    metricsGivenEntryData: (data) => ({})
   });
   fileDb.activate();
 
@@ -94,7 +91,6 @@ Test.define("ObjectDb can assign metrics", () => {
 
       return result;
     },
-    labelGivenEntryData: data => data.message
   });
   fileDb.activate();
 

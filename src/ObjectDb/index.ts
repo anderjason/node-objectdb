@@ -24,8 +24,7 @@ export interface ObjectDbProps<T> {
 
   tagKeysGivenEntryData: (data: T) => string[];
   metricsGivenEntryData: (data: T) => Dict<number>;
-  labelGivenEntryData: (data: T) => string;
-
+  
   cacheSize?: number;
 }
 
@@ -352,6 +351,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       )
       .all(entryKey)
       .map((row) => row.metricKey);
+
     metricKeys.forEach((metricKey) => {
       const metric = this.metricGivenMetricKey(metricKey);
       metric.entryMetricValues.removeKey(entryKey);
@@ -391,7 +391,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry is required");
     }
 
-    this.writeEntryData(entry.data, entry.key, entry.createdAt);
+    this.writeEntryData(entry.data, entry.key, entry.createdAt, entry.label);
     return entry;
   }
 
@@ -428,7 +428,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   writeEntryData(
     entryData: T,
     entryKey?: string,
-    createdAt?: Instant
+    createdAt?: Instant,
+    label?: string
   ): Entry<T> {
     if (entryKey == null) {
       entryKey = UniqueId.ofRandom().toUUIDString();
@@ -438,7 +439,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const label = this.props.labelGivenEntryData(entryData);
     const now = Instant.ofNow();
 
     const entry = new Entry<T>({
