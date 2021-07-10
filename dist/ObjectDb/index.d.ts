@@ -15,6 +15,7 @@ export interface ObjectDbProps<T> {
     localFile: LocalFile;
     tagKeysGivenEntryData: (data: T) => string[];
     metricsGivenEntryData: (data: T) => Dict<number>;
+    labelGivenEntryData: (data: T) => string;
     cacheSize?: number;
 }
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
@@ -22,7 +23,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private _tagPrefixes;
     private _tags;
     private _metrics;
-    private _allEntryKeys;
+    private _entryReferences;
     private _db;
     constructor(props: ObjectDbProps<T>);
     onActivate(): void;

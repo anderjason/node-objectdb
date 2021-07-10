@@ -16,7 +16,7 @@ class ObjectDb extends skytree_1.Actor {
         this._tagPrefixes = new Set();
         this._tags = new Map();
         this._metrics = new Map();
-        this._allEntryKeys = new Set();
+        this._entryReferences = [];
         this._entryCache = new LRUCache_1.LRUCache(props.cacheSize || 10);
     }
     onActivate() {
@@ -55,6 +55,7 @@ class ObjectDb extends skytree_1.Actor {
       CREATE TABLE IF NOT EXISTS entries (
         key text PRIMARY KEY,
         data TEXT NOT NULL,
+        label TEXT,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL
       )
@@ -99,9 +100,14 @@ class ObjectDb extends skytree_1.Actor {
       ON metricValues(entryKey);
     `);
         const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
-        const entryKeys = db
-            .toRows("SELECT key FROM entries")
-            .map((row) => row.key);
+        this._entryReferences = db
+            .toRows("SELECT key, label FROM entries ORDER BY label")
+            .map((row) => {
+            return {
+                entryKey: row.key,
+                label: row.label,
+            };
+        });
         const metricKeys = db
             .toRows("SELECT key FROM metrics")
             .map((row) => row.key);
@@ -124,12 +130,11 @@ class ObjectDb extends skytree_1.Actor {
             }));
             this._metrics.set(metricKey, metric);
         }
-        this._allEntryKeys = new Set(entryKeys);
     }
     toEntryKeys(options = {}) {
         let entryKeys;
         if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
-            entryKeys = Array.from(this._allEntryKeys);
+            entryKeys = this._entryReferences.map((er) => er.entryKey);
         }
         else {
             const sets = options.requireTagKeys.map((tagKey) => {
@@ -144,13 +149,12 @@ class ObjectDb extends skytree_1.Actor {
         const metricKey = options.orderByMetricKey;
         if (metricKey != null) {
             const metric = this._metrics.get(metricKey);
-            if (metric == null) {
-                throw new Error(`Metric is not defined '${metricKey}'`);
+            if (metric != null) {
+                entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (entryKey) => {
+                    const metricValue = metric.entryMetricValues.toOptionalValueGivenKey(entryKey);
+                    return metricValue || 0;
+                }, "ascending");
             }
-            entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (entryKey) => {
-                const metricValue = metric.entryMetricValues.toOptionalValueGivenKey(entryKey);
-                return metricValue || 0;
-            }, "ascending");
         }
         let start = 0;
         let end = entryKeys.length;
@@ -306,17 +310,24 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
+        const label = this.props.labelGivenEntryData(entryData);
         const now = time_1.Instant.ofNow();
         const entry = new Entry_1.Entry({
             key: entryKey,
             db: this._db,
+            label,
             createdAt: createdAt || now,
             updatedAt: now,
         });
         entry.data = entryData;
         entry.save();
         this._entryCache.put(entryKey, entry);
-        this._allEntryKeys.add(entryKey);
+        this._entryReferences.push({
+            entryKey,
+            label,
+        });
+        // sort by label
+        this._entryReferences = util_1.ArrayUtil.arrayWithOrderFromValue(this._entryReferences, (er) => er.label || "", "ascending");
         this.rebuildMetadataGivenEntry(entry);
         return entry;
     }
@@ -325,7 +336,7 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("Entry key length must be at least 5 characters");
         }
         this._entryCache.remove(entryKey);
-        this._allEntryKeys.delete(entryKey);
+        this._entryReferences = this._entryReferences.filter(er => er.entryKey !== entryKey);
         const existingRecord = this.toOptionalEntryGivenKey(entryKey);
         if (existingRecord == null) {
             return;
