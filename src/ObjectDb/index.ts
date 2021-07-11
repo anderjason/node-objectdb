@@ -34,48 +34,18 @@ interface EntryReference {
 }
 
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
-  private _entryCache: LRUCache<Entry<T>>;
   private _tagPrefixes = new Set<string>();
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
-  private _entryLabelByKey = ObservableDict.ofEmpty<string>();
+  private _entryLabelByKey = new Map<string, string>();
   private _entryKeysSortedByLabel: string[] = [];
   private _db: DbInstance;
-
-  constructor(props: ObjectDbProps<T>) {
-    super(props);
-
-    this._entryCache = new LRUCache<Entry<T>>(props.cacheSize || 10);
-  }
 
   onActivate(): void {
     this._db = this.addActor(
       new DbInstance({
         localFile: this.props.localFile,
       })
-    );
-
-    this.cancelOnDeactivate(
-      this._entryLabelByKey.didChange.subscribe(dict => {
-        if (dict == null) {
-          this._entryKeysSortedByLabel = [];
-          return;
-        }
-
-        console.log("sorting entry keys");
-        let objects = Object.keys(dict).map(key => {
-          return {
-            entryKey: key,
-            label: dict[key]
-          };
-        });
-
-        objects = ArrayUtil.arrayWithOrderFromValue(objects, obj => {
-          return obj.label || ""
-        }, "ascending");
-
-        this._entryKeysSortedByLabel = objects.map(obj => obj.entryKey);
-      }, true)
     );
 
     this.load();
@@ -172,13 +142,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
 
-    const entryReferences: Dict<string> = {};
     db
       .toRows("SELECT key, label FROM entries ORDER BY label")
       .forEach((row) => {
-        entryReferences[row.key] = row.label;
+        this._entryLabelByKey.set(row.key, row.label);
       });
-    this._entryLabelByKey.sync(entryReferences);
+    this.sortEntryKeys();
 
     const metricKeys = db
       .toRows("SELECT key FROM metrics")
@@ -211,6 +180,25 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
       this._metrics.set(metricKey, metric);
     }
+  }
+
+  private sortEntryKeys(): void {
+    console.log("sorting entry keys");
+    
+    let objects = [];
+
+    for (let [key, value] of this._entryLabelByKey) {
+      objects.push({
+        entryKey: key,
+        label: value
+      });
+    }
+    
+    objects = ArrayUtil.arrayWithOrderFromValue(objects, obj => {
+      return obj.label || ""
+    }, "ascending");
+
+    this._entryKeysSortedByLabel = objects.map(obj => obj.entryKey);
   }
 
   toEntryKeys(options: ObjectDbReadOptions = {}): string[] {
@@ -267,7 +255,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       fn(entry);
     });
   }
-  
+
   hasEntry(entryKey: string): boolean {
     const keys = this.toEntryKeys();
     return keys.includes(entryKey);
@@ -344,11 +332,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const cachedEntry = this._entryCache.get(entryKey);
-    if (cachedEntry != null) {
-      return cachedEntry;
-    }
-
     const result: Entry<T> = new Entry<T>({
       key: entryKey,
       db: this._db,
@@ -357,8 +340,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (!result.load()) {
       return undefined;
     }
-
-    this._entryCache.put(entryKey, result);
 
     return result;
   }
@@ -370,6 +351,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       )
       .all(entryKey)
       .map((row) => row.tagKey);
+
     tagKeys.forEach((tagKey) => {
       const tag = this.tagGivenTagKey(tagKey);
       tag.entryKeys.removeValue(entryKey);
@@ -482,8 +464,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry.data = entryData;
     entry.save();
 
-    this._entryCache.put(entryKey, entry);
-    this._entryLabelByKey.setValue(entryKey, label);
+    if (this._entryLabelByKey.get(entryKey) !== "label") {
+      this._entryLabelByKey.set(entryKey, label);
+      this.sortEntryKeys();
+    }
 
     this.rebuildMetadataGivenEntry(entry);
 
@@ -495,8 +479,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    this._entryCache.remove(entryKey);
-    this._entryLabelByKey.removeKey(entryKey);
+    this._entryLabelByKey.delete(entryKey);
     
     const existingRecord = this.toOptionalEntryGivenKey(entryKey);
     if (existingRecord == null) {

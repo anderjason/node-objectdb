@@ -2,46 +2,26 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ObjectDb = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
-const observable_1 = require("@anderjason/observable");
 const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
 const Entry_1 = require("../Entry");
-const LRUCache_1 = require("../LRUCache");
 const Metric_1 = require("../Metric");
 const SqlClient_1 = require("../SqlClient");
 const Tag_1 = require("../Tag");
 class ObjectDb extends skytree_1.Actor {
-    constructor(props) {
-        super(props);
+    constructor() {
+        super(...arguments);
         this._tagPrefixes = new Set();
         this._tags = new Map();
         this._metrics = new Map();
-        this._entryLabelByKey = observable_1.ObservableDict.ofEmpty();
+        this._entryLabelByKey = new Map();
         this._entryKeysSortedByLabel = [];
-        this._entryCache = new LRUCache_1.LRUCache(props.cacheSize || 10);
     }
     onActivate() {
         this._db = this.addActor(new SqlClient_1.DbInstance({
             localFile: this.props.localFile,
         }));
-        this.cancelOnDeactivate(this._entryLabelByKey.didChange.subscribe(dict => {
-            if (dict == null) {
-                this._entryKeysSortedByLabel = [];
-                return;
-            }
-            console.log("sorting entry keys");
-            let objects = Object.keys(dict).map(key => {
-                return {
-                    entryKey: key,
-                    label: dict[key]
-                };
-            });
-            objects = util_1.ArrayUtil.arrayWithOrderFromValue(objects, obj => {
-                return obj.label || "";
-            }, "ascending");
-            this._entryKeysSortedByLabel = objects.map(obj => obj.entryKey);
-        }, true));
         this.load();
     }
     get tags() {
@@ -119,13 +99,12 @@ class ObjectDb extends skytree_1.Actor {
       ON metricValues(entryKey);
     `);
         const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
-        const entryReferences = {};
         db
             .toRows("SELECT key, label FROM entries ORDER BY label")
             .forEach((row) => {
-            entryReferences[row.key] = row.label;
+            this._entryLabelByKey.set(row.key, row.label);
         });
-        this._entryLabelByKey.sync(entryReferences);
+        this.sortEntryKeys();
         const metricKeys = db
             .toRows("SELECT key FROM metrics")
             .map((row) => row.key);
@@ -148,6 +127,20 @@ class ObjectDb extends skytree_1.Actor {
             }));
             this._metrics.set(metricKey, metric);
         }
+    }
+    sortEntryKeys() {
+        console.log("sorting entry keys");
+        let objects = [];
+        for (let [key, value] of this._entryLabelByKey) {
+            objects.push({
+                entryKey: key,
+                label: value
+            });
+        }
+        objects = util_1.ArrayUtil.arrayWithOrderFromValue(objects, obj => {
+            return obj.label || "";
+        }, "ascending");
+        this._entryKeysSortedByLabel = objects.map(obj => obj.entryKey);
     }
     toEntryKeys(options = {}) {
         let entryKeys;
@@ -244,10 +237,6 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        const cachedEntry = this._entryCache.get(entryKey);
-        if (cachedEntry != null) {
-            return cachedEntry;
-        }
         const result = new Entry_1.Entry({
             key: entryKey,
             db: this._db,
@@ -255,7 +244,6 @@ class ObjectDb extends skytree_1.Actor {
         if (!result.load()) {
             return undefined;
         }
-        this._entryCache.put(entryKey, result);
         return result;
     }
     removeMetadataGivenEntryKey(entryKey) {
@@ -344,8 +332,10 @@ class ObjectDb extends skytree_1.Actor {
         });
         entry.data = entryData;
         entry.save();
-        this._entryCache.put(entryKey, entry);
-        this._entryLabelByKey.setValue(entryKey, label);
+        if (this._entryLabelByKey.get(entryKey) !== "label") {
+            this._entryLabelByKey.set(entryKey, label);
+            this.sortEntryKeys();
+        }
         this.rebuildMetadataGivenEntry(entry);
         return entry;
     }
@@ -353,8 +343,7 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        this._entryCache.remove(entryKey);
-        this._entryLabelByKey.removeKey(entryKey);
+        this._entryLabelByKey.delete(entryKey);
         const existingRecord = this.toOptionalEntryGivenKey(entryKey);
         if (existingRecord == null) {
             return;

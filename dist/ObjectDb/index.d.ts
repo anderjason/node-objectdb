@@ -18,19 +18,18 @@ export interface ObjectDbProps<T> {
     cacheSize?: number;
 }
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
-    private _entryCache;
     private _tagPrefixes;
     private _tags;
     private _metrics;
     private _entryLabelByKey;
     private _entryKeysSortedByLabel;
     private _db;
-    constructor(props: ObjectDbProps<T>);
     onActivate(): void;
     get tags(): Tag[];
     get metrics(): Metric[];
     get tagPrefixes(): string[];
     private load;
+    private sortEntryKeys;
     toEntryKeys(options?: ObjectDbReadOptions): string[];
     forEach(fn: (entry: Entry<T>) => void): void;
     hasEntry(entryKey: string): boolean;
