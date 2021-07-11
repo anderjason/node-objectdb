@@ -183,7 +183,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   private sortEntryKeys(): void {
-    console.log("sorting entry keys");
+    console.log("sorting entry keys", this._db.props.localFile.toAbsolutePath());
     
     let objects = [];
 
@@ -464,7 +464,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry.data = entryData;
     entry.save();
 
-    if (this._entryLabelByKey.get(entryKey) !== "label") {
+    if (this._entryLabelByKey.get(entryKey) !== label) {
       this._entryLabelByKey.set(entryKey, label);
       this.sortEntryKeys();
     }

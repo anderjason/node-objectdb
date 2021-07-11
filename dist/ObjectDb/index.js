@@ -129,7 +129,7 @@ class ObjectDb extends skytree_1.Actor {
         }
     }
     sortEntryKeys() {
-        console.log("sorting entry keys");
+        console.log("sorting entry keys", this._db.props.localFile.toAbsolutePath());
         let objects = [];
         for (let [key, value] of this._entryLabelByKey) {
             objects.push({
@@ -332,7 +332,7 @@ class ObjectDb extends skytree_1.Actor {
         });
         entry.data = entryData;
         entry.save();
-        if (this._entryLabelByKey.get(entryKey) !== "label") {
+        if (this._entryLabelByKey.get(entryKey) !== label) {
             this._entryLabelByKey.set(entryKey, label);
             this.sortEntryKeys();
         }
