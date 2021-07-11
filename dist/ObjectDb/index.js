@@ -184,6 +184,12 @@ class ObjectDb extends skytree_1.Actor {
         }
         return entryKeys.slice(start, end);
     }
+    forEach(fn) {
+        this._entryKeysSortedByLabel.forEach(entryKey => {
+            const entry = this.toOptionalEntryGivenKey(entryKey);
+            fn(entry);
+        });
+    }
     hasEntry(entryKey) {
         const keys = this.toEntryKeys();
         return keys.includes(entryKey);

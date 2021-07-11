@@ -261,6 +261,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return entryKeys.slice(start, end);
   }
 
+  forEach(fn: (entry: Entry<T>) => void): void {
+    this._entryKeysSortedByLabel.forEach(entryKey => {
+      const entry = this.toOptionalEntryGivenKey(entryKey);
+      fn(entry);
+    });
+  }
+  
   hasEntry(entryKey: string): boolean {
     const keys = this.toEntryKeys();
     return keys.includes(entryKey);

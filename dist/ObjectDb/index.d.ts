@@ -32,6 +32,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     get tagPrefixes(): string[];
     private load;
     toEntryKeys(options?: ObjectDbReadOptions): string[];
+    forEach(fn: (entry: Entry<T>) => void): void;
     hasEntry(entryKey: string): boolean;
     runTransaction(fn: () => void): void;
     toEntryCount(requireTagKeys?: string[]): number;
