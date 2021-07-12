@@ -108,14 +108,21 @@ class ObjectDb extends skytree_1.Actor {
       CREATE INDEX IF NOT EXISTS idxMetricValuesEntryKey
       ON metricValues(entryKey);
     `);
+        this.stopwatch.start("selectTagKeys");
         const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
+        this.stopwatch.stop("selectTagKeys");
+        this.stopwatch.start("selectEntryKeys");
         db.toRows("SELECT key, label FROM entries ORDER BY label").forEach((row) => {
             this._entryLabelByKey.set(row.key, row.label);
         });
+        this.stopwatch.stop("selectEntryKeys");
         this.sortEntryKeys();
+        this.stopwatch.start("selectMetricKeys");
         const metricKeys = db
             .toRows("SELECT key FROM metrics")
             .map((row) => row.key);
+        this.stopwatch.stop("selectMetricKeys");
+        this.stopwatch.start("createTags");
         const tagKeyCount = tagKeys.length;
         for (let i = 0; i < tagKeyCount; i++) {
             const tagKey = tagKeys[i];
@@ -126,6 +133,8 @@ class ObjectDb extends skytree_1.Actor {
             this._tags.set(tagKey, tag);
             this._tagPrefixes.add(tag.tagPrefix);
         }
+        this.stopwatch.stop("createTags");
+        this.stopwatch.start("createMetrics");
         const metricKeyCount = metricKeys.length;
         for (let i = 0; i < metricKeyCount; i++) {
             const metricKey = metricKeys[i];
@@ -135,11 +144,11 @@ class ObjectDb extends skytree_1.Actor {
             }));
             this._metrics.set(metricKey, metric);
         }
+        this.stopwatch.stop("createTags");
     }
     // TC: O(N log N)
     // SC: O(N)
     sortEntryKeys() {
-        console.log("Sorting entry keys", this._db.props.localFile.toAbsolutePath());
         this.stopwatch.start("sortEntryKeys");
         let objects = [];
         for (let [key, value] of this._entryLabelByKey) {
