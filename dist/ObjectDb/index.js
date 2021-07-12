@@ -169,7 +169,7 @@ class ObjectDb extends skytree_1.Actor {
                 if (tag == null) {
                     return new Set();
                 }
-                return tag.entryKeys.toSet();
+                return new Set(tag.entryKeys.values());
             });
             entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
         }
@@ -178,7 +178,7 @@ class ObjectDb extends skytree_1.Actor {
             const metric = this._metrics.get(metricKey);
             if (metric != null) {
                 entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (entryKey) => {
-                    const metricValue = metric.entryMetricValues.toOptionalValueGivenKey(entryKey);
+                    const metricValue = metric.entryMetricValues.get(entryKey);
                     return metricValue || 0;
                 }, "ascending");
             }
@@ -275,7 +275,7 @@ class ObjectDb extends skytree_1.Actor {
             .map((row) => row.tagKey);
         tagKeys.forEach((tagKey) => {
             const tag = this.tagGivenTagKey(tagKey);
-            tag.entryKeys.removeValue(entryKey);
+            tag.deleteValue(entryKey);
         });
         const metricKeys = this._db
             .prepareCached("select distinct metricKey from metricValues where entryKey = ?")
@@ -283,7 +283,7 @@ class ObjectDb extends skytree_1.Actor {
             .map((row) => row.metricKey);
         metricKeys.forEach((metricKey) => {
             const metric = this.metricGivenMetricKey(metricKey);
-            metric.entryMetricValues.removeKey(entryKey);
+            metric.deleteKey(entryKey);
         });
     }
     rebuildMetadata() {
@@ -301,12 +301,12 @@ class ObjectDb extends skytree_1.Actor {
         const metricValues = this.props.metricsGivenEntryData(entry.data);
         tagKeys.forEach((tagKey) => {
             const tag = this.tagGivenTagKey(tagKey);
-            tag.entryKeys.addValue(entry.key);
+            tag.addValue(entry.key);
         });
         Object.keys(metricValues).forEach((metricKey) => {
             const metric = this.metricGivenMetricKey(metricKey);
             const metricValue = metricValues[metricKey];
-            metric.entryMetricValues.setValue(entry.key, metricValue);
+            metric.setValue(entry.key, metricValue);
         });
         this.stopwatch.stop("rebuildMetadataGivenEntry");
     }

@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Tag = void 0;
-const observable_1 = require("@anderjason/observable");
 const skytree_1 = require("skytree");
+const ReadOnlySet_1 = require("../ReadOnlySet");
 class Tag extends skytree_1.Actor {
     constructor(props) {
         super(props);
+        this._entryKeys = new Set();
         if (props.tagKey == null) {
             throw new Error("tagKey is required");
         }
@@ -22,9 +23,11 @@ class Tag extends skytree_1.Actor {
     }
     get entryKeys() {
         this.loadEntryKeysOnce();
-        return this._entryKeys;
+        if (this._readOnlyEntryKeys == null) {
+            this._readOnlyEntryKeys = new ReadOnlySet_1.ReadOnlySet(this._entryKeys);
+        }
+        return this._readOnlyEntryKeys;
     }
-    onActivate() { }
     loadEntryKeysOnce() {
         if (this._entryKeys != null) {
             return;
@@ -36,21 +39,15 @@ class Tag extends skytree_1.Actor {
         const rows = db
             .prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
             .all(this.key);
-        this._entryKeys = observable_1.ObservableSet.givenValues(rows.map((row) => row.entryKey));
-        this.cancelOnDeactivate(this._entryKeys.didChangeSteps.subscribe((steps) => {
-            steps.forEach((step) => {
-                switch (step.type) {
-                    case "add":
-                        this._insertEntryKeyQuery.run(this.key, step.value);
-                        break;
-                    case "remove":
-                        this._deleteEntryKeyQuery.run(this.key, step.value);
-                        break;
-                    default:
-                        break;
-                }
-            });
-        }));
+        this._entryKeys = new Set(rows.map((row) => row.entryKey));
+    }
+    addValue(value) {
+        this._insertEntryKeyQuery.run(this.key, value);
+        this._entryKeys.add(value);
+    }
+    deleteValue(value) {
+        this._entryKeys.delete(value);
+        this._deleteEntryKeyQuery.run(this.key, value);
     }
 }
 exports.Tag = Tag;

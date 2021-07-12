@@ -1,7 +1,6 @@
-import { ObservableSet } from "@anderjason/observable";
-import { Duration, Instant } from "@anderjason/time";
 import { Statement } from "better-sqlite3";
 import { Actor } from "skytree";
+import { ReadOnlySet } from "../ReadOnlySet";
 import { DbInstance } from "../SqlClient";
 
 export interface TagProps {
@@ -14,16 +13,22 @@ export class Tag extends Actor<TagProps> {
   readonly tagValue: string;
   readonly key: string;
 
-  private _entryKeys: ObservableSet<string>;
-  private _insertEntryKeyQuery: Statement<[string, string]>;
-  private _deleteEntryKeyQuery: Statement<[string, string]>;
-
-  get entryKeys(): ObservableSet<string> {
+  get entryKeys(): ReadOnlySet<string> {
     this.loadEntryKeysOnce();
 
-    return this._entryKeys;
+    if (this._readOnlyEntryKeys == null) {
+      this._readOnlyEntryKeys = new ReadOnlySet(this._entryKeys);
+    }
+
+    return this._readOnlyEntryKeys;
   }
 
+  private _entryKeys = new Set<string>();
+  private _readOnlyEntryKeys: ReadOnlySet<string>;
+
+  private _insertEntryKeyQuery: Statement<[string, string]>;
+  private _deleteEntryKeyQuery: Statement<[string, string]>;
+  
   constructor(props: TagProps) {
     super(props);
 
@@ -48,8 +53,6 @@ export class Tag extends Actor<TagProps> {
     this.tagValue = parts[1];
   }
 
-  onActivate() {}
-
   private loadEntryKeysOnce(): void {
     if (this._entryKeys != null) {
       return;
@@ -72,25 +75,18 @@ export class Tag extends Actor<TagProps> {
       .prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
       .all(this.key);
 
-    this._entryKeys = ObservableSet.givenValues<string>(
+    this._entryKeys = new Set(
       rows.map((row) => row.entryKey)
     );
+  }
 
-    this.cancelOnDeactivate(
-      this._entryKeys.didChangeSteps.subscribe((steps) => {
-        steps.forEach((step) => {
-          switch (step.type) {
-            case "add":
-              this._insertEntryKeyQuery.run(this.key, step.value);
-              break;
-            case "remove":
-              this._deleteEntryKeyQuery.run(this.key, step.value);
-              break;
-            default:
-              break;
-          }
-        });
-      })
-    );
+  addValue(value: string): void {
+    this._insertEntryKeyQuery.run(this.key, value);
+    this._entryKeys.add(value);
+  }
+
+  deleteValue(value: string): void {
+    this._entryKeys.delete(value);
+    this._deleteEntryKeyQuery.run(this.key, value);
   }
 }

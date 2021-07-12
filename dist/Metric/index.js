@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Metric = void 0;
-const observable_1 = require("@anderjason/observable");
 const skytree_1 = require("skytree");
+const ReadOnlyMap_1 = require("../ReadOnlyMap");
 class Metric extends skytree_1.Actor {
     constructor(props) {
         super(props);
+        this._entryMetricValues = new Map();
         if (props.metricKey == null) {
             throw new Error("metricKey is required");
         }
@@ -16,7 +17,10 @@ class Metric extends skytree_1.Actor {
     }
     get entryMetricValues() {
         this.loadOnce();
-        return this._entryMetricValues;
+        if (this._readOnlyMetricValues == null) {
+            this._readOnlyMetricValues = new ReadOnlyMap_1.ReadOnlyMap(this._entryMetricValues);
+        }
+        return this._readOnlyMetricValues;
     }
     onActivate() { }
     loadOnce() {
@@ -30,22 +34,16 @@ class Metric extends skytree_1.Actor {
         const rows = db
             .prepareCached("SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?")
             .all(this.key);
-        const values = {};
         rows.forEach((row) => {
-            values[row.entryKey] = row.metricValue;
+            this._entryMetricValues.set(row.entryKey, row.metricValue);
         });
-        this._entryMetricValues = observable_1.ObservableDict.givenValues(values);
-        this.cancelOnDeactivate(this._entryMetricValues.didChangeSteps.subscribe((steps) => {
-            steps.forEach((step) => {
-                if (step.newValue != null &&
-                    (step.type == "add" || step.type == "update")) {
-                    this._upsertEntryMetricValueQuery.run(this.key, step.key, step.newValue);
-                }
-                else {
-                    this._deleteEntryMetricValueQuery.run(this.key, step.key);
-                }
-            });
-        }));
+    }
+    setValue(key, newValue) {
+        this._upsertEntryMetricValueQuery.run(this.key, key, newValue);
+        this._entryMetricValues.set(key, newValue);
+    }
+    deleteKey(key) {
+        this._deleteEntryMetricValueQuery.run(this.key, key);
     }
 }
 exports.Metric = Metric;

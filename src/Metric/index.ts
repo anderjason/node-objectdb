@@ -1,6 +1,6 @@
-import { Dict, ObservableDict } from "@anderjason/observable";
 import { Statement } from "better-sqlite3";
 import { Actor } from "skytree";
+import { ReadOnlyMap } from "../ReadOnlyMap";
 import { DbInstance } from "../SqlClient";
 
 export interface MetricProps {
@@ -11,13 +11,19 @@ export interface MetricProps {
 export class Metric extends Actor<MetricProps> {
   readonly key: string;
 
-  get entryMetricValues(): ObservableDict<number> {
+  get entryMetricValues(): ReadOnlyMap<string, number> {
     this.loadOnce();
 
-    return this._entryMetricValues;
+    if (this._readOnlyMetricValues == null) {
+      this._readOnlyMetricValues = new ReadOnlyMap(this._entryMetricValues);
+    }
+
+    return this._readOnlyMetricValues;
   }
 
-  private _entryMetricValues: ObservableDict<number>;
+  private _entryMetricValues = new Map<string, number>();
+  private _readOnlyMetricValues: ReadOnlyMap<string, number>;
+  
   private _upsertEntryMetricValueQuery: Statement<[string, string, number]>;
   private _deleteEntryMetricValueQuery: Statement<[string, string]>;
 
@@ -59,30 +65,21 @@ export class Metric extends Actor<MetricProps> {
       )
       .all(this.key);
 
-    const values: Dict<number> = {};
     rows.forEach((row) => {
-      values[row.entryKey] = row.metricValue;
+      this._entryMetricValues.set(row.entryKey, row.metricValue);
     });
+  }
 
-    this._entryMetricValues = ObservableDict.givenValues(values);
-
-    this.cancelOnDeactivate(
-      this._entryMetricValues.didChangeSteps.subscribe((steps) => {
-        steps.forEach((step) => {
-          if (
-            step.newValue != null &&
-            (step.type == "add" || step.type == "update")
-          ) {
-            this._upsertEntryMetricValueQuery.run(
-              this.key,
-              step.key,
-              step.newValue
-            );
-          } else {
-            this._deleteEntryMetricValueQuery.run(this.key, step.key);
-          }
-        });
-      })
+  setValue(key: string, newValue: number): void {
+    this._upsertEntryMetricValueQuery.run(
+      this.key,
+      key,
+      newValue
     );
+    this._entryMetricValues.set(key, newValue);
+  }
+
+  deleteKey(key: string): void {
+    this._deleteEntryMetricValueQuery.run(this.key, key);
   }
 }

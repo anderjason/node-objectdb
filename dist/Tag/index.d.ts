@@ -1,5 +1,5 @@
-import { ObservableSet } from "@anderjason/observable";
 import { Actor } from "skytree";
+import { ReadOnlySet } from "../ReadOnlySet";
 import { DbInstance } from "../SqlClient";
 export interface TagProps {
     tagKey: string;
@@ -9,11 +9,13 @@ export declare class Tag extends Actor<TagProps> {
     readonly tagPrefix: string;
     readonly tagValue: string;
     readonly key: string;
+    get entryKeys(): ReadOnlySet<string>;
     private _entryKeys;
+    private _readOnlyEntryKeys;
     private _insertEntryKeyQuery;
     private _deleteEntryKeyQuery;
-    get entryKeys(): ObservableSet<string>;
     constructor(props: TagProps);
-    onActivate(): void;
     private loadEntryKeysOnce;
+    addValue(value: string): void;
+    deleteValue(value: string): void;
 }

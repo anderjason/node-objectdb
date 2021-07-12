@@ -32,7 +32,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly entryDidChange = new TypedEvent<string>();
 
   readonly stopwatch: Stopwatch;
-  
+
   private _tagPrefixes = new Set<string>();
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
@@ -242,7 +242,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
           return new Set<string>();
         }
 
-        return tag.entryKeys.toSet();
+        return new Set(tag.entryKeys.values());
       });
 
       entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
@@ -255,8 +255,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         entryKeys = ArrayUtil.arrayWithOrderFromValue(
           entryKeys,
           (entryKey) => {
-            const metricValue =
-              metric.entryMetricValues.toOptionalValueGivenKey(entryKey);
+            const metricValue = metric.entryMetricValues.get(entryKey);
             return metricValue || 0;
           },
           "ascending"
@@ -394,7 +393,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     tagKeys.forEach((tagKey) => {
       const tag = this.tagGivenTagKey(tagKey);
-      tag.entryKeys.removeValue(entryKey);
+      tag.deleteValue(entryKey);
     });
 
     const metricKeys = this._db
@@ -406,7 +405,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     metricKeys.forEach((metricKey) => {
       const metric = this.metricGivenMetricKey(metricKey);
-      metric.entryMetricValues.removeKey(entryKey);
+      metric.deleteKey(entryKey);
     });
   }
 
@@ -428,14 +427,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     tagKeys.forEach((tagKey) => {
       const tag = this.tagGivenTagKey(tagKey);
-      tag.entryKeys.addValue(entry.key);
+      tag.addValue(entry.key);
     });
 
     Object.keys(metricValues).forEach((metricKey) => {
       const metric = this.metricGivenMetricKey(metricKey);
 
       const metricValue = metricValues[metricKey];
-      metric.entryMetricValues.setValue(entry.key, metricValue);
+      metric.setValue(entry.key, metricValue);
     });
 
     this.stopwatch.stop("rebuildMetadataGivenEntry");
