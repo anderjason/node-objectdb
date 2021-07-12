@@ -174,13 +174,20 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const tagKeyCount = tagKeys.length;
     for (let i = 0; i < tagKeyCount; i++) {
       const tagKey = tagKeys[i];
-      const tag = this.addActor(
-        new Tag({
-          tagKey,
-          db: this._db,
-          stopwatch: this.stopwatch
-        })
+
+      this.stopwatch.start("createTag");
+      const tag = new Tag({
+        tagKey,
+        db: this._db,
+        stopwatch: this.stopwatch
+      });
+      this.stopwatch.stop("createTag");
+
+      this.stopwatch.start("activateTag");
+      this.addActor(
+        tag
       );
+      this.stopwatch.stop("activateTag");
 
       this._tags.set(tagKey, tag);
       this._tagPrefixes.add(tag.tagPrefix);

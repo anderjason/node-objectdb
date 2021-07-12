@@ -126,11 +126,16 @@ class ObjectDb extends skytree_1.Actor {
         const tagKeyCount = tagKeys.length;
         for (let i = 0; i < tagKeyCount; i++) {
             const tagKey = tagKeys[i];
-            const tag = this.addActor(new Tag_1.Tag({
+            this.stopwatch.start("createTag");
+            const tag = new Tag_1.Tag({
                 tagKey,
                 db: this._db,
                 stopwatch: this.stopwatch
-            }));
+            });
+            this.stopwatch.stop("createTag");
+            this.stopwatch.start("activateTag");
+            this.addActor(tag);
+            this.stopwatch.stop("activateTag");
             this._tags.set(tagKey, tag);
             this._tagPrefixes.add(tag.tagPrefix);
         }

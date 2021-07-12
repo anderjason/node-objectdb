@@ -56,12 +56,14 @@ export class Tag extends Actor<TagProps> {
 
     const { db } = this.props;
 
+    this.props.stopwatch.start("tag:prepareCached");
     this._insertEntryKeyQuery = db.prepareCached(
       "INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)"
     );
     this._deleteEntryKeyQuery = db.prepareCached(
       "DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?"
     );
+    this.props.stopwatch.stop("tag:prepareCached");
   }
 
   private loadOnce(): void {

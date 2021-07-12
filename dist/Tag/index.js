@@ -20,8 +20,10 @@ class Tag extends skytree_1.Actor {
         this.tagPrefix = parts[0];
         this.tagValue = parts[1];
         const { db } = this.props;
+        this.props.stopwatch.start("tag:prepareCached");
         this._insertEntryKeyQuery = db.prepareCached("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
         this._deleteEntryKeyQuery = db.prepareCached("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
+        this.props.stopwatch.stop("tag:prepareCached");
     }
     get entryKeys() {
         this.loadOnce();
