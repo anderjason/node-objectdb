@@ -37,6 +37,7 @@ class Metric extends skytree_1.Actor {
         const rows = db
             .prepareCached("SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?")
             .all(this.key);
+        this._entryMetricValues = new Map();
         rows.forEach((row) => {
             this._entryMetricValues.set(row.entryKey, row.metricValue);
         });

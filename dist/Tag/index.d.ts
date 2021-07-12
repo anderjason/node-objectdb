@@ -1,9 +1,11 @@
+import { Stopwatch } from "@anderjason/time";
 import { Actor } from "skytree";
 import { ReadOnlySet } from "../ReadOnlySet";
 import { DbInstance } from "../SqlClient";
 export interface TagProps {
     tagKey: string;
     db: DbInstance;
+    stopwatch: Stopwatch;
 }
 export declare class Tag extends Actor<TagProps> {
     readonly tagPrefix: string;

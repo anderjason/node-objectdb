@@ -71,6 +71,7 @@ export class Metric extends Actor<MetricProps> {
       )
       .all(this.key);
 
+    this._entryMetricValues = new Map<string, number>();
     rows.forEach((row) => {
       this._entryMetricValues.set(row.entryKey, row.metricValue);
     });
@@ -85,7 +86,7 @@ export class Metric extends Actor<MetricProps> {
 
   deleteKey(key: string): void {
     this.loadOnce();
-    
+
     this._deleteEntryMetricValueQuery.run(this.key, key);
   }
 }

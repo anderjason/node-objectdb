@@ -178,6 +178,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         new Tag({
           tagKey,
           db: this._db,
+          stopwatch: this.stopwatch
         })
       );
 
@@ -462,6 +463,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         new Tag({
           tagKey,
           db: this._db,
+          stopwatch: this.stopwatch
         })
       );
       this._tags.set(tagKey, tag);

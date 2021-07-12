@@ -34,17 +34,27 @@ class Tag extends skytree_1.Actor {
         if (this._entryKeys != null) {
             return;
         }
+        this.props.stopwatch.start("tag:loadOnce");
         const { db } = this.props;
+        this.props.stopwatch.start("tag:insertIntoTags");
         db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)").run(this.key, this.tagPrefix, this.tagValue);
+        this.props.stopwatch.stop("tag:insertIntoTags");
+        this.props.stopwatch.start("tag:selectEntryKeys");
         const rows = db
             .prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
             .all(this.key);
+        this.props.stopwatch.stop("tag:selectEntryKeys");
+        this.props.stopwatch.start("tag:createSet");
         this._entryKeys = new Set(rows.map((row) => row.entryKey));
+        this.props.stopwatch.stop("tag:createSet");
+        this.props.stopwatch.stop("tag:loadOnce");
     }
     addValue(value) {
         this.loadOnce();
+        this.props.stopwatch.start("tag:addValue");
         this._insertEntryKeyQuery.run(this.key, value);
         this._entryKeys.add(value);
+        this.props.stopwatch.stop("tag:addValue");
     }
     deleteValue(value) {
         this.loadOnce();

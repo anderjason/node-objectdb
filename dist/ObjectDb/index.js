@@ -129,6 +129,7 @@ class ObjectDb extends skytree_1.Actor {
             const tag = this.addActor(new Tag_1.Tag({
                 tagKey,
                 db: this._db,
+                stopwatch: this.stopwatch
             }));
             this._tags.set(tagKey, tag);
             this._tagPrefixes.add(tag.tagPrefix);
@@ -332,6 +333,7 @@ class ObjectDb extends skytree_1.Actor {
             tag = this.addActor(new Tag_1.Tag({
                 tagKey,
                 db: this._db,
+                stopwatch: this.stopwatch
             }));
             this._tags.set(tagKey, tag);
         }
