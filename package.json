@@ -25,7 +25,8 @@
     "@anderjason/time": "^2.0.2",
     "@anderjason/util": "^2.0.8",
     "better-sqlite3": "^7.4.1",
-    "skytree": "^9.4.0"
+    "skytree": "^9.4.0",
+    "stopwatch-node": "^1.1.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^5.4.1",
