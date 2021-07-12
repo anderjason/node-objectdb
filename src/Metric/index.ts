@@ -23,7 +23,7 @@ export class Metric extends Actor<MetricProps> {
 
   private _entryMetricValues = new Map<string, number>();
   private _readOnlyMetricValues: ReadOnlyMap<string, number>;
-  
+
   private _upsertEntryMetricValueQuery: Statement<[string, string, number]>;
   private _deleteEntryMetricValueQuery: Statement<[string, string]>;
 
@@ -39,21 +39,23 @@ export class Metric extends Actor<MetricProps> {
     }
 
     this.key = props.metricKey;
+
+    const { db } = this.props;
+
+    this._upsertEntryMetricValueQuery = db.prepareCached(`
+      INSERT INTO metricValues (metricKey, entryKey, metricValue)
+      VALUES (?, ?, ?)
+    `);
+
+    this._deleteEntryMetricValueQuery = db.prepareCached(
+      "DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?"
+    );
   }
 
   onActivate() {}
 
   private loadOnce(): void {
     const { db } = this.props;
-
-    this._upsertEntryMetricValueQuery = db.prepareCached(`
-        INSERT INTO metricValues (metricKey, entryKey, metricValue)
-        VALUES (?, ?, ?)
-      `);
-
-    this._deleteEntryMetricValueQuery = db.prepareCached(
-      "DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?"
-    );
 
     db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)").run(
       this.key
@@ -71,11 +73,7 @@ export class Metric extends Actor<MetricProps> {
   }
 
   setValue(key: string, newValue: number): void {
-    this._upsertEntryMetricValueQuery.run(
-      this.key,
-      key,
-      newValue
-    );
+    this._upsertEntryMetricValueQuery.run(this.key, key, newValue);
     this._entryMetricValues.set(key, newValue);
   }
 

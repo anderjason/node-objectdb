@@ -14,6 +14,12 @@ class Metric extends skytree_1.Actor {
             throw new Error("db is required");
         }
         this.key = props.metricKey;
+        const { db } = this.props;
+        this._upsertEntryMetricValueQuery = db.prepareCached(`
+      INSERT INTO metricValues (metricKey, entryKey, metricValue)
+      VALUES (?, ?, ?)
+    `);
+        this._deleteEntryMetricValueQuery = db.prepareCached("DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?");
     }
     get entryMetricValues() {
         this.loadOnce();
@@ -25,11 +31,6 @@ class Metric extends skytree_1.Actor {
     onActivate() { }
     loadOnce() {
         const { db } = this.props;
-        this._upsertEntryMetricValueQuery = db.prepareCached(`
-        INSERT INTO metricValues (metricKey, entryKey, metricValue)
-        VALUES (?, ?, ?)
-      `);
-        this._deleteEntryMetricValueQuery = db.prepareCached("DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?");
         db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)").run(this.key);
         const rows = db
             .prepareCached("SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?")

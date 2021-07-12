@@ -51,12 +51,6 @@ export class Tag extends Actor<TagProps> {
     const parts = props.tagKey.split(":");
     this.tagPrefix = parts[0];
     this.tagValue = parts[1];
-  }
-
-  private loadEntryKeysOnce(): void {
-    if (this._entryKeys != null) {
-      return;
-    }
 
     const { db } = this.props;
 
@@ -66,6 +60,14 @@ export class Tag extends Actor<TagProps> {
     this._deleteEntryKeyQuery = db.prepareCached(
       "DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?"
     );
+  }
+
+  private loadEntryKeysOnce(): void {
+    if (this._entryKeys != null) {
+      return;
+    }
+
+    const { db } = this.props;
 
     db.prepareCached(
       "INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)"

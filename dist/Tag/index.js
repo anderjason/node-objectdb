@@ -20,6 +20,9 @@ class Tag extends skytree_1.Actor {
         const parts = props.tagKey.split(":");
         this.tagPrefix = parts[0];
         this.tagValue = parts[1];
+        const { db } = this.props;
+        this._insertEntryKeyQuery = db.prepareCached("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
+        this._deleteEntryKeyQuery = db.prepareCached("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
     }
     get entryKeys() {
         this.loadEntryKeysOnce();
@@ -33,8 +36,6 @@ class Tag extends skytree_1.Actor {
             return;
         }
         const { db } = this.props;
-        this._insertEntryKeyQuery = db.prepareCached("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
-        this._deleteEntryKeyQuery = db.prepareCached("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
         db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)").run(this.key, this.tagPrefix, this.tagValue);
         const rows = db
             .prepareCached("SELECT entryKey FROM tagEntries WHERE tagKey = ?")
