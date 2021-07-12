@@ -194,6 +194,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
+  stopWatchReport(): void {
+    Object.keys(this.stopWatches).forEach(key => {
+      const dict = this.stopWatches as any;
+      const stopWatch = dict[key] as StopWatch;
+      stopWatch.prettyPrint();
+    });
+  }
+
   // TC: O(N log N)
   // SC: O(N)
   private sortEntryKeys(): void {

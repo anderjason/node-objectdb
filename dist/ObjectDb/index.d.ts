@@ -4,6 +4,7 @@ import { Instant } from "@anderjason/time";
 import { Actor } from "skytree";
 import { Entry } from "../Entry";
 import { Metric } from "../Metric";
+import { StopWatch } from "stopwatch-node";
 import { Tag } from "../Tag";
 export interface ObjectDbReadOptions {
     requireTagKeys?: string[];
@@ -20,6 +21,13 @@ export interface ObjectDbProps<T> {
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly collectionDidChange: TypedEvent<void>;
     readonly entryDidChange: TypedEvent<string>;
+    readonly stopWatches: {
+        sortEntryKeys: StopWatch;
+        writeEntryData: StopWatch;
+        toEntryKeys: StopWatch;
+        toOptionalEntryGivenKey: StopWatch;
+        rebuildMetadataGivenEntry: StopWatch;
+    };
     private _tagPrefixes;
     private _tags;
     private _metrics;
@@ -32,6 +40,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     get metrics(): Metric[];
     get tagPrefixes(): string[];
     private load;
+    stopWatchReport(): void;
     private sortEntryKeys;
     toEntryKeys(options?: ObjectDbReadOptions): string[];
     forEach(fn: (entry: Entry<T>) => void): void;
