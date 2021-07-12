@@ -31,8 +31,8 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     super(props);
 
     this.key = props.key || UniqueId.ofRandom().toUUIDString();
-    this.createdAt = props.createdAt || Instant.ofNow();
-    this.updatedAt = props.updatedAt || props.createdAt || Instant.ofNow();
+    this.createdAt = props.createdAt;
+    this.updatedAt = props.updatedAt || props.createdAt;
     this.label = props.label;
   }
 
@@ -53,6 +53,12 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
   save(): void {
     const data = JSON.stringify(this.data);
 
+    this.updatedAt = Instant.ofNow();
+
+    if (this.createdAt == null) {
+      this.createdAt = this.updatedAt;
+    }
+    
     const createdAtMs = this.createdAt.toEpochMilliseconds();
     const updatedAtMs = this.updatedAt.toEpochMilliseconds();
 

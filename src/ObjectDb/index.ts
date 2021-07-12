@@ -1,7 +1,7 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
-import { Instant } from "@anderjason/time";
+import { Debounce, Duration, Instant } from "@anderjason/time";
 import { ArrayUtil, SetUtil } from "@anderjason/util";
 import { Actor } from "skytree";
 import { Broadcast } from "../Broadcast";
@@ -28,11 +28,6 @@ export interface ObjectDbProps<T> {
   cacheSize?: number;
 }
 
-interface EntryReference {
-  entryKey: string;
-  label?: string;
-}
-
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly collectionDidChange = new TypedEvent();
   readonly entryDidChange = new TypedEvent<string>();
@@ -43,6 +38,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _entryLabelByKey = new Map<string, string>();
   private _entryKeysSortedByLabel: string[] = [];
   private _db: DbInstance;
+  private _sortLater = new Debounce({
+    fn: () => {
+      this.sortEntryKeys();
+    },
+    duration: Duration.givenSeconds(5)
+  });
 
   onActivate(): void {
     this._db = this.addActor(
@@ -185,7 +186,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
+  // TC: O(N log N)
+  // SC: O(N)
   private sortEntryKeys(): void {
+    console.log("Sorting entry keys", this._db.props.localFile.toAbsolutePath());
     let objects = [];
 
     for (let [key, value] of this._entryLabelByKey) {
@@ -254,6 +258,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return entryKeys.slice(start, end);
   }
 
+  // TC: O(N)
   forEach(fn: (entry: Entry<T>) => void): void {
     this._entryKeysSortedByLabel.forEach(entryKey => {
       const entry = this.toOptionalEntryGivenKey(entryKey);
@@ -476,7 +481,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (this._entryLabelByKey.get(entryKey) !== label) {
       this._entryLabelByKey.set(entryKey, label);
-      this.sortEntryKeys();
+      this._sortLater.invoke();
     }
 
     this.rebuildMetadataGivenEntry(entry);

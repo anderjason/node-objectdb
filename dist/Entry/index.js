@@ -8,8 +8,8 @@ class Entry extends PropsObject_1.PropsObject {
     constructor(props) {
         super(props);
         this.key = props.key || node_crypto_1.UniqueId.ofRandom().toUUIDString();
-        this.createdAt = props.createdAt || time_1.Instant.ofNow();
-        this.updatedAt = props.updatedAt || props.createdAt || time_1.Instant.ofNow();
+        this.createdAt = props.createdAt;
+        this.updatedAt = props.updatedAt || props.createdAt;
         this.label = props.label;
     }
     load() {
@@ -25,6 +25,10 @@ class Entry extends PropsObject_1.PropsObject {
     }
     save() {
         const data = JSON.stringify(this.data);
+        this.updatedAt = time_1.Instant.ofNow();
+        if (this.createdAt == null) {
+            this.createdAt = this.updatedAt;
+        }
         const createdAtMs = this.createdAt.toEpochMilliseconds();
         const updatedAtMs = this.updatedAt.toEpochMilliseconds();
         this.props.db.runQuery(`
