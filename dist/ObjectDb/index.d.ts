@@ -2,7 +2,6 @@ import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { Actor } from "skytree";
-import { Broadcast } from "../Broadcast";
 import { Entry } from "../Entry";
 import { Metric } from "../Metric";
 import { Tag } from "../Tag";
@@ -19,8 +18,8 @@ export interface ObjectDbProps<T> {
     cacheSize?: number;
 }
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
-    readonly broadcast: Broadcast;
-    readonly entriesDidChange: TypedEvent<void>;
+    readonly collectionDidChange: TypedEvent<void>;
+    readonly entryDidChange: TypedEvent<string>;
     private _tagPrefixes;
     private _tags;
     private _metrics;

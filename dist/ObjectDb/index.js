@@ -6,7 +6,6 @@ const observable_1 = require("@anderjason/observable");
 const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
-const Broadcast_1 = require("../Broadcast");
 const Entry_1 = require("../Entry");
 const Metric_1 = require("../Metric");
 const SqlClient_1 = require("../SqlClient");
@@ -14,8 +13,8 @@ const Tag_1 = require("../Tag");
 class ObjectDb extends skytree_1.Actor {
     constructor() {
         super(...arguments);
-        this.broadcast = new Broadcast_1.Broadcast();
-        this.entriesDidChange = new observable_1.TypedEvent();
+        this.collectionDidChange = new observable_1.TypedEvent();
+        this.entryDidChange = new observable_1.TypedEvent();
         this._tagPrefixes = new Set();
         this._tags = new Map();
         this._metrics = new Map();
@@ -349,9 +348,9 @@ class ObjectDb extends skytree_1.Actor {
         }
         this.rebuildMetadataGivenEntry(entry);
         if (didCreateNewEntry) {
-            this.entriesDidChange.emit();
+            this.collectionDidChange.emit();
         }
-        this.broadcast.emit(entryKey);
+        this.entryDidChange.emit(entryKey);
         return entry;
     }
     deleteEntryKey(entryKey) {
@@ -367,8 +366,8 @@ class ObjectDb extends skytree_1.Actor {
         this._db.runQuery(`
       DELETE FROM entries WHERE key = ?
     `, [entryKey]);
-        this.broadcast.emit(entryKey);
-        this.entriesDidChange.emit();
+        this.entryDidChange.emit(entryKey);
+        this.collectionDidChange.emit();
     }
 }
 exports.ObjectDb = ObjectDb;

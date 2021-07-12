@@ -34,8 +34,8 @@ interface EntryReference {
 }
 
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
-  readonly broadcast = new Broadcast();
-  readonly entriesDidChange = new TypedEvent();
+  readonly collectionDidChange = new TypedEvent();
+  readonly entryDidChange = new TypedEvent<string>();
   
   private _tagPrefixes = new Set<string>();
   private _tags = new Map<string, Tag>();
@@ -482,10 +482,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.rebuildMetadataGivenEntry(entry);
 
     if (didCreateNewEntry) {
-      this.entriesDidChange.emit();
+      this.collectionDidChange.emit();
     }
     
-    this.broadcast.emit(entryKey);
+    this.entryDidChange.emit(entryKey);
 
     return entry;
   }
@@ -511,7 +511,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       [entryKey]
     );
 
-    this.broadcast.emit(entryKey);
-    this.entriesDidChange.emit();
+    this.entryDidChange.emit(entryKey);
+    this.collectionDidChange.emit();
   }
 }
