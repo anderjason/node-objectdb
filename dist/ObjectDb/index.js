@@ -2,9 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ObjectDb = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
+const observable_1 = require("@anderjason/observable");
 const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
+const Broadcast_1 = require("../Broadcast");
 const Entry_1 = require("../Entry");
 const Metric_1 = require("../Metric");
 const SqlClient_1 = require("../SqlClient");
@@ -12,6 +14,8 @@ const Tag_1 = require("../Tag");
 class ObjectDb extends skytree_1.Actor {
     constructor() {
         super(...arguments);
+        this.broadcast = new Broadcast_1.Broadcast();
+        this.entriesDidChange = new observable_1.TypedEvent();
         this._tagPrefixes = new Set();
         this._tags = new Map();
         this._metrics = new Map();
@@ -129,7 +133,6 @@ class ObjectDb extends skytree_1.Actor {
         }
     }
     sortEntryKeys() {
-        console.log("sorting entry keys", this._db.props.localFile.toAbsolutePath());
         let objects = [];
         for (let [key, value] of this._entryLabelByKey) {
             objects.push({
@@ -138,7 +141,10 @@ class ObjectDb extends skytree_1.Actor {
             });
         }
         objects = util_1.ArrayUtil.arrayWithOrderFromValue(objects, obj => {
-            return obj.label || "";
+            if (obj.label == null) {
+                return "";
+            }
+            return obj.label.toLowerCase();
         }, "ascending");
         this._entryKeysSortedByLabel = objects.map(obj => obj.entryKey);
     }
@@ -323,13 +329,18 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("Entry key length must be at least 5 characters");
         }
         const now = time_1.Instant.ofNow();
-        const entry = new Entry_1.Entry({
-            key: entryKey,
-            db: this._db,
-            label,
-            createdAt: createdAt || now,
-            updatedAt: now,
-        });
+        let didCreateNewEntry = false;
+        let entry = this.toOptionalEntryGivenKey(entryKey);
+        if (entry == null) {
+            entry = new Entry_1.Entry({
+                key: entryKey,
+                db: this._db,
+                label,
+                createdAt: createdAt || now,
+                updatedAt: now,
+            });
+            didCreateNewEntry = true;
+        }
         entry.data = entryData;
         entry.save();
         if (this._entryLabelByKey.get(entryKey) !== label) {
@@ -337,6 +348,10 @@ class ObjectDb extends skytree_1.Actor {
             this.sortEntryKeys();
         }
         this.rebuildMetadataGivenEntry(entry);
+        if (didCreateNewEntry) {
+            this.entriesDidChange.emit();
+        }
+        this.broadcast.emit(entryKey);
         return entry;
     }
     deleteEntryKey(entryKey) {
@@ -352,6 +367,8 @@ class ObjectDb extends skytree_1.Actor {
         this._db.runQuery(`
       DELETE FROM entries WHERE key = ?
     `, [entryKey]);
+        this.broadcast.emit(entryKey);
+        this.entriesDidChange.emit();
     }
 }
 exports.ObjectDb = ObjectDb;

@@ -1,6 +1,6 @@
 import { ObservableDict } from "@anderjason/observable";
-import { DbInstance } from "../SqlClient";
 import { Actor } from "skytree";
+import { DbInstance } from "../SqlClient";
 export interface MetricProps {
     metricKey: string;
     db: DbInstance;

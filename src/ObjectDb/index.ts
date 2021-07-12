@@ -1,11 +1,11 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
-import { Dict, ObservableDict } from "@anderjason/observable";
+import { Dict, TypedEvent } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { ArrayUtil, SetUtil } from "@anderjason/util";
 import { Actor } from "skytree";
+import { Broadcast } from "../Broadcast";
 import { Entry } from "../Entry";
-import { LRUCache } from "../LRUCache";
 import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
 import { Tag } from "../Tag";
@@ -34,6 +34,9 @@ interface EntryReference {
 }
 
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
+  readonly broadcast = new Broadcast();
+  readonly entriesDidChange = new TypedEvent();
+  
   private _tagPrefixes = new Set<string>();
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
@@ -183,8 +186,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   private sortEntryKeys(): void {
-    console.log("sorting entry keys", this._db.props.localFile.toAbsolutePath());
-    
     let objects = [];
 
     for (let [key, value] of this._entryLabelByKey) {
@@ -195,7 +196,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
     
     objects = ArrayUtil.arrayWithOrderFromValue(objects, obj => {
-      return obj.label || ""
+      if (obj.label == null) {
+        return "";
+      }
+
+      return obj.label.toLowerCase();
     }, "ascending");
 
     this._entryKeysSortedByLabel = objects.map(obj => obj.entryKey);
@@ -452,14 +457,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     const now = Instant.ofNow();
+    let didCreateNewEntry = false;
 
-    const entry = new Entry<T>({
-      key: entryKey,
-      db: this._db,
-      label,
-      createdAt: createdAt || now,
-      updatedAt: now,
-    });
+    let entry = this.toOptionalEntryGivenKey(entryKey);
+    if (entry == null) {
+      entry = new Entry<T>({
+        key: entryKey,
+        db: this._db,
+        label,
+        createdAt: createdAt || now,
+        updatedAt: now,
+      });
+      didCreateNewEntry = true;
+    }
 
     entry.data = entryData;
     entry.save();
@@ -470,6 +480,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     this.rebuildMetadataGivenEntry(entry);
+
+    if (didCreateNewEntry) {
+      this.entriesDidChange.emit();
+    }
+    
+    this.broadcast.emit(entryKey);
 
     return entry;
   }
@@ -494,5 +510,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     `,
       [entryKey]
     );
+
+    this.broadcast.emit(entryKey);
+    this.entriesDidChange.emit();
   }
 }

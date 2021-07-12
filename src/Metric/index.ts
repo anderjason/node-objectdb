@@ -1,8 +1,7 @@
 import { Dict, ObservableDict } from "@anderjason/observable";
-import { DbInstance } from "../SqlClient";
 import { Statement } from "better-sqlite3";
 import { Actor } from "skytree";
-import { Duration, Instant } from "@anderjason/time";
+import { DbInstance } from "../SqlClient";
 
 export interface MetricProps {
   metricKey: string;
