@@ -6,7 +6,6 @@ const ReadOnlyMap_1 = require("../ReadOnlyMap");
 class Metric extends skytree_1.Actor {
     constructor(props) {
         super(props);
-        this._entryMetricValues = new Map();
         if (props.metricKey == null) {
             throw new Error("metricKey is required");
         }
@@ -30,6 +29,9 @@ class Metric extends skytree_1.Actor {
     }
     onActivate() { }
     loadOnce() {
+        if (this._entryMetricValues != null) {
+            return;
+        }
         const { db } = this.props;
         db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)").run(this.key);
         const rows = db
@@ -40,10 +42,12 @@ class Metric extends skytree_1.Actor {
         });
     }
     setValue(key, newValue) {
+        this.loadOnce();
         this._upsertEntryMetricValueQuery.run(this.key, key, newValue);
         this._entryMetricValues.set(key, newValue);
     }
     deleteKey(key) {
+        this.loadOnce();
         this._deleteEntryMetricValueQuery.run(this.key, key);
     }
 }

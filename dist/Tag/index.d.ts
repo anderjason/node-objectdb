@@ -15,7 +15,7 @@ export declare class Tag extends Actor<TagProps> {
     private _insertEntryKeyQuery;
     private _deleteEntryKeyQuery;
     constructor(props: TagProps);
-    private loadEntryKeysOnce;
+    private loadOnce;
     addValue(value: string): void;
     deleteValue(value: string): void;
 }

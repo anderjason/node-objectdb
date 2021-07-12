@@ -6,7 +6,6 @@ const ReadOnlySet_1 = require("../ReadOnlySet");
 class Tag extends skytree_1.Actor {
     constructor(props) {
         super(props);
-        this._entryKeys = new Set();
         if (props.tagKey == null) {
             throw new Error("tagKey is required");
         }
@@ -25,13 +24,13 @@ class Tag extends skytree_1.Actor {
         this._deleteEntryKeyQuery = db.prepareCached("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
     }
     get entryKeys() {
-        this.loadEntryKeysOnce();
+        this.loadOnce();
         if (this._readOnlyEntryKeys == null) {
             this._readOnlyEntryKeys = new ReadOnlySet_1.ReadOnlySet(this._entryKeys);
         }
         return this._readOnlyEntryKeys;
     }
-    loadEntryKeysOnce() {
+    loadOnce() {
         if (this._entryKeys != null) {
             return;
         }
@@ -43,10 +42,12 @@ class Tag extends skytree_1.Actor {
         this._entryKeys = new Set(rows.map((row) => row.entryKey));
     }
     addValue(value) {
+        this.loadOnce();
         this._insertEntryKeyQuery.run(this.key, value);
         this._entryKeys.add(value);
     }
     deleteValue(value) {
+        this.loadOnce();
         this._entryKeys.delete(value);
         this._deleteEntryKeyQuery.run(this.key, value);
     }

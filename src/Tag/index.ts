@@ -14,7 +14,7 @@ export class Tag extends Actor<TagProps> {
   readonly key: string;
 
   get entryKeys(): ReadOnlySet<string> {
-    this.loadEntryKeysOnce();
+    this.loadOnce();
 
     if (this._readOnlyEntryKeys == null) {
       this._readOnlyEntryKeys = new ReadOnlySet(this._entryKeys);
@@ -23,7 +23,7 @@ export class Tag extends Actor<TagProps> {
     return this._readOnlyEntryKeys;
   }
 
-  private _entryKeys = new Set<string>();
+  private _entryKeys: Set<string>;  // this is initialized in loadOnce
   private _readOnlyEntryKeys: ReadOnlySet<string>;
 
   private _insertEntryKeyQuery: Statement<[string, string]>;
@@ -62,7 +62,7 @@ export class Tag extends Actor<TagProps> {
     );
   }
 
-  private loadEntryKeysOnce(): void {
+  private loadOnce(): void {
     if (this._entryKeys != null) {
       return;
     }
@@ -83,11 +83,15 @@ export class Tag extends Actor<TagProps> {
   }
 
   addValue(value: string): void {
+    this.loadOnce();
+
     this._insertEntryKeyQuery.run(this.key, value);
     this._entryKeys.add(value);
   }
 
   deleteValue(value: string): void {
+    this.loadOnce();
+    
     this._entryKeys.delete(value);
     this._deleteEntryKeyQuery.run(this.key, value);
   }

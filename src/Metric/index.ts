@@ -21,7 +21,7 @@ export class Metric extends Actor<MetricProps> {
     return this._readOnlyMetricValues;
   }
 
-  private _entryMetricValues = new Map<string, number>();
+  private _entryMetricValues: Map<string, number>;  // this is initialized in loadOnce
   private _readOnlyMetricValues: ReadOnlyMap<string, number>;
 
   private _upsertEntryMetricValueQuery: Statement<[string, string, number]>;
@@ -55,6 +55,10 @@ export class Metric extends Actor<MetricProps> {
   onActivate() {}
 
   private loadOnce(): void {
+    if (this._entryMetricValues != null) {
+      return;
+    }
+
     const { db } = this.props;
 
     db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)").run(
@@ -73,11 +77,15 @@ export class Metric extends Actor<MetricProps> {
   }
 
   setValue(key: string, newValue: number): void {
+    this.loadOnce();
+
     this._upsertEntryMetricValueQuery.run(this.key, key, newValue);
     this._entryMetricValues.set(key, newValue);
   }
 
   deleteKey(key: string): void {
+    this.loadOnce();
+    
     this._deleteEntryMetricValueQuery.run(this.key, key);
   }
 }
