@@ -22,11 +22,10 @@
     "@anderjason/node-crypto": "^2.0.0",
     "@anderjason/node-filesystem": "^2.0.1",
     "@anderjason/observable": "^3.2.2",
-    "@anderjason/time": "^2.0.2",
+    "@anderjason/time": "^2.1.0",
     "@anderjason/util": "^2.0.8",
     "better-sqlite3": "^7.4.1",
-    "skytree": "^9.4.0",
-    "stopwatch-node": "^1.1.0"
+    "skytree": "^9.4.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^5.4.1",

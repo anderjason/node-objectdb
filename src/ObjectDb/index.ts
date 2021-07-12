@@ -1,13 +1,12 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
-import { Debounce, Duration, Instant } from "@anderjason/time";
+import { Debounce, Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, SetUtil } from "@anderjason/util";
 import { Actor } from "skytree";
 import { Entry } from "../Entry";
 import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
-import { StopWatch } from "stopwatch-node";
 import { Tag } from "../Tag";
 
 // TODO something takes longer to write the more items there are. what is it?
@@ -24,22 +23,16 @@ export interface ObjectDbProps<T> {
 
   tagKeysGivenEntryData: (data: T) => string[];
   metricsGivenEntryData: (data: T) => Dict<number>;
-  
+
   cacheSize?: number;
 }
 
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly collectionDidChange = new TypedEvent();
   readonly entryDidChange = new TypedEvent<string>();
-  
-  readonly stopWatches =  {
-    sortEntryKeys: new StopWatch("sortEntryKeys"),
-    writeEntryData: new StopWatch("writeEntryData"),
-    toEntryKeys: new StopWatch("toEntryKeys"),
-    toOptionalEntryGivenKey: new StopWatch("toOptionalEntryGivenKey"),
-    rebuildMetadataGivenEntry: new StopWatch("rebuildMetadataGivenEntry")
-  };
 
+  readonly stopwatch: Stopwatch;
+  
   private _tagPrefixes = new Set<string>();
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
@@ -50,8 +43,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     fn: () => {
       this.sortEntryKeys();
     },
-    duration: Duration.givenSeconds(5)
+    duration: Duration.givenSeconds(5),
   });
+
+  constructor(props: ObjectDbProps<T>) {
+    super(props);
+
+    this.stopwatch = new Stopwatch(props.localFile.toAbsolutePath());
+  }
 
   onActivate(): void {
     this._db = this.addActor(
@@ -154,11 +153,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
 
-    db
-      .toRows("SELECT key, label FROM entries ORDER BY label")
-      .forEach((row) => {
+    db.toRows("SELECT key, label FROM entries ORDER BY label").forEach(
+      (row) => {
         this._entryLabelByKey.set(row.key, row.label);
-      });
+      }
+    );
     this.sortEntryKeys();
 
     const metricKeys = db
@@ -194,44 +193,43 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  stopWatchReport(): void {
-    Object.keys(this.stopWatches).forEach(key => {
-      const dict = this.stopWatches as any;
-      const stopWatch = dict[key] as StopWatch;
-      stopWatch.prettyPrint();
-    });
-  }
-
   // TC: O(N log N)
   // SC: O(N)
   private sortEntryKeys(): void {
-    console.log("Sorting entry keys", this._db.props.localFile.toAbsolutePath());
-    this.stopWatches.sortEntryKeys.start();
+    console.log(
+      "Sorting entry keys",
+      this._db.props.localFile.toAbsolutePath()
+    );
+    this.stopwatch.start("sortEntryKeys");
 
     let objects = [];
 
     for (let [key, value] of this._entryLabelByKey) {
       objects.push({
         entryKey: key,
-        label: value
+        label: value,
       });
     }
-    
-    objects = ArrayUtil.arrayWithOrderFromValue(objects, obj => {
-      if (obj.label == null) {
-        return "";
-      }
 
-      return obj.label.toLowerCase();
-    }, "ascending");
+    objects = ArrayUtil.arrayWithOrderFromValue(
+      objects,
+      (obj) => {
+        if (obj.label == null) {
+          return "";
+        }
 
-    this._entryKeysSortedByLabel = objects.map(obj => obj.entryKey);
+        return obj.label.toLowerCase();
+      },
+      "ascending"
+    );
 
-    this.stopWatches.sortEntryKeys.stop();
+    this._entryKeysSortedByLabel = objects.map((obj) => obj.entryKey);
+
+    this.stopwatch.stop("sortEntryKeys");
   }
 
   toEntryKeys(options: ObjectDbReadOptions = {}): string[] {
-    this.stopWatches.toEntryKeys.start();
+    this.stopwatch.start("toEntryKeys");
 
     let entryKeys: string[];
 
@@ -279,14 +277,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const result = entryKeys.slice(start, end);
 
-    this.stopWatches.toEntryKeys.stop();
+    this.stopwatch.stop("toEntryKeys");
 
     return result;
   }
 
   // TC: O(N)
   forEach(fn: (entry: Entry<T>) => void): void {
-    this._entryKeysSortedByLabel.forEach(entryKey => {
+    this._entryKeysSortedByLabel.forEach((entryKey) => {
       const entry = this.toOptionalEntryGivenKey(entryKey);
       fn(entry);
     });
@@ -368,8 +366,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    this.stopWatches.toOptionalEntryGivenKey.start();
-    
+    this.stopwatch.start("toOptionalEntryGivenKey");
+
     const result: Entry<T> = new Entry<T>({
       key: entryKey,
       db: this._db,
@@ -377,7 +375,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const didLoad = result.load();
 
-    this.stopWatches.toOptionalEntryGivenKey.stop();
+    this.stopwatch.stop("toOptionalEntryGivenKey");
 
     if (!didLoad) {
       return undefined;
@@ -422,7 +420,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   rebuildMetadataGivenEntry(entry: Entry<T>): void {
-    this.stopWatches.rebuildMetadataGivenEntry.start();
+    this.stopwatch.start("rebuildMetadataGivenEntry");
     this.removeMetadataGivenEntryKey(entry.key);
 
     const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
@@ -440,7 +438,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       metric.entryMetricValues.setValue(entry.key, metricValue);
     });
 
-    this.stopWatches.rebuildMetadataGivenEntry.stop();
+    this.stopwatch.stop("rebuildMetadataGivenEntry");
   }
 
   writeEntry(entry: Entry<T>): Entry<T> {
@@ -496,7 +494,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    this.stopWatches.writeEntryData.start();
+    this.stopwatch.start("writeEntryData");
 
     const now = Instant.ofNow();
     let didCreateNewEntry = false;
@@ -514,7 +512,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     entry.data = entryData;
+
+    this.stopwatch.start("save");
     entry.save();
+    this.stopwatch.stop("save");
 
     if (this._entryLabelByKey.get(entryKey) !== label) {
       this._entryLabelByKey.set(entryKey, label);
@@ -526,11 +527,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (didCreateNewEntry) {
       this.collectionDidChange.emit();
     }
-    
+
     this.entryDidChange.emit(entryKey);
 
-    this.stopWatches.writeEntryData.stop();
-    
+    this.stopwatch.stop("writeEntryData");
+
     return entry;
   }
 
@@ -540,7 +541,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     this._entryLabelByKey.delete(entryKey);
-    
+
     const existingRecord = this.toOptionalEntryGivenKey(entryKey);
     if (existingRecord == null) {
       return;
