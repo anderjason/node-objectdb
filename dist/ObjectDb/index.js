@@ -144,7 +144,7 @@ class ObjectDb extends skytree_1.Actor {
             }));
             this._metrics.set(metricKey, metric);
         }
-        this.stopwatch.stop("createTags");
+        this.stopwatch.stop("createMetrics");
     }
     // TC: O(N log N)
     // SC: O(N)

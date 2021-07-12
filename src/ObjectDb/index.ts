@@ -200,7 +200,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
       this._metrics.set(metricKey, metric);
     }
-    this.stopwatch.stop("createTags");
+    this.stopwatch.stop("createMetrics");
   }
 
   // TC: O(N log N)
