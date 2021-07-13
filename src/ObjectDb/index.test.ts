@@ -42,7 +42,7 @@ Test.define("ObjectDb can write and read a row", () => {
   Test.assert(entry.data.message === "hello world");
 
   const result = fileDb.toEntryGivenKey(entry.key);
-  Test.assertIsDeepEqual(result.data, entry);
+  Test.assertIsDeepEqual(result.data, entry.data);
 
   fileDb.deactivate();
 });

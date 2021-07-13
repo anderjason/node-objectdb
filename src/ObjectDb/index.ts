@@ -75,7 +75,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   private load(): void {
-    if (this.isActive.value == false) {
+    if (this.isActive == false) {
       return;
     }
 

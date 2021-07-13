@@ -44,7 +44,7 @@ class ObjectDb extends skytree_1.Actor {
         return Array.from(this._tagPrefixes);
     }
     load() {
-        if (this.isActive.value == false) {
+        if (this.isActive == false) {
             return;
         }
         const db = this._db;
