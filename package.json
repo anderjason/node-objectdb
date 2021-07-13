@@ -25,7 +25,7 @@
     "@anderjason/time": "^2.1.1",
     "@anderjason/util": "^2.0.8",
     "better-sqlite3": "^7.4.1",
-    "skytree": "git+https://github.com/anderjason/skytree.git"
+    "skytree": "^10.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^5.4.1",

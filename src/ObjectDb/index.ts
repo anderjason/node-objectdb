@@ -151,6 +151,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       ON metricValues(entryKey);
     `);
 
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxEntriesKeyLabel
+      ON entries(key, label);
+    `);
+
     this.stopwatch.start("selectTagKeys");
     const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
     this.stopwatch.stop("selectTagKeys");
