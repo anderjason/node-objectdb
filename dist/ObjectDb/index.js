@@ -404,6 +404,7 @@ class ObjectDb extends skytree_1.Actor {
         this._db.runQuery(`
       DELETE FROM entries WHERE key = ?
     `, [entryKey]);
+        this.sortEntryKeys();
         this.entryDidChange.emit(entryKey);
         this.collectionDidChange.emit();
     }

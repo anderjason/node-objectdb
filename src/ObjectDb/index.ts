@@ -568,6 +568,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       [entryKey]
     );
 
+    this.sortEntryKeys();
+    
     this.entryDidChange.emit(entryKey);
     this.collectionDidChange.emit();
   }
