@@ -20,12 +20,6 @@ class ObjectDb extends skytree_1.Actor {
         this._metrics = new Map();
         this._entryLabelByKey = new Map();
         this._entryKeysSortedByLabel = [];
-        this._sortLater = new time_1.Debounce({
-            fn: () => {
-                this.sortEntryKeys();
-            },
-            duration: time_1.Duration.givenSeconds(5),
-        });
         this.stopwatch = new time_1.Stopwatch(props.localFile.toAbsolutePath());
     }
     onActivate() {
@@ -386,7 +380,7 @@ class ObjectDb extends skytree_1.Actor {
         this.stopwatch.stop("save");
         if (this._entryLabelByKey.get(entryKey) !== label) {
             this._entryLabelByKey.set(entryKey, label);
-            this._sortLater.invoke();
+            this.sortEntryKeys();
         }
         this.rebuildMetadataGivenEntry(entry);
         if (didCreateNewEntry) {

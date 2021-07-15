@@ -9,8 +9,6 @@ import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
 import { Tag } from "../Tag";
 
-// TODO something takes longer to write the more items there are. what is it?
-
 export interface ObjectDbReadOptions {
   requireTagKeys?: string[];
   orderByMetricKey?: string;
@@ -39,13 +37,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _entryLabelByKey = new Map<string, string>();
   private _entryKeysSortedByLabel: string[] = [];
   private _db: DbInstance;
-  private _sortLater = new Debounce({
-    fn: () => {
-      this.sortEntryKeys();
-    },
-    duration: Duration.givenSeconds(5),
-  });
-
+  
   constructor(props: ObjectDbProps<T>) {
     super(props);
 
@@ -538,7 +530,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (this._entryLabelByKey.get(entryKey) !== label) {
       this._entryLabelByKey.set(entryKey, label);
-      this._sortLater.invoke();
+      this.sortEntryKeys();
     }
 
     this.rebuildMetadataGivenEntry(entry);

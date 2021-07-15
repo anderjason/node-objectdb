@@ -27,7 +27,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private _entryLabelByKey;
     private _entryKeysSortedByLabel;
     private _db;
-    private _sortLater;
     constructor(props: ObjectDbProps<T>);
     onActivate(): void;
     get tags(): Tag[];
