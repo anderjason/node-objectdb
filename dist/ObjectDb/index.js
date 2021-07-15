@@ -378,7 +378,8 @@ class ObjectDb extends skytree_1.Actor {
         this.stopwatch.start("save");
         entry.save();
         this.stopwatch.stop("save");
-        if (this._entryLabelByKey.get(entryKey) !== label) {
+        const currentLabel = this._entryLabelByKey.get(entryKey);
+        if (currentLabel == null || currentLabel !== label) {
             this._entryLabelByKey.set(entryKey, label);
             this.sortEntryKeys();
         }

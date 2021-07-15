@@ -528,7 +528,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry.save();
     this.stopwatch.stop("save");
 
-    if (this._entryLabelByKey.get(entryKey) !== label) {
+    const currentLabel = this._entryLabelByKey.get(entryKey);
+    if (currentLabel == null || currentLabel !== label) {
       this._entryLabelByKey.set(entryKey, label);
       this.sortEntryKeys();
     }
