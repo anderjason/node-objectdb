@@ -16,6 +16,7 @@ class DbInstance extends skytree_1.Actor {
         return this._db;
     }
     onActivate() {
+        this.props.localFile.toDirectory().createDirectorySync();
         this._db = better_sqlite3_1.default(this.props.localFile.toAbsolutePath(), {});
         this._db.pragma("encoding = 'UTF-8'");
         this.cancelOnDeactivate(new observable_1.Receipt(() => {

@@ -16,6 +16,8 @@ export class DbInstance extends Actor<Sqlite3ActorProps> {
   }
 
   onActivate() {
+    this.props.localFile.toDirectory().createDirectorySync();
+    
     this._db = BetterSqlite3(this.props.localFile.toAbsolutePath(), {});
 
     this._db.pragma("encoding = 'UTF-8'");
