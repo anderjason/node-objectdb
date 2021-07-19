@@ -186,7 +186,7 @@ class ObjectDb extends skytree_1.Actor {
             });
             entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
         }
-        const order = options.orderByMetricKey;
+        const order = options.orderByMetric;
         if (order != null) {
             const metric = this._metrics.get(order.key);
             if (metric != null) {

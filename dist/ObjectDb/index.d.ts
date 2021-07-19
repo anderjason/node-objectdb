@@ -11,7 +11,7 @@ export interface Order {
 }
 export interface ObjectDbReadOptions {
     requireTagKeys?: string[];
-    orderByMetricKey?: Order;
+    orderByMetric?: Order;
     limit?: number;
     offset?: number;
 }

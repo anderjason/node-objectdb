@@ -16,7 +16,7 @@ export interface Order {
 
 export interface ObjectDbReadOptions {
   requireTagKeys?: string[];
-  orderByMetricKey?: Order;
+  orderByMetric?: Order;
   limit?: number;
   offset?: number;
 }
@@ -264,7 +264,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
     }
 
-    const order = options.orderByMetricKey;
+    const order = options.orderByMetric;
     if (order != null) {
       const metric = this._metrics.get(order.key);
       if (metric != null) {
