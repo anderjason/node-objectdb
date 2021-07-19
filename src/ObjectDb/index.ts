@@ -441,6 +441,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
     const metricValues = this.props.metricsGivenEntryData(entry.data);
 
+    metricValues.createdAt = entry.createdAt.toEpochMilliseconds();
+    metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds();
+    
     tagKeys.forEach((tagKey) => {
       const tag = this.tagGivenTagKey(tagKey);
       tag.addValue(entry.key);

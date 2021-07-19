@@ -312,6 +312,8 @@ class ObjectDb extends skytree_1.Actor {
         this.removeMetadataGivenEntryKey(entry.key);
         const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
         const metricValues = this.props.metricsGivenEntryData(entry.data);
+        metricValues.createdAt = entry.createdAt.toEpochMilliseconds();
+        metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds();
         tagKeys.forEach((tagKey) => {
             const tag = this.tagGivenTagKey(tagKey);
             tag.addValue(entry.key);
