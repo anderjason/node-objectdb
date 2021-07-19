@@ -186,14 +186,14 @@ class ObjectDb extends skytree_1.Actor {
             });
             entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
         }
-        const metricKey = options.orderByMetricKey;
-        if (metricKey != null) {
-            const metric = this._metrics.get(metricKey);
+        const order = options.orderByMetricKey;
+        if (order != null) {
+            const metric = this._metrics.get(order.key);
             if (metric != null) {
                 entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (entryKey) => {
                     const metricValue = metric.entryMetricValues.get(entryKey);
                     return metricValue || 0;
-                }, "ascending");
+                }, order.direction);
             }
         }
         let start = 0;

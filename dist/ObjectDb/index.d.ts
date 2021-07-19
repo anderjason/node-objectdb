@@ -5,9 +5,13 @@ import { Actor } from "skytree";
 import { Entry } from "../Entry";
 import { Metric } from "../Metric";
 import { Tag } from "../Tag";
+export interface Order {
+    key: string;
+    direction: "ascending" | "descending";
+}
 export interface ObjectDbReadOptions {
     requireTagKeys?: string[];
-    orderByMetricKey?: string;
+    orderByMetricKey?: Order;
     limit?: number;
     offset?: number;
 }

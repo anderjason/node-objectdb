@@ -1,7 +1,7 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
-import { Debounce, Duration, Instant, Stopwatch } from "@anderjason/time";
+import { Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, SetUtil } from "@anderjason/util";
 import { Actor } from "skytree";
 import { Entry } from "../Entry";
@@ -9,9 +9,14 @@ import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
 import { Tag } from "../Tag";
 
+export interface Order {
+  key: string;
+  direction: "ascending" | "descending";
+}
+
 export interface ObjectDbReadOptions {
   requireTagKeys?: string[];
-  orderByMetricKey?: string;
+  orderByMetricKey?: Order;
   limit?: number;
   offset?: number;
 }
@@ -259,9 +264,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
     }
 
-    const metricKey = options.orderByMetricKey;
-    if (metricKey != null) {
-      const metric = this._metrics.get(metricKey);
+    const order = options.orderByMetricKey;
+    if (order != null) {
+      const metric = this._metrics.get(order.key);
       if (metric != null) {
         entryKeys = ArrayUtil.arrayWithOrderFromValue(
           entryKeys,
@@ -269,7 +274,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
             const metricValue = metric.entryMetricValues.get(entryKey);
             return metricValue || 0;
           },
-          "ascending"
+          order.direction
         );
       }
     }
