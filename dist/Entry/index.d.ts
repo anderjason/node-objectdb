@@ -20,7 +20,6 @@ export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     createdAt: Instant;
     updatedAt: Instant;
     data: T;
-    label: string;
     constructor(props: EntryProps<T>);
     load(): boolean;
     save(): void;

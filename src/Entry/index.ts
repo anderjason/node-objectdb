@@ -25,7 +25,6 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
   createdAt: Instant;
   updatedAt: Instant;
   data: T;
-  label: string;
 
   constructor(props: EntryProps<T>) {
     super(props);
@@ -33,11 +32,10 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.key = props.key || UniqueId.ofRandom().toUUIDString();
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt || props.createdAt;
-    this.label = props.label;
   }
 
   load(): boolean {
-    const row = this.props.db.toFirstRow("SELECT data, label, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
+    const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
     if (row == null) {
       return false;
     }
@@ -45,7 +43,6 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.data = JSON.parse(row.data);
     this.createdAt = Instant.givenEpochMilliseconds(row.createdAt);
     this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAt);
-    this.label = row.label;
 
     return true;
   }
@@ -64,12 +61,12 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
 
     this.props.db.runQuery(
       `
-      INSERT INTO entries (key, data, label, createdAt, updatedAt)
-      VALUES(?, ?, ?, ?, ?)
+      INSERT INTO entries (key, data, createdAt, updatedAt)
+      VALUES(?, ?, ?, ?)
       ON CONFLICT(key) 
-      DO UPDATE SET data=?, label=?, createdAt=?, updatedAt=?;
+      DO UPDATE SET data=?, createdAt=?, updatedAt=?;
       `,
-      [this.key, data, this.label, createdAtMs, updatedAtMs, data, this.label, createdAtMs, updatedAtMs]
+      [this.key, data, createdAtMs, updatedAtMs, data, createdAtMs, updatedAtMs]
     );
   }
 
@@ -78,8 +75,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
       key: this.key,
       createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
       updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
-      data: this.data,
-      label: this.label
+      data: this.data
     };
   }
 }

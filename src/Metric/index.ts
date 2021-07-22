@@ -11,7 +11,7 @@ export interface MetricProps {
 export class Metric extends Actor<MetricProps> {
   readonly key: string;
 
-  get entryMetricValues(): ReadOnlyMap<string, number> {
+  get entryMetricValues(): ReadOnlyMap<string, string> {
     this.loadOnce();
 
     if (this._readOnlyMetricValues == null) {
@@ -21,10 +21,10 @@ export class Metric extends Actor<MetricProps> {
     return this._readOnlyMetricValues;
   }
 
-  private _entryMetricValues: Map<string, number>;  // this is initialized in loadOnce
-  private _readOnlyMetricValues: ReadOnlyMap<string, number>;
+  private _entryMetricValues: Map<string, string>;  // this is initialized in loadOnce
+  private _readOnlyMetricValues: ReadOnlyMap<string, string>;
 
-  private _upsertEntryMetricValueQuery: Statement<[string, string, number]>;
+  private _upsertEntryMetricValueQuery: Statement<[string, string, string]>;
   private _deleteEntryMetricValueQuery: Statement<[string, string]>;
 
   constructor(props: MetricProps) {
@@ -71,13 +71,13 @@ export class Metric extends Actor<MetricProps> {
       )
       .all(this.key);
 
-    this._entryMetricValues = new Map<string, number>();
+    this._entryMetricValues = new Map<string, string>();
     rows.forEach((row) => {
       this._entryMetricValues.set(row.entryKey, row.metricValue);
     });
   }
 
-  setValue(key: string, newValue: number): void {
+  setValue(key: string, newValue: string): void {
     this.loadOnce();
 
     this._upsertEntryMetricValueQuery.run(this.key, key, newValue);

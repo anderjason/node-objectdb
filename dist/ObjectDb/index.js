@@ -18,8 +18,7 @@ class ObjectDb extends skytree_1.Actor {
         this._tagPrefixes = new Set();
         this._tags = new Map();
         this._metrics = new Map();
-        this._entryLabelByKey = new Map();
-        this._entryKeysSortedByLabel = [];
+        this._entryKeys = new Set();
         this.stopwatch = new time_1.Stopwatch(props.localFile.toAbsolutePath());
     }
     onActivate() {
@@ -58,7 +57,6 @@ class ObjectDb extends skytree_1.Actor {
       CREATE TABLE IF NOT EXISTS entries (
         key text PRIMARY KEY,
         data TEXT NOT NULL,
-        label TEXT,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL
       )
@@ -76,7 +74,7 @@ class ObjectDb extends skytree_1.Actor {
       CREATE TABLE IF NOT EXISTS metricValues (
         metricKey TEXT NOT NULL,
         entryKey TEXT NOT NULL,
-        metricValue INTEGER NOT NULL,
+        metricValue TEXT NOT NULL,
         FOREIGN KEY(metricKey) REFERENCES metrics(key),
         FOREIGN KEY(entryKey) REFERENCES entries(key)
         UNIQUE(metricKey, entryKey)
@@ -103,18 +101,17 @@ class ObjectDb extends skytree_1.Actor {
       ON metricValues(entryKey);
     `);
         db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxEntriesKeyLabel
-      ON entries(key, label);
+      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricValue
+      ON metricValues(metricValue);
     `);
         this.stopwatch.start("selectTagKeys");
         const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
         this.stopwatch.stop("selectTagKeys");
         this.stopwatch.start("selectEntryKeys");
-        db.toRows("SELECT key, label FROM entries ORDER BY label").forEach((row) => {
-            this._entryLabelByKey.set(row.key, row.label);
+        db.toRows("SELECT key FROM entries").forEach((row) => {
+            this._entryKeys.add(row.key);
         });
         this.stopwatch.stop("selectEntryKeys");
-        this.sortEntryKeys();
         this.stopwatch.start("selectMetricKeys");
         const metricKeys = db
             .toRows("SELECT key FROM metrics")
@@ -150,31 +147,11 @@ class ObjectDb extends skytree_1.Actor {
         }
         this.stopwatch.stop("createMetrics");
     }
-    // TC: O(N log N)
-    // SC: O(N)
-    sortEntryKeys() {
-        this.stopwatch.start("sortEntryKeys");
-        let objects = [];
-        for (let [key, value] of this._entryLabelByKey) {
-            objects.push({
-                entryKey: key,
-                label: value,
-            });
-        }
-        objects = util_1.ArrayUtil.arrayWithOrderFromValue(objects, (obj) => {
-            if (obj.label == null) {
-                return "";
-            }
-            return obj.label.toLowerCase();
-        }, "ascending");
-        this._entryKeysSortedByLabel = objects.map((obj) => obj.entryKey);
-        this.stopwatch.stop("sortEntryKeys");
-    }
     toEntryKeys(options = {}) {
         this.stopwatch.start("toEntryKeys");
         let entryKeys;
         if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
-            entryKeys = this._entryKeysSortedByLabel;
+            entryKeys = Array.from(this._entryKeys);
         }
         else {
             const sets = options.requireTagKeys.map((tagKey) => {
@@ -210,7 +187,7 @@ class ObjectDb extends skytree_1.Actor {
     }
     // TC: O(N)
     forEach(fn) {
-        this._entryKeysSortedByLabel.forEach((entryKey) => {
+        this._entryKeys.forEach((entryKey) => {
             const entry = this.toOptionalEntryGivenKey(entryKey);
             fn(entry);
         });
@@ -312,8 +289,8 @@ class ObjectDb extends skytree_1.Actor {
         this.removeMetadataGivenEntryKey(entry.key);
         const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
         const metricValues = this.props.metricsGivenEntryData(entry.data);
-        metricValues.createdAt = entry.createdAt.toEpochMilliseconds();
-        metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds();
+        metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
+        metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
         tagKeys.forEach((tagKey) => {
             const tag = this.tagGivenTagKey(tagKey);
             tag.addValue(entry.key);
@@ -329,7 +306,7 @@ class ObjectDb extends skytree_1.Actor {
         if (entry == null) {
             throw new Error("Entry is required");
         }
-        this.writeEntryData(entry.data, entry.key, entry.createdAt, entry.label);
+        this.writeEntryData(entry.data, entry.key, entry.createdAt);
         return entry;
     }
     tagGivenTagKey(tagKey) {
@@ -355,7 +332,7 @@ class ObjectDb extends skytree_1.Actor {
         }
         return metric;
     }
-    writeEntryData(entryData, entryKey, createdAt, label) {
+    writeEntryData(entryData, entryKey, createdAt) {
         if (entryKey == null) {
             entryKey = node_crypto_1.UniqueId.ofRandom().toUUIDString();
         }
@@ -370,7 +347,6 @@ class ObjectDb extends skytree_1.Actor {
             entry = new Entry_1.Entry({
                 key: entryKey,
                 db: this._db,
-                label,
                 createdAt: createdAt || now,
                 updatedAt: now,
             });
@@ -380,11 +356,6 @@ class ObjectDb extends skytree_1.Actor {
         this.stopwatch.start("save");
         entry.save();
         this.stopwatch.stop("save");
-        const currentLabel = this._entryLabelByKey.get(entryKey);
-        if (currentLabel == null || currentLabel !== label) {
-            this._entryLabelByKey.set(entryKey, label);
-            this.sortEntryKeys();
-        }
         this.rebuildMetadataGivenEntry(entry);
         if (didCreateNewEntry) {
             this.collectionDidChange.emit();
@@ -397,7 +368,6 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        this._entryLabelByKey.delete(entryKey);
         const existingRecord = this.toOptionalEntryGivenKey(entryKey);
         if (existingRecord == null) {
             return;
@@ -406,7 +376,7 @@ class ObjectDb extends skytree_1.Actor {
         this._db.runQuery(`
       DELETE FROM entries WHERE key = ?
     `, [entryKey]);
-        this.sortEntryKeys();
+        this._entryKeys.delete(entryKey);
         this.entryDidChange.emit(entryKey);
         this.collectionDidChange.emit();
     }

@@ -18,7 +18,7 @@ export interface ObjectDbReadOptions {
 export interface ObjectDbProps<T> {
     localFile: LocalFile;
     tagKeysGivenEntryData: (data: T) => string[];
-    metricsGivenEntryData: (data: T) => Dict<number>;
+    metricsGivenEntryData: (data: T) => Dict<string>;
     cacheSize?: number;
 }
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
@@ -28,8 +28,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private _tagPrefixes;
     private _tags;
     private _metrics;
-    private _entryLabelByKey;
-    private _entryKeysSortedByLabel;
+    private _entryKeys;
     private _db;
     constructor(props: ObjectDbProps<T>);
     onActivate(): void;
@@ -37,7 +36,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     get metrics(): Metric[];
     get tagPrefixes(): string[];
     private load;
-    private sortEntryKeys;
     toEntryKeys(options?: ObjectDbReadOptions): string[];
     forEach(fn: (entry: Entry<T>) => void): void;
     hasEntry(entryKey: string): boolean;
@@ -53,6 +51,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     writeEntry(entry: Entry<T>): Entry<T>;
     tagGivenTagKey(tagKey: string): Tag;
     metricGivenMetricKey(metricKey: string): Metric;
-    writeEntryData(entryData: T, entryKey?: string, createdAt?: Instant, label?: string): Entry<T>;
+    writeEntryData(entryData: T, entryKey?: string, createdAt?: Instant): Entry<T>;
     deleteEntryKey(entryKey: string): void;
 }

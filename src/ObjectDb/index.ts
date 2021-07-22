@@ -25,7 +25,7 @@ export interface ObjectDbProps<T> {
   localFile: LocalFile;
 
   tagKeysGivenEntryData: (data: T) => string[];
-  metricsGivenEntryData: (data: T) => Dict<number>;
+  metricsGivenEntryData: (data: T) => Dict<string>;
 
   cacheSize?: number;
 }
@@ -39,8 +39,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _tagPrefixes = new Set<string>();
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
-  private _entryLabelByKey = new Map<string, string>();
-  private _entryKeysSortedByLabel: string[] = [];
+  private _entryKeys = new Set<string>();
   private _db: DbInstance;
   
   constructor(props: ObjectDbProps<T>) {
@@ -96,7 +95,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       CREATE TABLE IF NOT EXISTS entries (
         key text PRIMARY KEY,
         data TEXT NOT NULL,
-        label TEXT,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL
       )
@@ -116,7 +114,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       CREATE TABLE IF NOT EXISTS metricValues (
         metricKey TEXT NOT NULL,
         entryKey TEXT NOT NULL,
-        metricValue INTEGER NOT NULL,
+        metricValue TEXT NOT NULL,
         FOREIGN KEY(metricKey) REFERENCES metrics(key),
         FOREIGN KEY(entryKey) REFERENCES entries(key)
         UNIQUE(metricKey, entryKey)
@@ -149,8 +147,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     `);
 
     db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxEntriesKeyLabel
-      ON entries(key, label);
+      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricValue
+      ON metricValues(metricValue);
     `);
 
     this.stopwatch.start("selectTagKeys");
@@ -158,14 +156,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.stopwatch.stop("selectTagKeys");
 
     this.stopwatch.start("selectEntryKeys");
-    db.toRows("SELECT key, label FROM entries ORDER BY label").forEach(
+    db.toRows("SELECT key FROM entries").forEach(
       (row) => {
-        this._entryLabelByKey.set(row.key, row.label);
+        this._entryKeys.add(row.key);
       }
     );
     this.stopwatch.stop("selectEntryKeys");
-    this.sortEntryKeys();
-
+    
     this.stopwatch.start("selectMetricKeys");
     const metricKeys = db
       .toRows("SELECT key FROM metrics")
@@ -213,44 +210,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.stopwatch.stop("createMetrics");
   }
 
-  // TC: O(N log N)
-  // SC: O(N)
-  private sortEntryKeys(): void {
-    this.stopwatch.start("sortEntryKeys");
-
-    let objects = [];
-
-    for (let [key, value] of this._entryLabelByKey) {
-      objects.push({
-        entryKey: key,
-        label: value,
-      });
-    }
-
-    objects = ArrayUtil.arrayWithOrderFromValue(
-      objects,
-      (obj) => {
-        if (obj.label == null) {
-          return "";
-        }
-
-        return obj.label.toLowerCase();
-      },
-      "ascending"
-    );
-
-    this._entryKeysSortedByLabel = objects.map((obj) => obj.entryKey);
-
-    this.stopwatch.stop("sortEntryKeys");
-  }
-
   toEntryKeys(options: ObjectDbReadOptions = {}): string[] {
     this.stopwatch.start("toEntryKeys");
 
     let entryKeys: string[];
 
     if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
-      entryKeys = this._entryKeysSortedByLabel;
+      entryKeys = Array.from(this._entryKeys);
     } else {
       const sets = options.requireTagKeys.map((tagKey) => {
         const tag = this._tags.get(tagKey);
@@ -299,7 +265,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   // TC: O(N)
   forEach(fn: (entry: Entry<T>) => void): void {
-    this._entryKeysSortedByLabel.forEach((entryKey) => {
+    this._entryKeys.forEach((entryKey) => {
       const entry = this.toOptionalEntryGivenKey(entryKey);
       fn(entry);
     });
@@ -441,8 +407,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
     const metricValues = this.props.metricsGivenEntryData(entry.data);
 
-    metricValues.createdAt = entry.createdAt.toEpochMilliseconds();
-    metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds();
+    metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
+    metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
     
     tagKeys.forEach((tagKey) => {
       const tag = this.tagGivenTagKey(tagKey);
@@ -464,7 +430,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry is required");
     }
 
-    this.writeEntryData(entry.data, entry.key, entry.createdAt, entry.label);
+    this.writeEntryData(entry.data, entry.key, entry.createdAt);
     return entry;
   }
 
@@ -502,8 +468,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   writeEntryData(
     entryData: T,
     entryKey?: string,
-    createdAt?: Instant,
-    label?: string
+    createdAt?: Instant
   ): Entry<T> {
     if (entryKey == null) {
       entryKey = UniqueId.ofRandom().toUUIDString();
@@ -523,7 +488,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       entry = new Entry<T>({
         key: entryKey,
         db: this._db,
-        label,
         createdAt: createdAt || now,
         updatedAt: now,
       });
@@ -535,12 +499,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.stopwatch.start("save");
     entry.save();
     this.stopwatch.stop("save");
-
-    const currentLabel = this._entryLabelByKey.get(entryKey);
-    if (currentLabel == null || currentLabel !== label) {
-      this._entryLabelByKey.set(entryKey, label);
-      this.sortEntryKeys();
-    }
 
     this.rebuildMetadataGivenEntry(entry);
 
@@ -560,8 +518,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    this._entryLabelByKey.delete(entryKey);
-
     const existingRecord = this.toOptionalEntryGivenKey(entryKey);
     if (existingRecord == null) {
       return;
@@ -576,8 +532,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       [entryKey]
     );
 
-    this.sortEntryKeys();
-    
+    this._entryKeys.delete(entryKey);
+
     this.entryDidChange.emit(entryKey);
     this.collectionDidChange.emit();
   }

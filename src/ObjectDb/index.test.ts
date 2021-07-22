@@ -85,9 +85,9 @@ Test.define("ObjectDb can assign metrics", () => {
     localFile,
     tagKeysGivenEntryData: (data) => [],
     metricsGivenEntryData: (data) => {
-      const result: Dict<number> = {};
+      const result: Dict<string> = {};
 
-      result.charCount = data?.message?.length || 0;
+      result.charCount = String(data?.message?.length || 0);
 
       return result;
     },
@@ -113,5 +113,5 @@ Test.define("ObjectDb can assign metrics", () => {
 
   db.deactivate();
 
-  Test.assertIsEqual(row.metricValue, 11);
+  Test.assertIsEqual(row.metricValue, "11");
 });
