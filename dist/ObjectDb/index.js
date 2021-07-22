@@ -356,6 +356,7 @@ class ObjectDb extends skytree_1.Actor {
         this.stopwatch.start("save");
         entry.save();
         this.stopwatch.stop("save");
+        this._entryKeys.add(entryKey);
         this.rebuildMetadataGivenEntry(entry);
         if (didCreateNewEntry) {
             this.collectionDidChange.emit();

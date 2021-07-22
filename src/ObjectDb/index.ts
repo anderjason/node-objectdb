@@ -500,6 +500,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry.save();
     this.stopwatch.stop("save");
 
+    this._entryKeys.add(entryKey);
     this.rebuildMetadataGivenEntry(entry);
 
     if (didCreateNewEntry) {
