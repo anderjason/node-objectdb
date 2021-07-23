@@ -10,15 +10,18 @@ class Entry extends PropsObject_1.PropsObject {
         this.key = props.key || node_crypto_1.UniqueId.ofRandom().toUUIDString();
         this.createdAt = props.createdAt;
         this.updatedAt = props.updatedAt || props.createdAt;
+        this.status = "unknown";
     }
     load() {
         const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
         if (row == null) {
+            this.status = "new";
             return false;
         }
         this.data = JSON.parse(row.data);
         this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAt);
         this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAt);
+        this.status = "saved";
         return true;
     }
     save() {
@@ -35,13 +38,15 @@ class Entry extends PropsObject_1.PropsObject {
       ON CONFLICT(key) 
       DO UPDATE SET data=?, createdAt=?, updatedAt=?;
       `, [this.key, data, createdAtMs, updatedAtMs, data, createdAtMs, updatedAtMs]);
+        this.status = "saved";
     }
     toPortableEntry() {
         return {
             key: this.key,
             createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
             updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
-            data: this.data
+            data: this.data,
+            status: this.status
         };
     }
 }

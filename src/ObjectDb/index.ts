@@ -430,7 +430,22 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry is required");
     }
 
-    this.writeEntryData(entry.data, entry.key, entry.createdAt);
+    switch (entry.status) {
+      case "saved":
+        console.log(`Skipping write because status for entry '${entry.key}' is already saved`);
+        return;
+      case "deleted":
+        this.deleteEntryKey(entry.key);
+        break;
+      case "new":
+      case "updated":
+      case "unknown":  
+        this.writeEntryData(entry.data, entry.key, entry.createdAt);
+        break;
+      default:
+        throw new Error(`Unsupported entry status '${entry.status}'`);
+    }
+
     return entry;
   }
 

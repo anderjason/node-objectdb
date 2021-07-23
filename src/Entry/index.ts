@@ -3,12 +3,15 @@ import { Instant } from "@anderjason/time";
 import { PropsObject } from "../PropsObject";
 import { DbInstance } from "../SqlClient";
 
+export type EntryStatus = "unknown" | "new" | "saved" | "updated" | "deleted";
+
 export interface PortableEntry<T> {
   key: string;
   createdAtEpochMs: number;
   updatedAtEpochMs: number;
   data: T;
   label?: string;
+  status: EntryStatus;
 }
 
 export interface EntryProps<T> {
@@ -25,6 +28,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
   createdAt: Instant;
   updatedAt: Instant;
   data: T;
+  status: EntryStatus;
 
   constructor(props: EntryProps<T>) {
     super(props);
@@ -32,17 +36,20 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.key = props.key || UniqueId.ofRandom().toUUIDString();
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt || props.createdAt;
+    this.status = "unknown";
   }
 
   load(): boolean {
     const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
     if (row == null) {
+      this.status = "new";
       return false;
     }
 
     this.data = JSON.parse(row.data);
     this.createdAt = Instant.givenEpochMilliseconds(row.createdAt);
     this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAt);
+    this.status = "saved";
 
     return true;
   }
@@ -68,6 +75,8 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
       `,
       [this.key, data, createdAtMs, updatedAtMs, data, createdAtMs, updatedAtMs]
     );
+
+    this.status = "saved";
   }
 
   toPortableEntry(): PortableEntry<T> {
@@ -75,7 +84,8 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
       key: this.key,
       createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
       updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
-      data: this.data
+      data: this.data,
+      status: this.status
     };
   }
 }
