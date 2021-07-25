@@ -4,7 +4,7 @@ import { Dict, TypedEvent } from "@anderjason/observable";
 import { Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, SetUtil } from "@anderjason/util";
 import { Actor } from "skytree";
-import { Entry } from "../Entry";
+import { Entry, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
 import { Tag } from "../Tag";
@@ -425,7 +425,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.stopwatch.stop("rebuildMetadataGivenEntry");
   }
 
-  writeEntry(entry: Entry<T>): Entry<T> {
+  writeEntry(entry: Entry<T> | PortableEntry<T>): void {
     if (entry == null) {
       throw new Error("Entry is required");
     }
@@ -440,13 +440,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       case "new":
       case "updated":
       case "unknown":  
-        this.writeEntryData(entry.data, entry.key, entry.createdAt);
+        if ("createdAt" in entry) {
+          this.writeEntryData(entry.data, entry.key, entry.createdAt);
+        } else {
+          const createdAt = Instant.givenEpochMilliseconds(entry.createdAtEpochMs);
+          this.writeEntryData(entry.data, entry.key, createdAt);
+        }
+        
         break;
       default:
         throw new Error(`Unsupported entry status '${entry.status}'`);
     }
-
-    return entry;
   }
 
   tagGivenTagKey(tagKey: string): Tag {

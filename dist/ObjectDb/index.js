@@ -316,12 +316,17 @@ class ObjectDb extends skytree_1.Actor {
             case "new":
             case "updated":
             case "unknown":
-                this.writeEntryData(entry.data, entry.key, entry.createdAt);
+                if ("createdAt" in entry) {
+                    this.writeEntryData(entry.data, entry.key, entry.createdAt);
+                }
+                else {
+                    const createdAt = time_1.Instant.givenEpochMilliseconds(entry.createdAtEpochMs);
+                    this.writeEntryData(entry.data, entry.key, createdAt);
+                }
                 break;
             default:
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
-        return entry;
     }
     tagGivenTagKey(tagKey) {
         let tag = this._tags.get(tagKey);
