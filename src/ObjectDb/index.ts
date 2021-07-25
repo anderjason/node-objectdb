@@ -237,8 +237,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         entryKeys = ArrayUtil.arrayWithOrderFromValue(
           entryKeys,
           (entryKey) => {
-            const metricValue = metric.entryMetricValues.get(entryKey);
-            return metricValue || 0;
+            return metric.entryMetricValues.get(entryKey);
           },
           order.direction
         );

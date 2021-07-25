@@ -168,8 +168,7 @@ class ObjectDb extends skytree_1.Actor {
             const metric = this._metrics.get(order.key);
             if (metric != null) {
                 entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (entryKey) => {
-                    const metricValue = metric.entryMetricValues.get(entryKey);
-                    return metricValue || 0;
+                    return metric.entryMetricValues.get(entryKey);
                 }, order.direction);
             }
         }
