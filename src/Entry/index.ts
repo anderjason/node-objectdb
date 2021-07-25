@@ -10,7 +10,6 @@ export interface PortableEntry<T> {
   createdAtEpochMs: number;
   updatedAtEpochMs: number;
   data: T;
-  label?: string;
   status: EntryStatus;
 }
 
@@ -18,7 +17,6 @@ export interface EntryProps<T> {
   key?: string;
   createdAt?: Instant;
   updatedAt?: Instant;
-  label?: string;
   db: DbInstance;
 }
 
