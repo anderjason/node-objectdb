@@ -22,7 +22,7 @@
     "@anderjason/node-crypto": "^2.0.0",
     "@anderjason/node-filesystem": "^2.0.1",
     "@anderjason/observable": "^3.2.2",
-    "@anderjason/time": "^2.1.1",
+    "@anderjason/time": "^2.1.2",
     "@anderjason/util": "^2.3.1",
     "better-sqlite3": "^7.4.1",
     "skytree": "^10.0.0"

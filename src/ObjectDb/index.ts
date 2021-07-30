@@ -442,7 +442,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         if ("createdAt" in entry) {
           this.writeEntryData(entry.data, entry.key, entry.createdAt);
         } else {
-          const createdAt = Instant.givenEpochMilliseconds(entry.createdAtEpochMs);
+          const createdAt = entry.createdAtEpochMs != null ? Instant.givenEpochMilliseconds(entry.createdAtEpochMs) : undefined;
           this.writeEntryData(entry.data, entry.key, createdAt);
         }
         

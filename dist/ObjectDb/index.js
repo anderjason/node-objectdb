@@ -319,7 +319,7 @@ class ObjectDb extends skytree_1.Actor {
                     this.writeEntryData(entry.data, entry.key, entry.createdAt);
                 }
                 else {
-                    const createdAt = time_1.Instant.givenEpochMilliseconds(entry.createdAtEpochMs);
+                    const createdAt = entry.createdAtEpochMs != null ? time_1.Instant.givenEpochMilliseconds(entry.createdAtEpochMs) : undefined;
                     this.writeEntryData(entry.data, entry.key, createdAt);
                 }
                 break;
