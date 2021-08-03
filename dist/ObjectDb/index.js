@@ -14,6 +14,7 @@ class ObjectDb extends skytree_1.Actor {
     constructor(props) {
         super(props);
         this.collectionDidChange = new observable_1.TypedEvent();
+        this.entryWillChange = new observable_1.TypedEvent();
         this.entryDidChange = new observable_1.TypedEvent();
         this._tagPrefixes = new Set();
         this._tags = new Map();
@@ -357,6 +358,7 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
+        this.entryWillChange.emit(entryKey);
         this.stopwatch.start("writeEntryData");
         const now = time_1.Instant.ofNow();
         let didCreateNewEntry = false;
@@ -391,6 +393,7 @@ class ObjectDb extends skytree_1.Actor {
         if (existingRecord == null) {
             return;
         }
+        this.entryWillChange.emit(entryKey);
         this.removeMetadataGivenEntryKey(entryKey);
         this._db.runQuery(`
       DELETE FROM entries WHERE key = ?

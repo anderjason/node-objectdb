@@ -32,6 +32,7 @@ export interface ObjectDbProps<T> {
 
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly collectionDidChange = new TypedEvent();
+  readonly entryWillChange = new TypedEvent<string>();
   readonly entryDidChange = new TypedEvent<string>();
 
   readonly stopwatch: Stopwatch;
@@ -496,6 +497,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
+    this.entryWillChange.emit(entryKey);
+
     this.stopwatch.start("writeEntryData");
 
     const now = Instant.ofNow();
@@ -541,6 +544,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (existingRecord == null) {
       return;
     }
+
+    this.entryWillChange.emit(entryKey);
 
     this.removeMetadataGivenEntryKey(entryKey);
 

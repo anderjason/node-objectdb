@@ -23,6 +23,7 @@ export interface ObjectDbProps<T> {
 }
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly collectionDidChange: TypedEvent<void>;
+    readonly entryWillChange: TypedEvent<string>;
     readonly entryDidChange: TypedEvent<string>;
     readonly stopwatch: Stopwatch;
     private _tagPrefixes;
