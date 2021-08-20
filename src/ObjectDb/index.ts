@@ -152,6 +152,23 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       ON metricValues(metricValue);
     `);
 
+    this.stopwatch.start("pruneTagsAndMetrics");
+    db.runQuery(`
+      DELETE FROM tags WHERE key IN (
+        SELECT t.key FROM tags AS t
+        LEFT JOIN tagEntries AS te ON te.tagKey = t.key
+        WHERE te.entryKey IS NULL
+      );    
+    `);
+    db.runQuery(`
+      DELETE FROM metrics WHERE key IN (
+        SELECT m.key FROM metrics AS m
+        LEFT JOIN metricValues AS mv ON mv.metricKey = m.key
+        WHERE mv.entryKey IS NULL
+      );    
+    `);
+    this.stopwatch.stop("pruneTagsAndMetrics");
+
     this.stopwatch.start("selectTagKeys");
     const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
     this.stopwatch.stop("selectTagKeys");
