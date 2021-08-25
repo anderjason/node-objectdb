@@ -2,7 +2,7 @@ import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
 import { Instant, Stopwatch } from "@anderjason/time";
-import { ArrayUtil, SetUtil } from "@anderjason/util";
+import { ArrayUtil, ObjectUtil, SetUtil } from "@anderjason/util";
 import { Actor } from "skytree";
 import { Entry, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
@@ -30,10 +30,17 @@ export interface ObjectDbProps<T> {
   cacheSize?: number;
 }
 
+export interface EntryChange<T> {
+  key: string;
+
+  oldData?: T;
+  newData?: T;
+}
+
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly collectionDidChange = new TypedEvent();
-  readonly entryWillChange = new TypedEvent<string>();
-  readonly entryDidChange = new TypedEvent<string>();
+  readonly entryWillChange = new TypedEvent<EntryChange<T>>();
+  readonly entryDidChange = new TypedEvent<EntryChange<T>>();
 
   readonly stopwatch: Stopwatch;
 
@@ -448,13 +455,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     switch (entry.status) {
-      case "saved":
-        console.log(`Skipping write because status for entry '${entry.key}' is already saved`);
-        return;
       case "deleted":
         this.deleteEntryKey(entry.key);
         break;
       case "new":
+      case "saved":
       case "updated":
       case "unknown":  
         if ("createdAt" in entry) {
@@ -514,7 +519,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    this.entryWillChange.emit(entryKey);
+    const oldData = this.toOptionalEntryGivenKey(entryKey)?.data;
+    if (ObjectUtil.objectIsDeepEqual(oldData, entryData)) {
+      // nothing changed
+      return;
+    }
+
+    const change: EntryChange<T> = {
+      key: entryKey,
+      oldData,
+      newData: entryData
+    };
+
+    this.entryWillChange.emit(change);
 
     this.stopwatch.start("writeEntryData");
 
@@ -545,7 +562,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       this.collectionDidChange.emit();
     }
 
-    this.entryDidChange.emit(entryKey);
+    this.entryDidChange.emit(change);
 
     this.stopwatch.stop("writeEntryData");
 
@@ -562,7 +579,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-    this.entryWillChange.emit(entryKey);
+    const change: EntryChange<T> = {
+      key: entryKey,
+      oldData: existingRecord.data,
+    };
+
+    this.entryWillChange.emit(change);
 
     this.removeMetadataGivenEntryKey(entryKey);
 
@@ -575,7 +597,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this._entryKeys.delete(entryKey);
 
-    this.entryDidChange.emit(entryKey);
+    this.entryDidChange.emit(change);
     this.collectionDidChange.emit();
   }
 }

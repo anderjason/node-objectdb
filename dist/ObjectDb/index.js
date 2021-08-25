@@ -323,13 +323,11 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("Entry is required");
         }
         switch (entry.status) {
-            case "saved":
-                console.log(`Skipping write because status for entry '${entry.key}' is already saved`);
-                return;
             case "deleted":
                 this.deleteEntryKey(entry.key);
                 break;
             case "new":
+            case "saved":
             case "updated":
             case "unknown":
                 if ("createdAt" in entry) {
@@ -368,13 +366,24 @@ class ObjectDb extends skytree_1.Actor {
         return metric;
     }
     writeEntryData(entryData, entryKey, createdAt) {
+        var _a;
         if (entryKey == null) {
             entryKey = node_crypto_1.UniqueId.ofRandom().toUUIDString();
         }
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        this.entryWillChange.emit(entryKey);
+        const oldData = (_a = this.toOptionalEntryGivenKey(entryKey)) === null || _a === void 0 ? void 0 : _a.data;
+        if (util_1.ObjectUtil.objectIsDeepEqual(oldData, entryData)) {
+            // nothing changed
+            return;
+        }
+        const change = {
+            key: entryKey,
+            oldData,
+            newData: entryData
+        };
+        this.entryWillChange.emit(change);
         this.stopwatch.start("writeEntryData");
         const now = time_1.Instant.ofNow();
         let didCreateNewEntry = false;
@@ -397,7 +406,7 @@ class ObjectDb extends skytree_1.Actor {
         if (didCreateNewEntry) {
             this.collectionDidChange.emit();
         }
-        this.entryDidChange.emit(entryKey);
+        this.entryDidChange.emit(change);
         this.stopwatch.stop("writeEntryData");
         return entry;
     }
@@ -409,13 +418,17 @@ class ObjectDb extends skytree_1.Actor {
         if (existingRecord == null) {
             return;
         }
-        this.entryWillChange.emit(entryKey);
+        const change = {
+            key: entryKey,
+            oldData: existingRecord.data,
+        };
+        this.entryWillChange.emit(change);
         this.removeMetadataGivenEntryKey(entryKey);
         this._db.runQuery(`
       DELETE FROM entries WHERE key = ?
     `, [entryKey]);
         this._entryKeys.delete(entryKey);
-        this.entryDidChange.emit(entryKey);
+        this.entryDidChange.emit(change);
         this.collectionDidChange.emit();
     }
 }

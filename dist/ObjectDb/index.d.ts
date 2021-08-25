@@ -21,10 +21,15 @@ export interface ObjectDbProps<T> {
     metricsGivenEntryData: (data: T) => Dict<string>;
     cacheSize?: number;
 }
+export interface EntryChange<T> {
+    key: string;
+    oldData?: T;
+    newData?: T;
+}
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly collectionDidChange: TypedEvent<void>;
-    readonly entryWillChange: TypedEvent<string>;
-    readonly entryDidChange: TypedEvent<string>;
+    readonly entryWillChange: TypedEvent<EntryChange<T>>;
+    readonly entryDidChange: TypedEvent<EntryChange<T>>;
     readonly stopwatch: Stopwatch;
     private _tagPrefixes;
     private _tags;

@@ -21,16 +21,16 @@
   "dependencies": {
     "@anderjason/node-crypto": "^2.0.0",
     "@anderjason/node-filesystem": "^2.0.1",
-    "@anderjason/observable": "^3.2.2",
+    "@anderjason/observable": "^3.3.1",
     "@anderjason/time": "^2.1.2",
-    "@anderjason/util": "^2.3.1",
-    "better-sqlite3": "^7.4.1",
+    "@anderjason/util": "^2.4.0",
+    "better-sqlite3": "^7.4.3",
     "skytree": "^10.0.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^5.4.1",
-    "@types/node": "^15.12.2",
-    "typescript": "^4.3.2"
+    "@types/better-sqlite3": "^7.4.0",
+    "@types/node": "^16.7.1",
+    "typescript": "^4.3.5"
   },
   "bugs": {
     "url": "https://github.com/anderjason/node-objectdb/issues"
