@@ -1,11 +1,11 @@
-# @anderjason/node-filedb
+# @anderjason/node-objectdb
 
 ## Installation
 
-`npm install --save @anderjason/node-filedb`
+`npm install --save @anderjason/node-objectdb`
 
 ## API Reference
 
-### FileDB
+### ObjectDB
 
 `TODO`
