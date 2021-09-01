@@ -35,6 +35,7 @@ class ObjectDb extends skytree_1.Actor {
                 const entries = Array.from(this._caches.entries());
                 for (const [key, val] of entries) {
                     if (val.expiresAt.toEpochMilliseconds() < nowMs) {
+                        console.log("Expiring cached entry keys for cache key", key);
                         this._caches.delete(key);
                     }
                 }
@@ -185,6 +186,7 @@ class ObjectDb extends skytree_1.Actor {
         if (options.cacheKey != null) {
             const cacheData = this._caches.get(options.cacheKey);
             if (cacheData != null) {
+                console.log("Using cached entry keys for cache key", options.cacheKey);
                 entryKeys = cacheData.entryKeys;
             }
         }
@@ -213,6 +215,7 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         if (options.cacheKey != null && !this._caches.has(options.cacheKey)) {
+            console.log("Caching entry keys with cache key", options.cacheKey);
             this._caches.set(options.cacheKey, {
                 entryKeys,
                 expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(300))
