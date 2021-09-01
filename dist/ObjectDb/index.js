@@ -20,11 +20,25 @@ class ObjectDb extends skytree_1.Actor {
         this._tags = new Map();
         this._metrics = new Map();
         this._entryKeys = new Set();
+        this._caches = new Map();
         this.stopwatch = new time_1.Stopwatch(props.localFile.toAbsolutePath());
     }
     onActivate() {
         this._db = this.addActor(new SqlClient_1.DbInstance({
             localFile: this.props.localFile,
+        }));
+        this.addActor(new skytree_1.Timer({
+            duration: time_1.Duration.givenMinutes(1),
+            isRepeating: true,
+            fn: () => {
+                const nowMs = time_1.Instant.ofNow().toEpochMilliseconds();
+                const entries = Array.from(this._caches.entries());
+                for (const [key, val] of entries) {
+                    if (val.expiresAt.toEpochMilliseconds() < nowMs) {
+                        this._caches.delete(key);
+                    }
+                }
+            }
         }));
         this.load();
     }
@@ -166,28 +180,43 @@ class ObjectDb extends skytree_1.Actor {
     }
     toEntryKeys(options = {}) {
         this.stopwatch.start("toEntryKeys");
-        let entryKeys;
-        if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
-            entryKeys = Array.from(this._entryKeys);
-        }
-        else {
-            const sets = options.requireTagKeys.map((tagKey) => {
-                const tag = this._tags.get(tagKey);
-                if (tag == null) {
-                    return new Set();
-                }
-                return new Set(tag.entryKeys.values());
-            });
-            entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
-        }
-        const order = options.orderByMetric;
-        if (order != null) {
-            const metric = this._metrics.get(order.key);
-            if (metric != null) {
-                entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (entryKey) => {
-                    return metric.entryMetricValues.get(entryKey);
-                }, order.direction);
+        const now = time_1.Instant.ofNow();
+        let entryKeys = undefined;
+        if (options.cacheKey != null) {
+            const cacheData = this._caches.get(options.cacheKey);
+            if (cacheData != null) {
+                entryKeys = cacheData.entryKeys;
             }
+        }
+        if (entryKeys == null) {
+            if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
+                entryKeys = Array.from(this._entryKeys);
+            }
+            else {
+                const sets = options.requireTagKeys.map((tagKey) => {
+                    const tag = this._tags.get(tagKey);
+                    if (tag == null) {
+                        return new Set();
+                    }
+                    return new Set(tag.entryKeys.values());
+                });
+                entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
+            }
+            const order = options.orderByMetric;
+            if (order != null) {
+                const metric = this._metrics.get(order.key);
+                if (metric != null) {
+                    entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (entryKey) => {
+                        return metric.entryMetricValues.get(entryKey);
+                    }, order.direction);
+                }
+            }
+        }
+        if (options.cacheKey != null && !this._caches.has(options.cacheKey)) {
+            this._caches.set(options.cacheKey, {
+                entryKeys,
+                expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(300))
+            });
         }
         let start = 0;
         let end = entryKeys.length;

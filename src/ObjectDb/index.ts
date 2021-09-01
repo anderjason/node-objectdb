@@ -1,9 +1,9 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
-import { Instant, Stopwatch } from "@anderjason/time";
+import { Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil } from "@anderjason/util";
-import { Actor } from "skytree";
+import { Actor, Timer } from "skytree";
 import { Entry, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
@@ -19,6 +19,7 @@ export interface ObjectDbReadOptions {
   orderByMetric?: Order;
   limit?: number;
   offset?: number;
+  cacheKey?: string;
 }
 
 export interface ObjectDbProps<T> {
@@ -37,6 +38,11 @@ export interface EntryChange<T> {
   newData?: T;
 }
 
+interface CacheData {
+  expiresAt: Instant;
+  entryKeys: string[];
+}
+
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly collectionDidChange = new TypedEvent();
   readonly entryWillChange = new TypedEvent<EntryChange<T>>();
@@ -48,6 +54,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
   private _entryKeys = new Set<string>();
+  private _caches = new Map<string, CacheData>();
   private _db: DbInstance;
   
   constructor(props: ObjectDbProps<T>) {
@@ -63,6 +70,22 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       })
     );
 
+    this.addActor(
+      new Timer({
+        duration: Duration.givenMinutes(1),
+        isRepeating: true,
+        fn: () => {
+          const nowMs = Instant.ofNow().toEpochMilliseconds();
+
+          const entries = Array.from(this._caches.entries())
+          for (const [key, val] of entries) {
+            if (val.expiresAt.toEpochMilliseconds() < nowMs) {
+              this._caches.delete(key);
+            }
+          }
+        }
+      })
+    )
     this.load();
   }
 
@@ -238,35 +261,56 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   toEntryKeys(options: ObjectDbReadOptions = {}): string[] {
     this.stopwatch.start("toEntryKeys");
 
-    let entryKeys: string[];
+    const now = Instant.ofNow();
 
-    if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
-      entryKeys = Array.from(this._entryKeys);
-    } else {
-      const sets = options.requireTagKeys.map((tagKey) => {
-        const tag = this._tags.get(tagKey);
-        if (tag == null) {
-          return new Set<string>();
-        }
+    let entryKeys: string[] = undefined;
 
-        return new Set(tag.entryKeys.values());
-      });
-
-      entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
+    if (options.cacheKey != null) {
+      const cacheData = this._caches.get(options.cacheKey);
+      if (cacheData != null) {
+        entryKeys = cacheData.entryKeys;
+      }
     }
 
-    const order = options.orderByMetric;
-    if (order != null) {
-      const metric = this._metrics.get(order.key);
-      if (metric != null) {
-        entryKeys = ArrayUtil.arrayWithOrderFromValue(
-          entryKeys,
-          (entryKey) => {
-            return metric.entryMetricValues.get(entryKey);
-          },
-          order.direction
-        );
+    if (entryKeys == null) {
+      if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
+        entryKeys = Array.from(this._entryKeys);
+      } else {
+        const sets = options.requireTagKeys.map((tagKey) => {
+          const tag = this._tags.get(tagKey);
+          if (tag == null) {
+            return new Set<string>();
+          }
+
+          return new Set(tag.entryKeys.values());
+        });
+
+        entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
       }
+
+      const order = options.orderByMetric;
+      if (order != null) {
+        const metric = this._metrics.get(order.key);
+        if (metric != null) {
+          entryKeys = ArrayUtil.arrayWithOrderFromValue(
+            entryKeys,
+            (entryKey) => {
+              return metric.entryMetricValues.get(entryKey);
+            },
+            order.direction
+          );
+        }
+      }
+    }
+
+    if (options.cacheKey != null && !this._caches.has(options.cacheKey)) {
+      this._caches.set(
+        options.cacheKey,
+        {
+          entryKeys,
+          expiresAt: now.withAddedDuration(Duration.givenSeconds(300))
+        }
+      );
     }
 
     let start = 0;

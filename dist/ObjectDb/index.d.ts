@@ -14,6 +14,7 @@ export interface ObjectDbReadOptions {
     orderByMetric?: Order;
     limit?: number;
     offset?: number;
+    cacheKey?: string;
 }
 export interface ObjectDbProps<T> {
     localFile: LocalFile;
@@ -35,6 +36,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private _tags;
     private _metrics;
     private _entryKeys;
+    private _caches;
     private _db;
     constructor(props: ObjectDbProps<T>);
     onActivate(): void;
