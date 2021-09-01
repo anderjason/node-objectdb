@@ -2,7 +2,7 @@ import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
-import { ArrayUtil, ObjectUtil, SetUtil } from "@anderjason/util";
+import { ArrayUtil, NumberUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Entry, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
@@ -54,7 +54,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
   private _entryKeys = new Set<string>();
-  private _caches = new Map<string, CacheData>();
+  private _caches = new Map<number, CacheData>();
   private _db: DbInstance;
   
   constructor(props: ObjectDbProps<T>) {
@@ -266,8 +266,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let entryKeys: string[] = undefined;
 
+    let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
-      const cacheData = this._caches.get(options.cacheKey);
+      const tagKeys = (options.requireTagKeys || []).join(",");      
+      const cacheKeyData = `${options.cacheKey}:${options.orderByMetric?.direction}:${options.orderByMetric?.key}:${tagKeys}`;
+      fullCacheKey = StringUtil.hashCodeGivenString(cacheKeyData);
+    }
+
+    if (fullCacheKey != null) {
+      const cacheData = this._caches.get(fullCacheKey);
       if (cacheData != null) {
         console.log("Using cached entry keys for cache key", options.cacheKey);
         entryKeys = cacheData.entryKeys;
@@ -305,10 +312,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       }
     }
 
-    if (options.cacheKey != null && !this._caches.has(options.cacheKey)) {
+    if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
       console.log("Caching entry keys with cache key", options.cacheKey);
       this._caches.set(
-        options.cacheKey,
+        fullCacheKey,
         {
           entryKeys,
           expiresAt: now.withAddedDuration(Duration.givenSeconds(300))

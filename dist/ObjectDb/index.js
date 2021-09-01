@@ -180,11 +180,18 @@ class ObjectDb extends skytree_1.Actor {
         this.stopwatch.stop("createMetrics");
     }
     toEntryKeys(options = {}) {
+        var _a, _b;
         this.stopwatch.start("toEntryKeys");
         const now = time_1.Instant.ofNow();
         let entryKeys = undefined;
+        let fullCacheKey = undefined;
         if (options.cacheKey != null) {
-            const cacheData = this._caches.get(options.cacheKey);
+            const tagKeys = (options.requireTagKeys || []).join(",");
+            const cacheKeyData = `${options.cacheKey}:${(_a = options.orderByMetric) === null || _a === void 0 ? void 0 : _a.direction}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.key}:${tagKeys}`;
+            fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
+        }
+        if (fullCacheKey != null) {
+            const cacheData = this._caches.get(fullCacheKey);
             if (cacheData != null) {
                 console.log("Using cached entry keys for cache key", options.cacheKey);
                 entryKeys = cacheData.entryKeys;
@@ -214,9 +221,9 @@ class ObjectDb extends skytree_1.Actor {
                 }
             }
         }
-        if (options.cacheKey != null && !this._caches.has(options.cacheKey)) {
+        if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
             console.log("Caching entry keys with cache key", options.cacheKey);
-            this._caches.set(options.cacheKey, {
+            this._caches.set(fullCacheKey, {
                 entryKeys,
                 expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(300))
             });
