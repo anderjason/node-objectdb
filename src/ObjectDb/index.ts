@@ -25,8 +25,8 @@ export interface ObjectDbReadOptions {
 export interface ObjectDbProps<T> {
   localFile: LocalFile;
 
-  tagKeysGivenEntryData: (data: T) => string[];
-  metricsGivenEntryData: (data: T) => Dict<string>;
+  tagKeysGivenEntry: (entry: Entry<T>) => string[];
+  metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
 
   cacheSize?: number;
 }
@@ -80,7 +80,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
           const entries = Array.from(this._caches.entries())
           for (const [key, val] of entries) {
             if (val.expiresAt.toEpochMilliseconds() < nowMs) {
-              console.log("Expiring cached entry keys for cache key", key);
               this._caches.delete(key);
             }
           }
@@ -276,7 +275,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (fullCacheKey != null) {
       const cacheData = this._caches.get(fullCacheKey);
       if (cacheData != null) {
-        console.log("Using cached entry keys for cache key", options.cacheKey);
+        cacheData.expiresAt = now.withAddedDuration(Duration.givenSeconds(120))
         entryKeys = cacheData.entryKeys;
       }
     }
@@ -313,12 +312,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
-      console.log("Caching entry keys with cache key", options.cacheKey);
       this._caches.set(
         fullCacheKey,
         {
           entryKeys,
-          expiresAt: now.withAddedDuration(Duration.givenSeconds(300))
+          expiresAt: now.withAddedDuration(Duration.givenSeconds(120))
         }
       );
     }
@@ -482,8 +480,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.stopwatch.start("rebuildMetadataGivenEntry");
     this.removeMetadataGivenEntryKey(entry.key);
 
-    const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
-    const metricValues = this.props.metricsGivenEntryData(entry.data);
+    const tagKeys = this.props.tagKeysGivenEntry(entry);
+    const metricValues = this.props.metricsGivenEntry(entry);
 
     metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
     metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();

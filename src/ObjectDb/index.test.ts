@@ -15,8 +15,8 @@ interface TestEntryData {
 Test.define("ObjectDb can be created", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
-    tagKeysGivenEntryData: (data) => [],
-    metricsGivenEntryData: (data) => ({})
+    tagKeysGivenEntry: (entry) => [],
+    metricsGivenEntry: (entry) => ({})
   });
   fileDb.activate();
 
@@ -26,8 +26,8 @@ Test.define("ObjectDb can be created", () => {
 Test.define("ObjectDb can write and read a row", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
-    tagKeysGivenEntryData: (data) => [],
-    metricsGivenEntryData: (data) => ({})
+    tagKeysGivenEntry: (entry) => [],
+    metricsGivenEntry: (entry) => ({})
   });
   fileDb.activate();
 
@@ -50,10 +50,10 @@ Test.define("ObjectDb can write and read a row", () => {
 Test.define("ObjectDb can assign tags", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
-    tagKeysGivenEntryData: (data) => {
+    tagKeysGivenEntry: (entry) => {
       return ["color:red", "color:blue"];
     },
-    metricsGivenEntryData: (data) => ({})
+    metricsGivenEntry: (entry) => ({})
   });
   fileDb.activate();
 
@@ -83,11 +83,11 @@ Test.define("ObjectDb can assign tags", () => {
 Test.define("ObjectDb can assign metrics", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
-    tagKeysGivenEntryData: (data) => [],
-    metricsGivenEntryData: (data) => {
+    tagKeysGivenEntry: (entry) => [],
+    metricsGivenEntry: (entry) => {
       const result: Dict<string> = {};
 
-      result.charCount = String(data?.message?.length || 0);
+      result.charCount = String(entry.data.message?.length || 0);
 
       return result;
     },

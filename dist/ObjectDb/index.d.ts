@@ -18,8 +18,8 @@ export interface ObjectDbReadOptions {
 }
 export interface ObjectDbProps<T> {
     localFile: LocalFile;
-    tagKeysGivenEntryData: (data: T) => string[];
-    metricsGivenEntryData: (data: T) => Dict<string>;
+    tagKeysGivenEntry: (entry: Entry<T>) => string[];
+    metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
     cacheSize?: number;
 }
 export interface EntryChange<T> {

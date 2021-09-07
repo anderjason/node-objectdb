@@ -35,7 +35,6 @@ class ObjectDb extends skytree_1.Actor {
                 const entries = Array.from(this._caches.entries());
                 for (const [key, val] of entries) {
                     if (val.expiresAt.toEpochMilliseconds() < nowMs) {
-                        console.log("Expiring cached entry keys for cache key", key);
                         this._caches.delete(key);
                     }
                 }
@@ -193,7 +192,7 @@ class ObjectDb extends skytree_1.Actor {
         if (fullCacheKey != null) {
             const cacheData = this._caches.get(fullCacheKey);
             if (cacheData != null) {
-                console.log("Using cached entry keys for cache key", options.cacheKey);
+                cacheData.expiresAt = now.withAddedDuration(time_1.Duration.givenSeconds(120));
                 entryKeys = cacheData.entryKeys;
             }
         }
@@ -222,10 +221,9 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
-            console.log("Caching entry keys with cache key", options.cacheKey);
             this._caches.set(fullCacheKey, {
                 entryKeys,
-                expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(300))
+                expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(120))
             });
         }
         let start = 0;
@@ -342,8 +340,8 @@ class ObjectDb extends skytree_1.Actor {
     rebuildMetadataGivenEntry(entry) {
         this.stopwatch.start("rebuildMetadataGivenEntry");
         this.removeMetadataGivenEntryKey(entry.key);
-        const tagKeys = this.props.tagKeysGivenEntryData(entry.data);
-        const metricValues = this.props.metricsGivenEntryData(entry.data);
+        const tagKeys = this.props.tagKeysGivenEntry(entry);
+        const metricValues = this.props.metricsGivenEntry(entry);
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
         metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
         tagKeys.forEach((tagKey) => {
