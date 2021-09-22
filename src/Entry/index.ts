@@ -50,7 +50,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
 
   load(): boolean {
     const row = this.props.db.toFirstRow(
-      "SELECT data, createdAt, updatedAt FROM entries WHERE key = ?",
+      "SELECT data, propertyValues, createdAt, updatedAt FROM entries WHERE key = ?",
       [this.key]
     );
     if (row == null) {

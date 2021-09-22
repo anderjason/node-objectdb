@@ -14,7 +14,7 @@ class Entry extends PropsObject_1.PropsObject {
     }
     load() {
         var _a;
-        const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
+        const row = this.props.db.toFirstRow("SELECT data, propertyValues, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
         if (row == null) {
             this.status = "new";
             return false;
