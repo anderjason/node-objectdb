@@ -6,7 +6,7 @@ import { DbInstance } from "../SqlClient";
 
 export type EntryStatus = "unknown" | "new" | "saved" | "updated" | "deleted";
 
-type JSONSerializable =
+export type JSONSerializable =
   | string
   | number
   | boolean
@@ -30,29 +30,13 @@ export interface EntryProps<T> {
   db: DbInstance;
 }
 
-function mapGivenDict<T>(dict: Dict<T> = {}): Map<string, T> {
-  const result = new Map<string, T>();
-  for (const key of Object.keys(dict)) {
-    result.set(key, dict[key]);
-  }
-  return result;
-}
-
-function dictGivenMap<T>(map: Map<string, T> = new Map()): Dict<T> {
-  const result: Dict<T> = {};
-  for (const [key, value] of map.entries()) {
-    result[key] = value;
-  }
-  return result;
-}
-
 export class Entry<T> extends PropsObject<EntryProps<T>> {
   readonly key: string;
 
   createdAt: Instant;
   updatedAt: Instant;
   data: T;
-  propertyValues: Map<string, JSONSerializable>;
+  propertyValues: Dict<JSONSerializable>;
   status: EntryStatus;
 
   constructor(props: EntryProps<T>) {
@@ -75,7 +59,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     }
 
     this.data = JSON.parse(row.data);
-    this.propertyValues = mapGivenDict(JSON.parse(row.propertyValues ?? "{}"));
+    this.propertyValues = JSON.parse(row.propertyValues ?? "{}");
     this.createdAt = Instant.givenEpochMilliseconds(row.createdAt);
     this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAt);
     this.status = "saved";
@@ -94,7 +78,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
 
     const createdAtMs = this.createdAt.toEpochMilliseconds();
     const updatedAtMs = this.updatedAt.toEpochMilliseconds();
-    const propertyValues = JSON.stringify(dictGivenMap(this.propertyValues));
+    const propertyValues = JSON.stringify(this.propertyValues);
 
     this.props.db.runQuery(
       `
@@ -125,7 +109,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
       createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
       updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
       data: this.data,
-      propertyValues: dictGivenMap(this.propertyValues),
+      propertyValues: this.propertyValues ?? {},
       status: this.status,
     };
   }

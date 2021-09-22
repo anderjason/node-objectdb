@@ -4,20 +4,6 @@ exports.Entry = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
 const time_1 = require("@anderjason/time");
 const PropsObject_1 = require("../PropsObject");
-function mapGivenDict(dict = {}) {
-    const result = new Map();
-    for (const key of Object.keys(dict)) {
-        result.set(key, dict[key]);
-    }
-    return result;
-}
-function dictGivenMap(map = new Map()) {
-    const result = {};
-    for (const [key, value] of map.entries()) {
-        result[key] = value;
-    }
-    return result;
-}
 class Entry extends PropsObject_1.PropsObject {
     constructor(props) {
         super(props);
@@ -34,7 +20,7 @@ class Entry extends PropsObject_1.PropsObject {
             return false;
         }
         this.data = JSON.parse(row.data);
-        this.propertyValues = mapGivenDict(JSON.parse((_a = row.propertyValues) !== null && _a !== void 0 ? _a : "{}"));
+        this.propertyValues = JSON.parse((_a = row.propertyValues) !== null && _a !== void 0 ? _a : "{}");
         this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAt);
         this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAt);
         this.status = "saved";
@@ -48,7 +34,7 @@ class Entry extends PropsObject_1.PropsObject {
         }
         const createdAtMs = this.createdAt.toEpochMilliseconds();
         const updatedAtMs = this.updatedAt.toEpochMilliseconds();
-        const propertyValues = JSON.stringify(dictGivenMap(this.propertyValues));
+        const propertyValues = JSON.stringify(this.propertyValues);
         this.props.db.runQuery(`
       INSERT INTO entries (key, data, propertyValues, createdAt, updatedAt)
       VALUES(?, ?, ?, ?, ?)
@@ -68,12 +54,13 @@ class Entry extends PropsObject_1.PropsObject {
         this.status = "saved";
     }
     toPortableEntry() {
+        var _a;
         return {
             key: this.key,
             createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
             updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
             data: this.data,
-            propertyValues: dictGivenMap(this.propertyValues),
+            propertyValues: (_a = this.propertyValues) !== null && _a !== void 0 ? _a : {},
             status: this.status,
         };
     }

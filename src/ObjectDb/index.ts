@@ -9,7 +9,7 @@ import {
   StringUtil
 } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
-import { Entry, PortableEntry } from "../Entry";
+import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
 import { Tag } from "../Tag";
@@ -161,6 +161,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         updatedAt INTEGER NOT NULL
       )
     `);
+
+    try {
+      db.runQuery(`
+        ALTER TABLE entries
+        ADD COLUMN propertyValues TEXT
+      `);
+    } catch (err) {
+      // ignore
+    }
 
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS tagEntries (
@@ -567,12 +576,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   propertyTagKeysGivenEntry(entry: Entry<T>): string[] {
     const result = new Set<string>();
 
-    for (const [key, value] of entry.propertyValues) {
+    Object.keys(entry.propertyValues).forEach((key) => {
+      const value = entry.propertyValues[key];
       const tag = this.tagGivenPropertyKeyAndValue(key, value);
       if (tag != null) {
         result.add(tag);
       }
-    }
+    });
 
     return Array.from(result);
   }
@@ -617,13 +627,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       case "updated":
       case "unknown":
         if ("createdAt" in entry) {
-          this.writeEntryData(entry.data, entry.key, entry.createdAt);
+          this.writeEntryData(entry.data, entry.propertyValues, entry.key, entry.createdAt);
         } else {
           const createdAt =
             entry.createdAtEpochMs != null
               ? Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
               : undefined;
-          this.writeEntryData(entry.data, entry.key, createdAt);
+          this.writeEntryData(entry.data, entry.propertyValues, entry.key, createdAt);
         }
 
         break;
@@ -665,6 +675,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   writeEntryData(
     entryData: T,
+    propertyValues: Dict<JSONSerializable> = {},
     entryKey?: string,
     createdAt?: Instant
   ): Entry<T> {
@@ -676,8 +687,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const oldData = this.toOptionalEntryGivenKey(entryKey)?.data;
-    if (ObjectUtil.objectIsDeepEqual(oldData, entryData)) {
+    const oldPortableEntry = this.toOptionalEntryGivenKey(entryKey)?.toPortableEntry();
+    const oldData = oldPortableEntry?.data;
+    const oldPropertyValues = oldPortableEntry?.propertyValues;
+
+    if (ObjectUtil.objectIsDeepEqual(oldData, entryData) && ObjectUtil.objectIsDeepEqual(oldPropertyValues, propertyValues)) {
       // nothing changed
       return;
     }
@@ -707,6 +721,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     entry.data = entryData;
+    entry.propertyValues = propertyValues;
 
     this.stopwatch.start("save");
     entry.save();

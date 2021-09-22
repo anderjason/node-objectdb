@@ -2,7 +2,7 @@ import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
 import { Instant, Stopwatch } from "@anderjason/time";
 import { Actor } from "skytree";
-import { Entry, PortableEntry } from "../Entry";
+import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { Tag } from "../Tag";
 export interface Order {
@@ -81,7 +81,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     writeEntry(entry: Entry<T> | PortableEntry<T>): void;
     tagGivenTagKey(tagKey: string): Tag;
     metricGivenMetricKey(metricKey: string): Metric;
-    writeEntryData(entryData: T, entryKey?: string, createdAt?: Instant): Entry<T>;
+    writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Entry<T>;
     deleteEntryKey(entryKey: string): void;
 }
 export {};

@@ -83,6 +83,15 @@ class ObjectDb extends skytree_1.Actor {
         updatedAt INTEGER NOT NULL
       )
     `);
+        try {
+            db.runQuery(`
+        ALTER TABLE entries
+        ADD COLUMN propertyValues TEXT
+      `);
+        }
+        catch (err) {
+            // ignore
+        }
         db.runQuery(`
       CREATE TABLE IF NOT EXISTS tagEntries (
         tagKey TEXT NOT NULL,
@@ -395,12 +404,13 @@ class ObjectDb extends skytree_1.Actor {
     }
     propertyTagKeysGivenEntry(entry) {
         const result = new Set();
-        for (const [key, value] of entry.propertyValues) {
+        Object.keys(entry.propertyValues).forEach((key) => {
+            const value = entry.propertyValues[key];
             const tag = this.tagGivenPropertyKeyAndValue(key, value);
             if (tag != null) {
                 result.add(tag);
             }
-        }
+        });
         return Array.from(result);
     }
     rebuildMetadataGivenEntry(entry) {
@@ -434,13 +444,13 @@ class ObjectDb extends skytree_1.Actor {
             case "updated":
             case "unknown":
                 if ("createdAt" in entry) {
-                    this.writeEntryData(entry.data, entry.key, entry.createdAt);
+                    this.writeEntryData(entry.data, entry.propertyValues, entry.key, entry.createdAt);
                 }
                 else {
                     const createdAt = entry.createdAtEpochMs != null
                         ? time_1.Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
                         : undefined;
-                    this.writeEntryData(entry.data, entry.key, createdAt);
+                    this.writeEntryData(entry.data, entry.propertyValues, entry.key, createdAt);
                 }
                 break;
             default:
@@ -470,7 +480,7 @@ class ObjectDb extends skytree_1.Actor {
         }
         return metric;
     }
-    writeEntryData(entryData, entryKey, createdAt) {
+    writeEntryData(entryData, propertyValues = {}, entryKey, createdAt) {
         var _a;
         if (entryKey == null) {
             entryKey = node_crypto_1.UniqueId.ofRandom().toUUIDString();
@@ -478,8 +488,10 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        const oldData = (_a = this.toOptionalEntryGivenKey(entryKey)) === null || _a === void 0 ? void 0 : _a.data;
-        if (util_1.ObjectUtil.objectIsDeepEqual(oldData, entryData)) {
+        const oldPortableEntry = (_a = this.toOptionalEntryGivenKey(entryKey)) === null || _a === void 0 ? void 0 : _a.toPortableEntry();
+        const oldData = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.data;
+        const oldPropertyValues = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.propertyValues;
+        if (util_1.ObjectUtil.objectIsDeepEqual(oldData, entryData) && util_1.ObjectUtil.objectIsDeepEqual(oldPropertyValues, propertyValues)) {
             // nothing changed
             return;
         }
@@ -503,6 +515,7 @@ class ObjectDb extends skytree_1.Actor {
             didCreateNewEntry = true;
         }
         entry.data = entryData;
+        entry.propertyValues = propertyValues;
         this.stopwatch.start("save");
         entry.save();
         this.stopwatch.stop("save");
