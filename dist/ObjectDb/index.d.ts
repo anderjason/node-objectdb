@@ -27,6 +27,20 @@ export interface EntryChange<T> {
     oldData?: T;
     newData?: T;
 }
+interface BasePropertyDefinition {
+    key: string;
+    label: string;
+    listOrder: number;
+}
+export interface SelectPropertyOption {
+    key: string;
+    label: string;
+}
+export interface SelectPropertyDefinition extends BasePropertyDefinition {
+    type: "select";
+    options: SelectPropertyOption[];
+}
+export declare type PropertyDefinition = SelectPropertyDefinition;
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly collectionDidChange: TypedEvent<void>;
     readonly entryWillChange: TypedEvent<EntryChange<T>>;
@@ -35,6 +49,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private _tagPrefixes;
     private _tags;
     private _metrics;
+    private _properties;
     private _entryKeys;
     private _caches;
     private _db;
@@ -53,8 +68,15 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Entry<T> | undefined;
     toEntryGivenKey(entryKey: string): Entry<T>;
     toOptionalEntryGivenKey(entryKey: string): Entry<T> | undefined;
+    setProperty(property: PropertyDefinition): void;
+    deletePropertyKey(key: string): void;
+    toPropertyGivenKey(key: string): PropertyDefinition;
+    toProperties(): PropertyDefinition[];
+    private saveProperties;
     removeMetadataGivenEntryKey(entryKey: string): void;
     rebuildMetadata(): void;
+    tagGivenPropertyKeyAndValue(propertyKey: string, value: any): string;
+    propertyTagKeysGivenEntry(entry: Entry<T>): string[];
     rebuildMetadataGivenEntry(entry: Entry<T>): void;
     writeEntry(entry: Entry<T> | PortableEntry<T>): void;
     tagGivenTagKey(tagKey: string): Tag;
@@ -62,3 +84,4 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     writeEntryData(entryData: T, entryKey?: string, createdAt?: Instant): Entry<T>;
     deleteEntryKey(entryKey: string): void;
 }
+export {};

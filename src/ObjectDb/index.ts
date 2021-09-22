@@ -2,7 +2,12 @@ import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
-import { ArrayUtil, NumberUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
+import {
+  ArrayUtil,
+  ObjectUtil,
+  SetUtil,
+  StringUtil
+} from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Entry, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
@@ -43,6 +48,24 @@ interface CacheData {
   entryKeys: string[];
 }
 
+interface BasePropertyDefinition {
+  key: string;
+  label: string;
+  listOrder: number;
+}
+
+export interface SelectPropertyOption {
+  key: string;
+  label: string;
+}
+
+export interface SelectPropertyDefinition extends BasePropertyDefinition {
+  type: "select";
+  options: SelectPropertyOption[];
+}
+
+export type PropertyDefinition = SelectPropertyDefinition;
+
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly collectionDidChange = new TypedEvent();
   readonly entryWillChange = new TypedEvent<EntryChange<T>>();
@@ -53,10 +76,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _tagPrefixes = new Set<string>();
   private _tags = new Map<string, Tag>();
   private _metrics = new Map<string, Metric>();
+  private _properties = new Map<string, PropertyDefinition>();
   private _entryKeys = new Set<string>();
   private _caches = new Map<number, CacheData>();
   private _db: DbInstance;
-  
+
   constructor(props: ObjectDbProps<T>) {
     super(props);
 
@@ -77,15 +101,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         fn: () => {
           const nowMs = Instant.ofNow().toEpochMilliseconds();
 
-          const entries = Array.from(this._caches.entries())
+          const entries = Array.from(this._caches.entries());
           for (const [key, val] of entries) {
             if (val.expiresAt.toEpochMilliseconds() < nowMs) {
               this._caches.delete(key);
             }
           }
-        }
+        },
       })
-    )
+    );
     this.load();
   }
 
@@ -107,6 +131,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     const db = this._db;
+
+    db.runQuery(`
+      CREATE TABLE IF NOT EXISTS meta (
+        id INTEGER PRIMARY KEY CHECK (id = 0),
+        properties TEXT NOT NULL
+      )
+    `);
 
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS tags (
@@ -199,24 +230,35 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     `);
     this.stopwatch.stop("pruneTagsAndMetrics");
 
+    db.prepareCached(
+      "INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)"
+    ).run("{}");
+
+    db.toRows("SELECT properties FROM meta").forEach((row) => {
+      const properties = JSON.parse(row.properties ?? "{}");
+
+      // assign property definitions
+      for (const key of Object.keys(properties)) {
+        this._properties.set(key, properties[key]);
+      }
+    });
+
     this.stopwatch.start("selectTagKeys");
     const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
     this.stopwatch.stop("selectTagKeys");
 
     this.stopwatch.start("selectEntryKeys");
-    db.toRows("SELECT key FROM entries").forEach(
-      (row) => {
-        this._entryKeys.add(row.key);
-      }
-    );
+    db.toRows("SELECT key FROM entries").forEach((row) => {
+      this._entryKeys.add(row.key);
+    });
     this.stopwatch.stop("selectEntryKeys");
-    
+
     this.stopwatch.start("selectMetricKeys");
     const metricKeys = db
       .toRows("SELECT key FROM metrics")
       .map((row) => row.key);
     this.stopwatch.stop("selectMetricKeys");
-    
+
     this.stopwatch.start("createTags");
     const tagKeyCount = tagKeys.length;
     for (let i = 0; i < tagKeyCount; i++) {
@@ -226,14 +268,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       const tag = new Tag({
         tagKey,
         db: this._db,
-        stopwatch: this.stopwatch
+        stopwatch: this.stopwatch,
       });
       this.stopwatch.stop("createTag");
 
       this.stopwatch.start("activateTag");
-      this.addActor(
-        tag
-      );
+      this.addActor(tag);
       this.stopwatch.stop("activateTag");
 
       this._tags.set(tagKey, tag);
@@ -267,7 +307,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
-      const tagKeys = (options.requireTagKeys || []).join(",");      
+      const tagKeys = (options.requireTagKeys || []).join(",");
       const cacheKeyData = `${options.cacheKey}:${options.orderByMetric?.direction}:${options.orderByMetric?.key}:${tagKeys}`;
       fullCacheKey = StringUtil.hashCodeGivenString(cacheKeyData);
     }
@@ -275,13 +315,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (fullCacheKey != null) {
       const cacheData = this._caches.get(fullCacheKey);
       if (cacheData != null) {
-        cacheData.expiresAt = now.withAddedDuration(Duration.givenSeconds(120))
+        cacheData.expiresAt = now.withAddedDuration(Duration.givenSeconds(120));
         entryKeys = cacheData.entryKeys;
       }
     }
 
     if (entryKeys == null) {
-      if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
+      if (
+        options.requireTagKeys == null ||
+        options.requireTagKeys.length === 0
+      ) {
         entryKeys = Array.from(this._entryKeys);
       } else {
         const sets = options.requireTagKeys.map((tagKey) => {
@@ -312,13 +355,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
-      this._caches.set(
-        fullCacheKey,
-        {
-          entryKeys,
-          expiresAt: now.withAddedDuration(Duration.givenSeconds(120))
-        }
-      );
+      this._caches.set(fullCacheKey, {
+        entryKeys,
+        expiresAt: now.withAddedDuration(Duration.givenSeconds(120)),
+      });
     }
 
     let start = 0;
@@ -441,6 +481,36 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
+  setProperty(property: PropertyDefinition): void {
+    this._properties.set(property.key, property);
+    this.saveProperties();
+  }
+
+  deletePropertyKey(key: string): void {
+    this._properties.delete(key);
+    this.saveProperties();
+  }
+
+  toPropertyGivenKey(key: string): PropertyDefinition {
+    return this._properties.get(key);
+  }
+
+  toProperties(): PropertyDefinition[] {
+    return Array.from(this._properties.values());
+  }
+
+  private saveProperties(): void {
+    // convert this._properties to a plain javascript object
+    const portableProperties: Dict<PropertyDefinition> = {};
+    this._properties.forEach((property, key) => {
+      portableProperties[key] = property;
+    });
+
+    this._db
+      .prepareCached("UPDATE meta SET properties = ?")
+      .run(JSON.stringify(portableProperties));
+  }
+
   removeMetadataGivenEntryKey(entryKey: string): void {
     const tagKeys = this._db
       .prepareCached(
@@ -476,6 +546,37 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
   }
 
+  tagGivenPropertyKeyAndValue(propertyKey: string, value: any): string {
+    if (propertyKey == null) {
+      return;
+    }
+
+    const property = this.toPropertyGivenKey(propertyKey);
+    if (property == null) {
+      return;
+    }
+
+    switch (property.type) {
+      case "select":
+        return `${property.key}:${value}`;
+      default:
+        return undefined;
+    }
+  } 
+
+  propertyTagKeysGivenEntry(entry: Entry<T>): string[] {
+    const result = new Set<string>();
+
+    for (const [key, value] of entry.propertyValues) {
+      const tag = this.tagGivenPropertyKeyAndValue(key, value);
+      if (tag != null) {
+        result.add(tag);
+      }
+    }
+
+    return Array.from(result);
+  }
+
   rebuildMetadataGivenEntry(entry: Entry<T>): void {
     this.stopwatch.start("rebuildMetadataGivenEntry");
     this.removeMetadataGivenEntryKey(entry.key);
@@ -483,9 +584,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const tagKeys = this.props.tagKeysGivenEntry(entry);
     const metricValues = this.props.metricsGivenEntry(entry);
 
+    
     metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
     metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
-    
+
     tagKeys.forEach((tagKey) => {
       const tag = this.tagGivenTagKey(tagKey);
       tag.addValue(entry.key);
@@ -513,14 +615,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       case "new":
       case "saved":
       case "updated":
-      case "unknown":  
+      case "unknown":
         if ("createdAt" in entry) {
           this.writeEntryData(entry.data, entry.key, entry.createdAt);
         } else {
-          const createdAt = entry.createdAtEpochMs != null ? Instant.givenEpochMilliseconds(entry.createdAtEpochMs) : undefined;
+          const createdAt =
+            entry.createdAtEpochMs != null
+              ? Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
+              : undefined;
           this.writeEntryData(entry.data, entry.key, createdAt);
         }
-        
+
         break;
       default:
         throw new Error(`Unsupported entry status '${entry.status}'`);
@@ -534,7 +639,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         new Tag({
           tagKey,
           db: this._db,
-          stopwatch: this.stopwatch
+          stopwatch: this.stopwatch,
         })
       );
       this._tags.set(tagKey, tag);
@@ -580,7 +685,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const change: EntryChange<T> = {
       key: entryKey,
       oldData,
-      newData: entryData
+      newData: entryData,
     };
 
     this.entryWillChange.emit(change);

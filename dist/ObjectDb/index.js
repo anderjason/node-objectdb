@@ -19,6 +19,7 @@ class ObjectDb extends skytree_1.Actor {
         this._tagPrefixes = new Set();
         this._tags = new Map();
         this._metrics = new Map();
+        this._properties = new Map();
         this._entryKeys = new Set();
         this._caches = new Map();
         this.stopwatch = new time_1.Stopwatch(props.localFile.toAbsolutePath());
@@ -38,7 +39,7 @@ class ObjectDb extends skytree_1.Actor {
                         this._caches.delete(key);
                     }
                 }
-            }
+            },
         }));
         this.load();
     }
@@ -56,6 +57,12 @@ class ObjectDb extends skytree_1.Actor {
             return;
         }
         const db = this._db;
+        db.runQuery(`
+      CREATE TABLE IF NOT EXISTS meta (
+        id INTEGER PRIMARY KEY CHECK (id = 0),
+        properties TEXT NOT NULL
+      )
+    `);
         db.runQuery(`
       CREATE TABLE IF NOT EXISTS tags (
         key TEXT PRIMARY KEY,
@@ -135,6 +142,15 @@ class ObjectDb extends skytree_1.Actor {
       );    
     `);
         this.stopwatch.stop("pruneTagsAndMetrics");
+        db.prepareCached("INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)").run("{}");
+        db.toRows("SELECT properties FROM meta").forEach((row) => {
+            var _a;
+            const properties = JSON.parse((_a = row.properties) !== null && _a !== void 0 ? _a : "{}");
+            // assign property definitions
+            for (const key of Object.keys(properties)) {
+                this._properties.set(key, properties[key]);
+            }
+        });
         this.stopwatch.start("selectTagKeys");
         const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
         this.stopwatch.stop("selectTagKeys");
@@ -156,7 +172,7 @@ class ObjectDb extends skytree_1.Actor {
             const tag = new Tag_1.Tag({
                 tagKey,
                 db: this._db,
-                stopwatch: this.stopwatch
+                stopwatch: this.stopwatch,
             });
             this.stopwatch.stop("createTag");
             this.stopwatch.start("activateTag");
@@ -197,7 +213,8 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         if (entryKeys == null) {
-            if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
+            if (options.requireTagKeys == null ||
+                options.requireTagKeys.length === 0) {
                 entryKeys = Array.from(this._entryKeys);
             }
             else {
@@ -223,7 +240,7 @@ class ObjectDb extends skytree_1.Actor {
         if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
             this._caches.set(fullCacheKey, {
                 entryKeys,
-                expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(120))
+                expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(120)),
             });
         }
         let start = 0;
@@ -311,6 +328,30 @@ class ObjectDb extends skytree_1.Actor {
         }
         return result;
     }
+    setProperty(property) {
+        this._properties.set(property.key, property);
+        this.saveProperties();
+    }
+    deletePropertyKey(key) {
+        this._properties.delete(key);
+        this.saveProperties();
+    }
+    toPropertyGivenKey(key) {
+        return this._properties.get(key);
+    }
+    toProperties() {
+        return Array.from(this._properties.values());
+    }
+    saveProperties() {
+        // convert this._properties to a plain javascript object
+        const portableProperties = {};
+        this._properties.forEach((property, key) => {
+            portableProperties[key] = property;
+        });
+        this._db
+            .prepareCached("UPDATE meta SET properties = ?")
+            .run(JSON.stringify(portableProperties));
+    }
     removeMetadataGivenEntryKey(entryKey) {
         const tagKeys = this._db
             .prepareCached("select distinct tagKey from tagEntries where entryKey = ?")
@@ -336,6 +377,31 @@ class ObjectDb extends skytree_1.Actor {
                 this.rebuildMetadataGivenEntry(entry);
             }
         });
+    }
+    tagGivenPropertyKeyAndValue(propertyKey, value) {
+        if (propertyKey == null) {
+            return;
+        }
+        const property = this.toPropertyGivenKey(propertyKey);
+        if (property == null) {
+            return;
+        }
+        switch (property.type) {
+            case "select":
+                return `${property.key}:${value}`;
+            default:
+                return undefined;
+        }
+    }
+    propertyTagKeysGivenEntry(entry) {
+        const result = new Set();
+        for (const [key, value] of entry.propertyValues) {
+            const tag = this.tagGivenPropertyKeyAndValue(key, value);
+            if (tag != null) {
+                result.add(tag);
+            }
+        }
+        return Array.from(result);
     }
     rebuildMetadataGivenEntry(entry) {
         this.stopwatch.start("rebuildMetadataGivenEntry");
@@ -371,7 +437,9 @@ class ObjectDb extends skytree_1.Actor {
                     this.writeEntryData(entry.data, entry.key, entry.createdAt);
                 }
                 else {
-                    const createdAt = entry.createdAtEpochMs != null ? time_1.Instant.givenEpochMilliseconds(entry.createdAtEpochMs) : undefined;
+                    const createdAt = entry.createdAtEpochMs != null
+                        ? time_1.Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
+                        : undefined;
                     this.writeEntryData(entry.data, entry.key, createdAt);
                 }
                 break;
@@ -385,7 +453,7 @@ class ObjectDb extends skytree_1.Actor {
             tag = this.addActor(new Tag_1.Tag({
                 tagKey,
                 db: this._db,
-                stopwatch: this.stopwatch
+                stopwatch: this.stopwatch,
             }));
             this._tags.set(tagKey, tag);
         }
@@ -418,7 +486,7 @@ class ObjectDb extends skytree_1.Actor {
         const change = {
             key: entryKey,
             oldData,
-            newData: entryData
+            newData: entryData,
         };
         this.entryWillChange.emit(change);
         this.stopwatch.start("writeEntryData");

@@ -115,3 +115,36 @@ Test.define("ObjectDb can assign metrics", () => {
 
   Test.assertIsEqual(row.metricValue, "11");
 });
+
+Test.define("ObjectDb can have properties", () => {
+  const fileDb = new ObjectDb<TestEntryData>({
+    localFile,
+    tagKeysGivenEntry: (entry) => [],
+    metricsGivenEntry: (entry) => {
+      const result: Dict<string> = {};
+
+      result.charCount = String(entry.data.message?.length || 0);
+
+      return result;
+    },
+  });
+  fileDb.activate();
+
+  fileDb.setProperty({
+    key: "status",
+    label: "Status",
+    listOrder: 0,
+    type: "select",
+    options: [
+      {key: "low", label: "Low"},
+      {key: "medium", label: "Medium"},
+      {key: "high", label: "High"},
+    ]
+  });
+
+  const statusDefinition = fileDb.toPropertyGivenKey("status");
+  Test.assert(statusDefinition != null);
+  Test.assert(statusDefinition.label === "Status");
+
+  fileDb.deactivate();
+})

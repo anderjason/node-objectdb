@@ -4,6 +4,20 @@ exports.Entry = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
 const time_1 = require("@anderjason/time");
 const PropsObject_1 = require("../PropsObject");
+function mapGivenDict(dict = {}) {
+    const result = new Map();
+    for (const key of Object.keys(dict)) {
+        result.set(key, dict[key]);
+    }
+    return result;
+}
+function dictGivenMap(map = new Map()) {
+    const result = {};
+    for (const [key, value] of map.entries()) {
+        result[key] = value;
+    }
+    return result;
+}
 class Entry extends PropsObject_1.PropsObject {
     constructor(props) {
         super(props);
@@ -13,12 +27,14 @@ class Entry extends PropsObject_1.PropsObject {
         this.status = "unknown";
     }
     load() {
+        var _a;
         const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
         if (row == null) {
             this.status = "new";
             return false;
         }
         this.data = JSON.parse(row.data);
+        this.propertyValues = mapGivenDict(JSON.parse((_a = row.propertyValues) !== null && _a !== void 0 ? _a : "{}"));
         this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAt);
         this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAt);
         this.status = "saved";
@@ -32,12 +48,23 @@ class Entry extends PropsObject_1.PropsObject {
         }
         const createdAtMs = this.createdAt.toEpochMilliseconds();
         const updatedAtMs = this.updatedAt.toEpochMilliseconds();
+        const propertyValues = JSON.stringify(dictGivenMap(this.propertyValues));
         this.props.db.runQuery(`
-      INSERT INTO entries (key, data, createdAt, updatedAt)
-      VALUES(?, ?, ?, ?)
+      INSERT INTO entries (key, data, propertyValues, createdAt, updatedAt)
+      VALUES(?, ?, ?, ?, ?)
       ON CONFLICT(key) 
-      DO UPDATE SET data=?, createdAt=?, updatedAt=?;
-      `, [this.key, data, createdAtMs, updatedAtMs, data, createdAtMs, updatedAtMs]);
+      DO UPDATE SET data=?, propertyValues=?, createdAt=?, updatedAt=?;
+      `, [
+            this.key,
+            data,
+            propertyValues,
+            createdAtMs,
+            updatedAtMs,
+            data,
+            propertyValues,
+            createdAtMs,
+            updatedAtMs,
+        ]);
         this.status = "saved";
     }
     toPortableEntry() {
@@ -46,7 +73,8 @@ class Entry extends PropsObject_1.PropsObject {
             createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
             updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
             data: this.data,
-            status: this.status
+            propertyValues: dictGivenMap(this.propertyValues),
+            status: this.status,
         };
     }
 }
