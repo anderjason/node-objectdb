@@ -15,7 +15,7 @@ interface TestEntryData {
 Test.define("ObjectDb can be created", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
-    tagKeysGivenEntry: (entry) => [],
+    tagsGivenEntry: (entry) => [],
     metricsGivenEntry: (entry) => ({})
   });
   fileDb.activate();
@@ -26,7 +26,7 @@ Test.define("ObjectDb can be created", () => {
 Test.define("ObjectDb can write and read a row", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
-    tagKeysGivenEntry: (entry) => [],
+    tagsGivenEntry: (entry) => [],
     metricsGivenEntry: (entry) => ({})
   });
   fileDb.activate();
@@ -50,8 +50,17 @@ Test.define("ObjectDb can write and read a row", () => {
 Test.define("ObjectDb can assign tags", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
-    tagKeysGivenEntry: (entry) => {
-      return ["color:red", "color:blue"];
+    tagsGivenEntry: (entry) => {
+      return [
+        {
+          tagPrefix: "color",
+          tagValue: "red"
+        },
+        {
+          tagPrefix: "color",
+          tagValue: "Blue"
+        }
+      ]
     },
     metricsGivenEntry: (entry) => ({})
   });
@@ -69,21 +78,22 @@ Test.define("ObjectDb can assign tags", () => {
   db.activate();
 
   const rows = db
-    .prepareCached("SELECT tagKey FROM tagEntries WHERE entryKey = ?")
+    .prepareCached("SELECT t.tagPrefix, t.tagValue, t.tagNormalizedValue FROM tagEntries AS te LEFT JOIN tags AS t ON t.key = te.tagKey WHERE te.entryKey = ?")
     .all(entry.key);
 
   db.deactivate();
 
-  const actualTagKeys = new Set(rows.map((row) => row.tagKey));
-  Test.assert(actualTagKeys.has("color:red"));
-  Test.assert(actualTagKeys.has("color:blue"));
-  Test.assert(actualTagKeys.size == 2);
+  console.log(rows);
+  
+  Test.assert(rows.some(row => row.tagPrefix === "color" && row.tagValue === "red" && row.tagNormalizedValue === "red"));
+  Test.assert(rows.some(row => row.tagPrefix === "color" && row.tagValue === "Blue" && row.tagNormalizedValue === "blue"));
+  Test.assert(rows.length == 2);
 });
 
 Test.define("ObjectDb can assign metrics", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
-    tagKeysGivenEntry: (entry) => [],
+    tagsGivenEntry: (entry) => [],
     metricsGivenEntry: (entry) => {
       const result: Dict<string> = {};
 
@@ -119,7 +129,7 @@ Test.define("ObjectDb can assign metrics", () => {
 Test.define("ObjectDb can have properties", () => {
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
-    tagKeysGivenEntry: (entry) => [],
+    tagsGivenEntry: (entry) => [],
     metricsGivenEntry: (entry) => {
       const result: Dict<string> = {};
 

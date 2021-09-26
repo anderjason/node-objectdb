@@ -17,7 +17,8 @@ class ObjectDb extends skytree_1.Actor {
         this.entryWillChange = new observable_1.TypedEvent();
         this.entryDidChange = new observable_1.TypedEvent();
         this._tagPrefixes = new Set();
-        this._tags = new Map();
+        this._tagsByKey = new Map();
+        this._tagsByHashcode = new Map();
         this._metrics = new Map();
         this._properties = new Map();
         this._entryKeys = new Set();
@@ -44,7 +45,7 @@ class ObjectDb extends skytree_1.Actor {
         this.load();
     }
     get tags() {
-        return Array.from(this._tags.values());
+        return Array.from(this._tagsByKey.values());
     }
     get metrics() {
         return Array.from(this._metrics.values());
@@ -70,6 +71,15 @@ class ObjectDb extends skytree_1.Actor {
         tagValue TEXT NOT NULL
       )
     `);
+        try {
+            db.runQuery(`
+        ALTER TABLE tags
+        ADD COLUMN tagNormalizedValue TEXT
+      `);
+        }
+        catch (err) {
+            // ignore
+        }
         db.runQuery(`
       CREATE TABLE IF NOT EXISTS metrics (
         key text PRIMARY KEY
@@ -114,6 +124,10 @@ class ObjectDb extends skytree_1.Actor {
         db.runQuery(`
       CREATE INDEX IF NOT EXISTS idxTagPrefix 
       ON tags(tagPrefix);
+    `);
+        db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagPrefixValue
+      ON tags(tagPrefix, tagNormalizedValue);
     `);
         db.runQuery(`
       CREATE INDEX IF NOT EXISTS idxTagEntriesTagKey 
@@ -161,7 +175,7 @@ class ObjectDb extends skytree_1.Actor {
             }
         });
         this.stopwatch.start("selectTagKeys");
-        const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
+        const tagRows = db.toRows("SELECT key, tagPrefix, tagValue, tagNormalizedValue FROM tags");
         this.stopwatch.stop("selectTagKeys");
         this.stopwatch.start("selectEntryKeys");
         db.toRows("SELECT key FROM entries").forEach((row) => {
@@ -174,12 +188,16 @@ class ObjectDb extends skytree_1.Actor {
             .map((row) => row.key);
         this.stopwatch.stop("selectMetricKeys");
         this.stopwatch.start("createTags");
-        const tagKeyCount = tagKeys.length;
+        const tagKeyCount = tagRows.length;
         for (let i = 0; i < tagKeyCount; i++) {
-            const tagKey = tagKeys[i];
+            const tagRow = tagRows[i];
+            const { key, tagPrefix, tagValue, tagNormalizedValue } = tagRow;
             this.stopwatch.start("createTag");
             const tag = new Tag_1.Tag({
-                tagKey,
+                tagKey: key,
+                tagPrefix,
+                tagValue,
+                tagNormalizedValue,
                 db: this._db,
                 stopwatch: this.stopwatch,
             });
@@ -187,8 +205,9 @@ class ObjectDb extends skytree_1.Actor {
             this.stopwatch.start("activateTag");
             this.addActor(tag);
             this.stopwatch.stop("activateTag");
-            this._tags.set(tagKey, tag);
+            this._tagsByKey.set(key, tag);
             this._tagPrefixes.add(tag.tagPrefix);
+            this._tagsByHashcode.set(tag.toHashCode(), tag);
         }
         this.stopwatch.stop("createTags");
         this.stopwatch.start("createMetrics");
@@ -228,7 +247,7 @@ class ObjectDb extends skytree_1.Actor {
             }
             else {
                 const sets = options.requireTagKeys.map((tagKey) => {
-                    const tag = this._tags.get(tagKey);
+                    const tag = this._tagsByKey.get(tagKey);
                     if (tag == null) {
                         return new Set();
                     }
@@ -367,8 +386,10 @@ class ObjectDb extends skytree_1.Actor {
             .all(entryKey)
             .map((row) => row.tagKey);
         tagKeys.forEach((tagKey) => {
-            const tag = this.tagGivenTagKey(tagKey);
-            tag.deleteValue(entryKey);
+            const tag = this._tagsByKey.get(tagKey);
+            if (tag != null) {
+                tag.deleteEntryKey(entryKey);
+            }
         });
         const metricKeys = this._db
             .prepareCached("select distinct metricKey from metricValues where entryKey = ?")
@@ -416,13 +437,13 @@ class ObjectDb extends skytree_1.Actor {
     rebuildMetadataGivenEntry(entry) {
         this.stopwatch.start("rebuildMetadataGivenEntry");
         this.removeMetadataGivenEntryKey(entry.key);
-        const tagKeys = this.props.tagKeysGivenEntry(entry);
+        const portableTags = this.props.tagsGivenEntry(entry);
         const metricValues = this.props.metricsGivenEntry(entry);
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
         metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
-        tagKeys.forEach((tagKey) => {
-            const tag = this.tagGivenTagKey(tagKey);
-            tag.addValue(entry.key);
+        portableTags.forEach((portableTag) => {
+            const tag = this.tagGivenPortableTag(portableTag);
+            tag.addEntryKey(entry.key);
         });
         Object.keys(metricValues).forEach((metricKey) => {
             const metric = this.metricGivenMetricKey(metricKey);
@@ -457,15 +478,22 @@ class ObjectDb extends skytree_1.Actor {
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
     }
-    tagGivenTagKey(tagKey) {
-        let tag = this._tags.get(tagKey);
+    tagGivenPortableTag(portableTag) {
+        const normalizedValue = Tag_1.normalizedValueGivenString(portableTag.tagValue);
+        const hashCode = Tag_1.hashCodeGivenTagPrefixAndNormalizedValue(portableTag.tagPrefix, normalizedValue);
+        let tag = this._tagsByHashcode.get(hashCode);
         if (tag == null) {
+            const tagKey = util_1.StringUtil.stringOfRandomCharacters(12);
             tag = this.addActor(new Tag_1.Tag({
                 tagKey,
+                tagPrefix: portableTag.tagPrefix,
+                tagValue: portableTag.tagValue,
                 db: this._db,
                 stopwatch: this.stopwatch,
             }));
-            this._tags.set(tagKey, tag);
+            this._tagsByKey.set(tagKey, tag);
+            this._tagPrefixes.add(portableTag.tagPrefix);
+            this._tagsByHashcode.set(hashCode, tag);
         }
         return tag;
     }
@@ -491,7 +519,8 @@ class ObjectDb extends skytree_1.Actor {
         const oldPortableEntry = (_a = this.toOptionalEntryGivenKey(entryKey)) === null || _a === void 0 ? void 0 : _a.toPortableEntry();
         const oldData = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.data;
         const oldPropertyValues = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.propertyValues;
-        if (util_1.ObjectUtil.objectIsDeepEqual(oldData, entryData) && util_1.ObjectUtil.objectIsDeepEqual(oldPropertyValues, propertyValues)) {
+        if (util_1.ObjectUtil.objectIsDeepEqual(oldData, entryData) &&
+            util_1.ObjectUtil.objectIsDeepEqual(oldPropertyValues, propertyValues)) {
             // nothing changed
             return;
         }

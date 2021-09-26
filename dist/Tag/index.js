@@ -1,10 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Tag = void 0;
+exports.Tag = exports.hashCodeGivenTagPrefixAndNormalizedValue = exports.normalizedValueGivenString = void 0;
+const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
 const ReadOnlySet_1 = require("../ReadOnlySet");
+function normalizedValueGivenString(tagValue) {
+    return tagValue.toLowerCase();
+}
+exports.normalizedValueGivenString = normalizedValueGivenString;
+function hashCodeGivenTagPrefixAndNormalizedValue(tagPrefix, normalizedValue) {
+    return util_1.StringUtil.hashCodeGivenString(tagPrefix + normalizedValue);
+}
+exports.hashCodeGivenTagPrefixAndNormalizedValue = hashCodeGivenTagPrefixAndNormalizedValue;
 class Tag extends skytree_1.Actor {
     constructor(props) {
+        var _a;
         super(props);
         if (props.tagKey == null) {
             throw new Error("tagKey is required");
@@ -12,14 +22,15 @@ class Tag extends skytree_1.Actor {
         if (props.db == null) {
             throw new Error("db is required");
         }
-        if (!props.tagKey.includes(":")) {
-            throw new Error(`Tags must be in the form PREFIX:VALUE (got '${props.tagKey}')`);
-        }
+        const tagNormalizedValue = (_a = props.tagNormalizedValue) !== null && _a !== void 0 ? _a : normalizedValueGivenString(props.tagValue);
         this.key = props.tagKey;
-        const parts = props.tagKey.split(":");
-        this.tagPrefix = parts[0];
-        this.tagValue = parts[1];
+        this.tagPrefix = props.tagPrefix;
+        this.tagValue = props.tagValue;
+        this.tagNormalizedValue = tagNormalizedValue;
         const { db } = this.props;
+        if (props.tagNormalizedValue == null) {
+            db.prepareCached("UPDATE tags SET tagNormalizedValue = ? WHERE key = ?").run(tagNormalizedValue, this.key);
+        }
         this.props.stopwatch.start("tag:prepareCached");
         this._insertEntryKeyQuery = db.prepareCached("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
         this._deleteEntryKeyQuery = db.prepareCached("DELETE FROM tagEntries WHERE tagKey = ? AND entryKey = ?");
@@ -39,7 +50,7 @@ class Tag extends skytree_1.Actor {
         this.props.stopwatch.start("tag:loadOnce");
         const { db } = this.props;
         this.props.stopwatch.start("tag:insertIntoTags");
-        db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)").run(this.key, this.tagPrefix, this.tagValue);
+        db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue, tagNormalizedValue) VALUES (?, ?, ?, ?)").run(this.key, this.tagPrefix, this.tagValue, this.tagNormalizedValue);
         this.props.stopwatch.stop("tag:insertIntoTags");
         this.props.stopwatch.start("tag:selectEntryKeys");
         const rows = db
@@ -51,17 +62,20 @@ class Tag extends skytree_1.Actor {
         this.props.stopwatch.stop("tag:createSet");
         this.props.stopwatch.stop("tag:loadOnce");
     }
-    addValue(value) {
+    addEntryKey(entryKey) {
         this.loadOnce();
         this.props.stopwatch.start("tag:addValue");
-        this._insertEntryKeyQuery.run(this.key, value);
-        this._entryKeys.add(value);
+        this._insertEntryKeyQuery.run(this.key, entryKey);
+        this._entryKeys.add(entryKey);
         this.props.stopwatch.stop("tag:addValue");
     }
-    deleteValue(value) {
+    deleteEntryKey(entryKey) {
         this.loadOnce();
-        this._entryKeys.delete(value);
-        this._deleteEntryKeyQuery.run(this.key, value);
+        this._entryKeys.delete(entryKey);
+        this._deleteEntryKeyQuery.run(this.key, entryKey);
+    }
+    toHashCode() {
+        return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix, this.tagNormalizedValue);
     }
 }
 exports.Tag = Tag;

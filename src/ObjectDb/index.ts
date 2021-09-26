@@ -2,17 +2,17 @@ import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, TypedEvent } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
-import {
-  ArrayUtil,
-  ObjectUtil,
-  SetUtil,
-  StringUtil
-} from "@anderjason/util";
+import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
-import { Tag } from "../Tag";
+import {
+  hashCodeGivenTagPrefixAndNormalizedValue,
+  normalizedValueGivenString,
+  Tag,
+} from "../Tag";
+import { PortableTag } from "../Tag/PortableTag";
 
 export interface Order {
   key: string;
@@ -30,7 +30,7 @@ export interface ObjectDbReadOptions {
 export interface ObjectDbProps<T> {
   localFile: LocalFile;
 
-  tagKeysGivenEntry: (entry: Entry<T>) => string[];
+  tagsGivenEntry: (entry: Entry<T>) => PortableTag[];
   metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
 
   cacheSize?: number;
@@ -74,7 +74,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly stopwatch: Stopwatch;
 
   private _tagPrefixes = new Set<string>();
-  private _tags = new Map<string, Tag>();
+  private _tagsByKey = new Map<string, Tag>();
+  private _tagsByHashcode = new Map<number, Tag>();
   private _metrics = new Map<string, Metric>();
   private _properties = new Map<string, PropertyDefinition>();
   private _entryKeys = new Set<string>();
@@ -114,7 +115,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   get tags(): Tag[] {
-    return Array.from(this._tags.values());
+    return Array.from(this._tagsByKey.values());
   }
 
   get metrics(): Metric[] {
@@ -146,6 +147,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         tagValue TEXT NOT NULL
       )
     `);
+
+    try {
+      db.runQuery(`
+        ALTER TABLE tags
+        ADD COLUMN tagNormalizedValue TEXT
+      `);
+    } catch (err) {
+      // ignore
+    }
 
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS metrics (
@@ -195,6 +205,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     db.runQuery(`
       CREATE INDEX IF NOT EXISTS idxTagPrefix 
       ON tags(tagPrefix);
+    `);
+
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagPrefixValue
+      ON tags(tagPrefix, tagNormalizedValue);
     `);
 
     db.runQuery(`
@@ -253,7 +268,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
 
     this.stopwatch.start("selectTagKeys");
-    const tagKeys = db.toRows("SELECT key FROM tags").map((row) => row.key);
+    const tagRows = db.toRows(
+      "SELECT key, tagPrefix, tagValue, tagNormalizedValue FROM tags"
+    );
     this.stopwatch.stop("selectTagKeys");
 
     this.stopwatch.start("selectEntryKeys");
@@ -269,13 +286,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.stopwatch.stop("selectMetricKeys");
 
     this.stopwatch.start("createTags");
-    const tagKeyCount = tagKeys.length;
+    const tagKeyCount = tagRows.length;
     for (let i = 0; i < tagKeyCount; i++) {
-      const tagKey = tagKeys[i];
+      const tagRow = tagRows[i];
+      const { key, tagPrefix, tagValue, tagNormalizedValue } = tagRow;
 
       this.stopwatch.start("createTag");
       const tag = new Tag({
-        tagKey,
+        tagKey: key,
+        tagPrefix,
+        tagValue,
+        tagNormalizedValue,
         db: this._db,
         stopwatch: this.stopwatch,
       });
@@ -285,8 +306,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       this.addActor(tag);
       this.stopwatch.stop("activateTag");
 
-      this._tags.set(tagKey, tag);
+      this._tagsByKey.set(key, tag);
       this._tagPrefixes.add(tag.tagPrefix);
+      this._tagsByHashcode.set(tag.toHashCode(), tag);
     }
     this.stopwatch.stop("createTags");
 
@@ -337,7 +359,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         entryKeys = Array.from(this._entryKeys);
       } else {
         const sets = options.requireTagKeys.map((tagKey) => {
-          const tag = this._tags.get(tagKey);
+          const tag = this._tagsByKey.get(tagKey);
           if (tag == null) {
             return new Set<string>();
           }
@@ -529,8 +551,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       .map((row) => row.tagKey);
 
     tagKeys.forEach((tagKey) => {
-      const tag = this.tagGivenTagKey(tagKey);
-      tag.deleteValue(entryKey);
+      const tag = this._tagsByKey.get(tagKey);
+      if (tag != null) {
+        tag.deleteEntryKey(entryKey);
+      }
     });
 
     const metricKeys = this._db
@@ -571,7 +595,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       default:
         return undefined;
     }
-  } 
+  }
 
   propertyTagKeysGivenEntry(entry: Entry<T>): string[] {
     const result = new Set<string>();
@@ -591,16 +615,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.stopwatch.start("rebuildMetadataGivenEntry");
     this.removeMetadataGivenEntryKey(entry.key);
 
-    const tagKeys = this.props.tagKeysGivenEntry(entry);
+    const portableTags = this.props.tagsGivenEntry(entry);
     const metricValues = this.props.metricsGivenEntry(entry);
 
-    
     metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
     metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
 
-    tagKeys.forEach((tagKey) => {
-      const tag = this.tagGivenTagKey(tagKey);
-      tag.addValue(entry.key);
+    portableTags.forEach((portableTag) => {
+      const tag = this.tagGivenPortableTag(portableTag);
+      tag.addEntryKey(entry.key);
     });
 
     Object.keys(metricValues).forEach((metricKey) => {
@@ -627,13 +650,23 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       case "updated":
       case "unknown":
         if ("createdAt" in entry) {
-          this.writeEntryData(entry.data, entry.propertyValues, entry.key, entry.createdAt);
+          this.writeEntryData(
+            entry.data,
+            entry.propertyValues,
+            entry.key,
+            entry.createdAt
+          );
         } else {
           const createdAt =
             entry.createdAtEpochMs != null
               ? Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
               : undefined;
-          this.writeEntryData(entry.data, entry.propertyValues, entry.key, createdAt);
+          this.writeEntryData(
+            entry.data,
+            entry.propertyValues,
+            entry.key,
+            createdAt
+          );
         }
 
         break;
@@ -642,17 +675,31 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  tagGivenTagKey(tagKey: string): Tag {
-    let tag = this._tags.get(tagKey);
+  tagGivenPortableTag(portableTag: PortableTag): Tag {
+    const normalizedValue = normalizedValueGivenString(portableTag.tagValue);
+    const hashCode = hashCodeGivenTagPrefixAndNormalizedValue(
+      portableTag.tagPrefix,
+      normalizedValue
+    );
+
+    let tag = this._tagsByHashcode.get(hashCode);
+
     if (tag == null) {
+      const tagKey = StringUtil.stringOfRandomCharacters(12);
+
       tag = this.addActor(
         new Tag({
           tagKey,
+          tagPrefix: portableTag.tagPrefix,
+          tagValue: portableTag.tagValue,
           db: this._db,
           stopwatch: this.stopwatch,
         })
       );
-      this._tags.set(tagKey, tag);
+
+      this._tagsByKey.set(tagKey, tag);
+      this._tagPrefixes.add(portableTag.tagPrefix);
+      this._tagsByHashcode.set(hashCode, tag);
     }
 
     return tag;
@@ -687,11 +734,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const oldPortableEntry = this.toOptionalEntryGivenKey(entryKey)?.toPortableEntry();
+    const oldPortableEntry =
+      this.toOptionalEntryGivenKey(entryKey)?.toPortableEntry();
     const oldData = oldPortableEntry?.data;
     const oldPropertyValues = oldPortableEntry?.propertyValues;
 
-    if (ObjectUtil.objectIsDeepEqual(oldData, entryData) && ObjectUtil.objectIsDeepEqual(oldPropertyValues, propertyValues)) {
+    if (
+      ObjectUtil.objectIsDeepEqual(oldData, entryData) &&
+      ObjectUtil.objectIsDeepEqual(oldPropertyValues, propertyValues)
+    ) {
       // nothing changed
       return;
     }

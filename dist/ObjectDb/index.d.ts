@@ -5,6 +5,7 @@ import { Actor } from "skytree";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { Tag } from "../Tag";
+import { PortableTag } from "../Tag/PortableTag";
 export interface Order {
     key: string;
     direction: "ascending" | "descending";
@@ -18,7 +19,7 @@ export interface ObjectDbReadOptions {
 }
 export interface ObjectDbProps<T> {
     localFile: LocalFile;
-    tagKeysGivenEntry: (entry: Entry<T>) => string[];
+    tagsGivenEntry: (entry: Entry<T>) => PortableTag[];
     metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
     cacheSize?: number;
 }
@@ -47,7 +48,8 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly entryDidChange: TypedEvent<EntryChange<T>>;
     readonly stopwatch: Stopwatch;
     private _tagPrefixes;
-    private _tags;
+    private _tagsByKey;
+    private _tagsByHashcode;
     private _metrics;
     private _properties;
     private _entryKeys;
@@ -79,7 +81,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     propertyTagKeysGivenEntry(entry: Entry<T>): string[];
     rebuildMetadataGivenEntry(entry: Entry<T>): void;
     writeEntry(entry: Entry<T> | PortableEntry<T>): void;
-    tagGivenTagKey(tagKey: string): Tag;
+    tagGivenPortableTag(portableTag: PortableTag): Tag;
     metricGivenMetricKey(metricKey: string): Metric;
     writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Entry<T>;
     deleteEntryKey(entryKey: string): void;

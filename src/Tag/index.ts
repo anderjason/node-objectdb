@@ -1,4 +1,5 @@
 import { Stopwatch } from "@anderjason/time";
+import { StringUtil } from "@anderjason/util";
 import { Statement } from "better-sqlite3";
 import { Actor } from "skytree";
 import { ReadOnlySet } from "../ReadOnlySet";
@@ -6,14 +7,27 @@ import { DbInstance } from "../SqlClient";
 
 export interface TagProps {
   tagKey: string;
+  tagPrefix: string;
+  tagValue: string;
   db: DbInstance;
   stopwatch: Stopwatch;
+
+  tagNormalizedValue?: string;
+}
+
+export function normalizedValueGivenString(tagValue: string): string {
+  return tagValue.toLowerCase();
+}
+
+export function hashCodeGivenTagPrefixAndNormalizedValue(tagPrefix: string, normalizedValue: string): number {
+  return StringUtil.hashCodeGivenString(tagPrefix + normalizedValue);
 }
 
 export class Tag extends Actor<TagProps> {
+  readonly key: string;
   readonly tagPrefix: string;
   readonly tagValue: string;
-  readonly key: string;
+  readonly tagNormalizedValue: string;
 
   get entryKeys(): ReadOnlySet<string> {
     this.loadOnce();
@@ -42,19 +56,20 @@ export class Tag extends Actor<TagProps> {
       throw new Error("db is required");
     }
 
-    if (!props.tagKey.includes(":")) {
-      throw new Error(
-        `Tags must be in the form PREFIX:VALUE (got '${props.tagKey}')`
-      );
-    }
+    const tagNormalizedValue = props.tagNormalizedValue ?? normalizedValueGivenString(props.tagValue);
 
     this.key = props.tagKey;
-
-    const parts = props.tagKey.split(":");
-    this.tagPrefix = parts[0];
-    this.tagValue = parts[1];
+    this.tagPrefix = props.tagPrefix;
+    this.tagValue = props.tagValue;
+    this.tagNormalizedValue = tagNormalizedValue;
 
     const { db } = this.props;
+
+    if (props.tagNormalizedValue == null) {
+      db.prepareCached(
+        "UPDATE tags SET tagNormalizedValue = ? WHERE key = ?"
+      ).run(tagNormalizedValue, this.key);
+    }
 
     this.props.stopwatch.start("tag:prepareCached");
     this._insertEntryKeyQuery = db.prepareCached(
@@ -77,8 +92,8 @@ export class Tag extends Actor<TagProps> {
 
     this.props.stopwatch.start("tag:insertIntoTags");
     db.prepareCached(
-      "INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue) VALUES (?, ?, ?)"
-    ).run(this.key, this.tagPrefix, this.tagValue);
+      "INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue, tagNormalizedValue) VALUES (?, ?, ?, ?)"
+    ).run(this.key, this.tagPrefix, this.tagValue, this.tagNormalizedValue);
     this.props.stopwatch.stop("tag:insertIntoTags");
 
     this.props.stopwatch.start("tag:selectEntryKeys");
@@ -96,19 +111,23 @@ export class Tag extends Actor<TagProps> {
     this.props.stopwatch.stop("tag:loadOnce");
   }
 
-  addValue(value: string): void {
+  addEntryKey(entryKey: string): void {
     this.loadOnce();
 
     this.props.stopwatch.start("tag:addValue");
-    this._insertEntryKeyQuery.run(this.key, value);
-    this._entryKeys.add(value);
+    this._insertEntryKeyQuery.run(this.key, entryKey);
+    this._entryKeys.add(entryKey);
     this.props.stopwatch.stop("tag:addValue");
   }
 
-  deleteValue(value: string): void {
+  deleteEntryKey(entryKey: string): void {
     this.loadOnce();
 
-    this._entryKeys.delete(value);
-    this._deleteEntryKeyQuery.run(this.key, value);
+    this._entryKeys.delete(entryKey);
+    this._deleteEntryKeyQuery.run(this.key, entryKey);
+  }
+
+  toHashCode(): number {
+    return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix, this.tagNormalizedValue);
   }
 }
