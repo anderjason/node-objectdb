@@ -11,7 +11,7 @@ export interface Order {
     direction: "ascending" | "descending";
 }
 export interface ObjectDbReadOptions {
-    requireTagKeys?: string[];
+    requireTags?: PortableTag[];
     orderByMetric?: Order;
     limit?: number;
     offset?: number;
@@ -65,7 +65,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     forEach(fn: (entry: Entry<T>) => void): void;
     hasEntry(entryKey: string): boolean;
     runTransaction(fn: () => void): void;
-    toEntryCount(requireTagKeys?: string[]): number;
+    toEntryCount(requireTags?: PortableTag[]): number;
     toEntries(options?: ObjectDbReadOptions): Entry<T>[];
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Entry<T> | undefined;
     toEntryGivenKey(entryKey: string): Entry<T>;
@@ -77,11 +77,11 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private saveProperties;
     removeMetadataGivenEntryKey(entryKey: string): void;
     rebuildMetadata(): void;
-    tagGivenPropertyKeyAndValue(propertyKey: string, value: any): string;
-    propertyTagKeysGivenEntry(entry: Entry<T>): string[];
+    tagGivenPropertyKeyAndValue(propertyKey: string, value: any): PortableTag;
+    propertyTagKeysGivenEntry(entry: Entry<T>): PortableTag[];
     rebuildMetadataGivenEntry(entry: Entry<T>): void;
     writeEntry(entry: Entry<T> | PortableEntry<T>): void;
-    tagGivenPortableTag(portableTag: PortableTag): Tag;
+    tagGivenPortableTag(portableTag: PortableTag, createIfMissing?: boolean): Tag;
     metricGivenMetricKey(metricKey: string): Metric;
     writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Entry<T>;
     deleteEntryKey(entryKey: string): void;

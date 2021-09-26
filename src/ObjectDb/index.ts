@@ -20,7 +20,7 @@ export interface Order {
 }
 
 export interface ObjectDbReadOptions {
-  requireTagKeys?: string[];
+  requireTags?: PortableTag[];
   orderByMetric?: Order;
   limit?: number;
   offset?: number;
@@ -338,8 +338,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
-      const tagKeys = (options.requireTagKeys || []).join(",");
-      const cacheKeyData = `${options.cacheKey}:${options.orderByMetric?.direction}:${options.orderByMetric?.key}:${tagKeys}`;
+      const portableTags = options.requireTags ?? [];
+      const tags = portableTags.map((pt) => this.tagGivenPortableTag(pt, false));
+      const hashCodes = tags.map(tag => tag.toHashCode());
+      const cacheKeyData = `${options.cacheKey}:${options.orderByMetric?.direction}:${options.orderByMetric?.key}:${hashCodes.join(",")}`;
       fullCacheKey = StringUtil.hashCodeGivenString(cacheKeyData);
     }
 
@@ -353,13 +355,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (entryKeys == null) {
       if (
-        options.requireTagKeys == null ||
-        options.requireTagKeys.length === 0
+        options.requireTags == null ||
+        options.requireTags.length === 0
       ) {
         entryKeys = Array.from(this._entryKeys);
       } else {
-        const sets = options.requireTagKeys.map((tagKey) => {
-          const tag = this._tagsByKey.get(tagKey);
+        const sets = options.requireTags.map((portableTag) => {
+          const tag = this.tagGivenPortableTag(portableTag, false);
           if (tag == null) {
             return new Set<string>();
           }
@@ -442,9 +444,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  toEntryCount(requireTagKeys?: string[]): number {
+  toEntryCount(requireTags?: PortableTag[]): number {
     const keys = this.toEntryKeys({
-      requireTagKeys: requireTagKeys,
+      requireTags,
     });
 
     return keys.length;
@@ -579,7 +581,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
   }
 
-  tagGivenPropertyKeyAndValue(propertyKey: string, value: any): string {
+  tagGivenPropertyKeyAndValue(propertyKey: string, value: any): PortableTag {
     if (propertyKey == null) {
       return;
     }
@@ -591,24 +593,27 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     switch (property.type) {
       case "select":
-        return `${property.key}:${value}`;
+        return {
+          tagPrefix: property.key,
+          tagValue: value
+        };
       default:
         return undefined;
     }
   }
 
-  propertyTagKeysGivenEntry(entry: Entry<T>): string[] {
-    const result = new Set<string>();
+  propertyTagKeysGivenEntry(entry: Entry<T>): PortableTag[] {
+    const result: PortableTag[] = [];
 
     Object.keys(entry.propertyValues).forEach((key) => {
       const value = entry.propertyValues[key];
       const tag = this.tagGivenPropertyKeyAndValue(key, value);
       if (tag != null) {
-        result.add(tag);
+        result.push(tag);
       }
     });
 
-    return Array.from(result);
+    return result;
   }
 
   rebuildMetadataGivenEntry(entry: Entry<T>): void {
@@ -675,7 +680,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  tagGivenPortableTag(portableTag: PortableTag): Tag {
+  tagGivenPortableTag(portableTag: PortableTag, createIfMissing: boolean = false): Tag {
     const normalizedValue = normalizedValueGivenString(portableTag.tagValue);
     const hashCode = hashCodeGivenTagPrefixAndNormalizedValue(
       portableTag.tagPrefix,
@@ -684,7 +689,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let tag = this._tagsByHashcode.get(hashCode);
 
-    if (tag == null) {
+    if (tag == null && createIfMissing == true) {
       const tagKey = StringUtil.stringOfRandomCharacters(12);
 
       tag = this.addActor(

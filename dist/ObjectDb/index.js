@@ -223,14 +223,16 @@ class ObjectDb extends skytree_1.Actor {
         this.stopwatch.stop("createMetrics");
     }
     toEntryKeys(options = {}) {
-        var _a, _b;
+        var _a, _b, _c;
         this.stopwatch.start("toEntryKeys");
         const now = time_1.Instant.ofNow();
         let entryKeys = undefined;
         let fullCacheKey = undefined;
         if (options.cacheKey != null) {
-            const tagKeys = (options.requireTagKeys || []).join(",");
-            const cacheKeyData = `${options.cacheKey}:${(_a = options.orderByMetric) === null || _a === void 0 ? void 0 : _a.direction}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.key}:${tagKeys}`;
+            const portableTags = (_a = options.requireTags) !== null && _a !== void 0 ? _a : [];
+            const tags = portableTags.map((pt) => this.tagGivenPortableTag(pt, false));
+            const hashCodes = tags.map(tag => tag.toHashCode());
+            const cacheKeyData = `${options.cacheKey}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.direction}:${(_c = options.orderByMetric) === null || _c === void 0 ? void 0 : _c.key}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
         }
         if (fullCacheKey != null) {
@@ -241,13 +243,13 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         if (entryKeys == null) {
-            if (options.requireTagKeys == null ||
-                options.requireTagKeys.length === 0) {
+            if (options.requireTags == null ||
+                options.requireTags.length === 0) {
                 entryKeys = Array.from(this._entryKeys);
             }
             else {
-                const sets = options.requireTagKeys.map((tagKey) => {
-                    const tag = this._tagsByKey.get(tagKey);
+                const sets = options.requireTags.map((portableTag) => {
+                    const tag = this.tagGivenPortableTag(portableTag, false);
                     if (tag == null) {
                         return new Set();
                     }
@@ -309,9 +311,9 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance.");
         }
     }
-    toEntryCount(requireTagKeys) {
+    toEntryCount(requireTags) {
         const keys = this.toEntryKeys({
-            requireTagKeys: requireTagKeys,
+            requireTags,
         });
         return keys.length;
     }
@@ -418,21 +420,24 @@ class ObjectDb extends skytree_1.Actor {
         }
         switch (property.type) {
             case "select":
-                return `${property.key}:${value}`;
+                return {
+                    tagPrefix: property.key,
+                    tagValue: value
+                };
             default:
                 return undefined;
         }
     }
     propertyTagKeysGivenEntry(entry) {
-        const result = new Set();
+        const result = [];
         Object.keys(entry.propertyValues).forEach((key) => {
             const value = entry.propertyValues[key];
             const tag = this.tagGivenPropertyKeyAndValue(key, value);
             if (tag != null) {
-                result.add(tag);
+                result.push(tag);
             }
         });
-        return Array.from(result);
+        return result;
     }
     rebuildMetadataGivenEntry(entry) {
         this.stopwatch.start("rebuildMetadataGivenEntry");
@@ -478,11 +483,11 @@ class ObjectDb extends skytree_1.Actor {
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
     }
-    tagGivenPortableTag(portableTag) {
+    tagGivenPortableTag(portableTag, createIfMissing = false) {
         const normalizedValue = Tag_1.normalizedValueGivenString(portableTag.tagValue);
         const hashCode = Tag_1.hashCodeGivenTagPrefixAndNormalizedValue(portableTag.tagPrefix, normalizedValue);
         let tag = this._tagsByHashcode.get(hashCode);
-        if (tag == null) {
+        if (tag == null && createIfMissing == true) {
             const tagKey = util_1.StringUtil.stringOfRandomCharacters(12);
             tag = this.addActor(new Tag_1.Tag({
                 tagKey,
