@@ -24,7 +24,7 @@ class Tag extends skytree_1.Actor {
         }
         const normalizedLabel = (_a = props.normalizedLabel) !== null && _a !== void 0 ? _a : normalizedValueGivenString(props.label);
         this.key = props.tagKey;
-        this.tagPrefixKey = props.tagPrefixKey;
+        this.tagPrefix = props.tagPrefix;
         this.label = props.label;
         this.normalizedLabel = normalizedLabel;
         const { db } = this.props;
@@ -50,7 +50,7 @@ class Tag extends skytree_1.Actor {
         this.props.stopwatch.start("tag:loadOnce");
         const { db } = this.props;
         this.props.stopwatch.start("tag:insertIntoTags");
-        db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefixKey, label, normalizedLabel) VALUES (?, ?, ?, ?)").run(this.key, this.tagPrefixKey, this.label, this.normalizedLabel);
+        db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefixKey, label, normalizedLabel) VALUES (?, ?, ?, ?)").run(this.key, this.tagPrefix.key, this.label, this.normalizedLabel);
         this.props.stopwatch.stop("tag:insertIntoTags");
         this.props.stopwatch.start("tag:selectEntryKeys");
         const rows = db
@@ -75,7 +75,7 @@ class Tag extends skytree_1.Actor {
         this._deleteEntryKeyQuery.run(this.key, entryKey);
     }
     toHashCode() {
-        return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefixKey, this.normalizedLabel);
+        return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix.key, this.normalizedLabel);
     }
 }
 exports.Tag = Tag;

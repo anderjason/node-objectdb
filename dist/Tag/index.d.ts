@@ -2,9 +2,10 @@ import { Stopwatch } from "@anderjason/time";
 import { Actor } from "skytree";
 import { ReadOnlySet } from "../ReadOnlySet";
 import { DbInstance } from "../SqlClient";
+import { TagPrefix } from "../TagPrefix";
 export interface TagProps {
     tagKey: string;
-    tagPrefixKey: string;
+    tagPrefix: TagPrefix;
     label: string;
     db: DbInstance;
     stopwatch: Stopwatch;
@@ -14,7 +15,7 @@ export declare function normalizedValueGivenString(tagValue: string): string;
 export declare function hashCodeGivenTagPrefixAndNormalizedValue(tagPrefix: string, normalizedValue: string): number;
 export declare class Tag extends Actor<TagProps> {
     readonly key: string;
-    readonly tagPrefixKey: string;
+    readonly tagPrefix: TagPrefix;
     readonly label: string;
     readonly normalizedLabel: string;
     get entryKeys(): ReadOnlySet<string>;

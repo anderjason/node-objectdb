@@ -335,10 +335,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       const tagRow = tagRows[i];
       const { key, tagPrefixKey, label, normalizedLabel } = tagRow;
 
+      const tagPrefix = this._tagPrefixesByKey.get(tagPrefixKey);
       this.stopwatch.start("createTag");
       const tag = new Tag({
         tagKey: key,
-        tagPrefixKey,
+        tagPrefix,
         label,
         normalizedLabel,
         db: this._db,
@@ -784,7 +785,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       tag = this.addActor(
         new Tag({
           tagKey,
-          tagPrefixKey: tagPrefix.key,
+          tagPrefix,
           label: portableTag.tagValue,
           db: this._db,
           stopwatch: this.stopwatch,

@@ -4,10 +4,11 @@ import { Statement } from "better-sqlite3";
 import { Actor } from "skytree";
 import { ReadOnlySet } from "../ReadOnlySet";
 import { DbInstance } from "../SqlClient";
+import { TagPrefix } from "../TagPrefix";
 
 export interface TagProps {
   tagKey: string;
-  tagPrefixKey: string;
+  tagPrefix: TagPrefix;
   label: string;
   db: DbInstance;
   stopwatch: Stopwatch;
@@ -25,7 +26,7 @@ export function hashCodeGivenTagPrefixAndNormalizedValue(tagPrefix: string, norm
 
 export class Tag extends Actor<TagProps> {
   readonly key: string;
-  readonly tagPrefixKey: string;
+  readonly tagPrefix: TagPrefix;
   readonly label: string;
   readonly normalizedLabel: string;
 
@@ -59,7 +60,7 @@ export class Tag extends Actor<TagProps> {
     const normalizedLabel = props.normalizedLabel ?? normalizedValueGivenString(props.label);
 
     this.key = props.tagKey;
-    this.tagPrefixKey = props.tagPrefixKey;
+    this.tagPrefix = props.tagPrefix;
     this.label = props.label;
     this.normalizedLabel = normalizedLabel;
 
@@ -93,7 +94,7 @@ export class Tag extends Actor<TagProps> {
     this.props.stopwatch.start("tag:insertIntoTags");
     db.prepareCached(
       "INSERT OR IGNORE INTO tags (key, tagPrefixKey, label, normalizedLabel) VALUES (?, ?, ?, ?)"
-    ).run(this.key, this.tagPrefixKey, this.label, this.normalizedLabel);
+    ).run(this.key, this.tagPrefix.key, this.label, this.normalizedLabel);
     this.props.stopwatch.stop("tag:insertIntoTags");
 
     this.props.stopwatch.start("tag:selectEntryKeys");
@@ -128,6 +129,6 @@ export class Tag extends Actor<TagProps> {
   }
 
   toHashCode(): number {
-    return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefixKey, this.normalizedLabel);
+    return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix.key, this.normalizedLabel);
   }
 }

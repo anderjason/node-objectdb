@@ -223,10 +223,11 @@ class ObjectDb extends skytree_1.Actor {
         for (let i = 0; i < tagKeyCount; i++) {
             const tagRow = tagRows[i];
             const { key, tagPrefixKey, label, normalizedLabel } = tagRow;
+            const tagPrefix = this._tagPrefixesByKey.get(tagPrefixKey);
             this.stopwatch.start("createTag");
             const tag = new Tag_1.Tag({
                 tagKey: key,
-                tagPrefixKey,
+                tagPrefix,
                 label,
                 normalizedLabel,
                 db: this._db,
@@ -548,7 +549,7 @@ class ObjectDb extends skytree_1.Actor {
             const tagPrefix = this.toTagPrefixGivenLabel(portableTag.tagPrefix, true);
             tag = this.addActor(new Tag_1.Tag({
                 tagKey,
-                tagPrefixKey: tagPrefix.key,
+                tagPrefix,
                 label: portableTag.tagValue,
                 db: this._db,
                 stopwatch: this.stopwatch,
