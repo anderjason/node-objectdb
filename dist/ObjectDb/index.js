@@ -452,7 +452,7 @@ class ObjectDb extends skytree_1.Actor {
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
         metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
         portableTags.forEach((portableTag) => {
-            const tag = this.tagGivenPortableTag(portableTag);
+            const tag = this.tagGivenPortableTag(portableTag, true);
             tag.addEntryKey(entry.key);
         });
         Object.keys(metricValues).forEach((metricKey) => {

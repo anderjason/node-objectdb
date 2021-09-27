@@ -633,7 +633,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
 
     portableTags.forEach((portableTag) => {
-      const tag = this.tagGivenPortableTag(portableTag);
+      const tag = this.tagGivenPortableTag(portableTag, true);
       tag.addEntryKey(entry.key);
     });
 
