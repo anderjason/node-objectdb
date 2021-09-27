@@ -53,12 +53,12 @@ Test.define("ObjectDb can assign tags", () => {
     tagsGivenEntry: (entry) => {
       return [
         {
-          tagPrefix: "color",
-          tagValue: "red"
+          tagPrefixLabel: "color",
+          tagLabel: "red"
         },
         {
-          tagPrefix: "color",
-          tagValue: "Blue"
+          tagPrefixLabel: "color",
+          tagLabel: "Blue"
         }
       ]
     },

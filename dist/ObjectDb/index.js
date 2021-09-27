@@ -471,8 +471,8 @@ class ObjectDb extends skytree_1.Actor {
                     return;
                 }
                 return {
-                    tagPrefix: property.label,
-                    tagValue: option.label,
+                    tagPrefixLabel: property.label,
+                    tagLabel: option.label,
                 };
             default:
                 return undefined;
@@ -541,16 +541,22 @@ class ObjectDb extends skytree_1.Actor {
         }
     }
     tagGivenPortableTag(portableTag, createIfMissing = false) {
-        const normalizedValue = Tag_1.normalizedValueGivenString(portableTag.tagValue);
-        const hashCode = Tag_1.hashCodeGivenTagPrefixAndNormalizedValue(portableTag.tagPrefix, normalizedValue);
+        if (portableTag.tagPrefixLabel == null) {
+            throw new Error("Missing tagPrefixLabel in portableTag");
+        }
+        if (portableTag.tagLabel == null) {
+            throw new Error("Missing tagLabel in portableTag");
+        }
+        const normalizedValue = Tag_1.normalizedValueGivenString(portableTag.tagLabel);
+        const hashCode = Tag_1.hashCodeGivenTagPrefixAndNormalizedValue(portableTag.tagPrefixLabel, normalizedValue);
         let tag = this._tagsByHashcode.get(hashCode);
         if (tag == null && createIfMissing == true) {
             const tagKey = util_1.StringUtil.stringOfRandomCharacters(12);
-            const tagPrefix = this.toTagPrefixGivenLabel(portableTag.tagPrefix, true);
+            const tagPrefix = this.toTagPrefixGivenLabel(portableTag.tagPrefixLabel, true);
             tag = this.addActor(new Tag_1.Tag({
                 tagKey,
                 tagPrefix,
-                label: portableTag.tagValue,
+                label: portableTag.tagLabel,
                 db: this._db,
                 stopwatch: this.stopwatch,
             }));

@@ -4,8 +4,8 @@ export function uniquePortableTags(tags: PortableTag[] = []): PortableTag[] {
   const tagMap: Map<string, PortableTag> = new Map();
 
   for (const tag of tags) {
-    if (tag.tagPrefix != null && tag.tagValue != null) {      
-      const key = tag.tagPrefix + tag.tagValue;
+    if (tag.tagPrefixLabel != null && tag.tagLabel != null) {      
+      const key = tag.tagPrefixLabel + tag.tagLabel;
       tagMap.set(key, tag);
     }
   }

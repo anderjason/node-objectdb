@@ -670,8 +670,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         }
 
         return {
-          tagPrefix: property.label,
-          tagValue: option.label,
+          tagPrefixLabel: property.label,
+          tagLabel: option.label,
         };
       default:
         return undefined;
@@ -769,9 +769,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     portableTag: PortableTag,
     createIfMissing: boolean = false
   ): Tag {
-    const normalizedValue = normalizedValueGivenString(portableTag.tagValue);
+    if (portableTag.tagPrefixLabel == null) {
+      throw new Error("Missing tagPrefixLabel in portableTag");
+    }
+
+    if (portableTag.tagLabel == null) {
+      throw new Error("Missing tagLabel in portableTag");
+    }
+
+    const normalizedValue = normalizedValueGivenString(portableTag.tagLabel);
     const hashCode = hashCodeGivenTagPrefixAndNormalizedValue(
-      portableTag.tagPrefix,
+      portableTag.tagPrefixLabel,
       normalizedValue
     );
 
@@ -780,13 +788,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (tag == null && createIfMissing == true) {
       const tagKey = StringUtil.stringOfRandomCharacters(12);
 
-      const tagPrefix = this.toTagPrefixGivenLabel(portableTag.tagPrefix, true);
+      const tagPrefix = this.toTagPrefixGivenLabel(portableTag.tagPrefixLabel, true);
 
       tag = this.addActor(
         new Tag({
           tagKey,
           tagPrefix,
-          label: portableTag.tagValue,
+          label: portableTag.tagLabel,
           db: this._db,
           stopwatch: this.stopwatch,
         })

@@ -1,4 +1,4 @@
 export interface PortableTag {
-  tagPrefix: string;
-  tagValue: string;
+  tagPrefixLabel: string;
+  tagLabel: string;
 }
