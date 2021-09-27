@@ -261,7 +261,10 @@ class ObjectDb extends skytree_1.Actor {
         let fullCacheKey = undefined;
         if (options.cacheKey != null) {
             const portableTags = (_a = options.requireTags) !== null && _a !== void 0 ? _a : [];
-            const tags = portableTags.map((pt) => this.tagGivenPortableTag(pt, false));
+            const optionalTags = portableTags.map((pt) => {
+                return this.tagGivenPortableTag(pt, false);
+            });
+            const tags = optionalTags.filter((t) => t != null);
             const hashCodes = tags.map((tag) => tag.toHashCode());
             const cacheKeyData = `${options.cacheKey}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.direction}:${(_c = options.orderByMetric) === null || _c === void 0 ? void 0 : _c.key}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);

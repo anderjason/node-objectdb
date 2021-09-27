@@ -383,10 +383,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
       const portableTags = options.requireTags ?? [];
-      const tags = portableTags.map((pt) =>
-        this.tagGivenPortableTag(pt, false)
-      );
+      const optionalTags = portableTags.map((pt) => {
+        return this.tagGivenPortableTag(pt, false)
+      });
+      const tags = optionalTags.filter((t) => t != null);
       const hashCodes = tags.map((tag) => tag.toHashCode());
+
       const cacheKeyData = `${options.cacheKey}:${
         options.orderByMetric?.direction
       }:${options.orderByMetric?.key}:${hashCodes.join(",")}`;
