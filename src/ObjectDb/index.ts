@@ -582,7 +582,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
   }
 
-  tagGivenPropertyKeyAndValue(propertyKey: string, tagValue: any): PortableTag {
+  tagGivenPropertyKeyAndValue(propertyKey: string, value: any): PortableTag {
     if (propertyKey == null) {
       return;
     }
@@ -593,12 +593,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     console.log("tagGivenPropertyKeyAndValue", propertyKey, property);
-    
+
     switch (property.type) {
       case "select":
+        const options = property.options;
+        const option = options.find(op => op.key === value);
+        if (option == null) {
+          return;
+        }
+
         return {
           tagPrefix: property.key,
-          tagValue
+          tagValue: option.label
         };
       default:
         return undefined;

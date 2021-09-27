@@ -77,7 +77,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private saveProperties;
     removeMetadataGivenEntryKey(entryKey: string): void;
     rebuildMetadata(): void;
-    tagGivenPropertyKeyAndValue(propertyKey: string, tagValue: any): PortableTag;
+    tagGivenPropertyKeyAndValue(propertyKey: string, value: any): PortableTag;
     propertyTagKeysGivenEntry(entry: Entry<T>): PortableTag[];
     rebuildMetadataGivenEntry(entry: Entry<T>): void;
     writeEntry(entry: Entry<T> | PortableEntry<T>): void;
