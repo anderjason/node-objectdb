@@ -10,6 +10,7 @@ const Entry_1 = require("../Entry");
 const Metric_1 = require("../Metric");
 const SqlClient_1 = require("../SqlClient");
 const Tag_1 = require("../Tag");
+const uniquePortableTags_1 = require("./uniquePortableTags");
 class ObjectDb extends skytree_1.Actor {
     constructor(props) {
         super(props);
@@ -442,7 +443,7 @@ class ObjectDb extends skytree_1.Actor {
     rebuildMetadataGivenEntry(entry) {
         this.stopwatch.start("rebuildMetadataGivenEntry");
         this.removeMetadataGivenEntryKey(entry.key);
-        const portableTags = this.props.tagsGivenEntry(entry);
+        const portableTags = uniquePortableTags_1.uniquePortableTags(this.props.tagsGivenEntry(entry));
         const metricValues = this.props.metricsGivenEntry(entry);
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
         metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
