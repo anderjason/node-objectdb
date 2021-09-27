@@ -11,8 +11,9 @@ export interface Order {
     key: string;
     direction: "ascending" | "descending";
 }
+export declare type TagLookup = string | PortableTag;
 export interface ObjectDbReadOptions {
-    requireTagKeys?: string[];
+    requireTags?: TagLookup[];
     orderByMetric?: Order;
     limit?: number;
     offset?: number;
@@ -67,7 +68,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     forEach(fn: (entry: Entry<T>) => void): void;
     hasEntry(entryKey: string): boolean;
     runTransaction(fn: () => void): void;
-    toEntryCount(requireTagKeys?: string[]): number;
+    toEntryCount(requireTags?: TagLookup[]): number;
     toEntries(options?: ObjectDbReadOptions): Entry<T>[];
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Entry<T> | undefined;
     toEntryGivenKey(entryKey: string): Entry<T>;

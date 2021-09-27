@@ -21,8 +21,10 @@ export interface Order {
   direction: "ascending" | "descending";
 }
 
+export type TagLookup = string | PortableTag;
+
 export interface ObjectDbReadOptions {
-  requireTagKeys?: string[];
+  requireTags?: TagLookup[];
   orderByMetric?: Order;
   limit?: number;
   offset?: number;
@@ -379,8 +381,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
-      const tagKeys = options.requireTagKeys ?? [];
-      const tags = tagKeys.map(key => this._tagsByKey.get(key)).filter((t) => t != null);
+      const tagLookups = options.requireTags ?? [];
+      const tags = tagLookups.map(lookup => {
+        if (typeof lookup === "string") {
+          return this._tagsByKey.get(lookup)
+        } else {
+          return this.toTagGivenPortableTag(lookup);
+        }
+      }).filter((t) => t != null);
       const hashCodes = tags.map((tag) => tag.toHashCode());
 
       const cacheKeyData = `${options.cacheKey}:${
@@ -398,11 +406,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     if (entryKeys == null) {
-      if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
+      if (options.requireTags == null || options.requireTags.length === 0) {
         entryKeys = Array.from(this._entryKeys);
       } else {
-        const sets = options.requireTagKeys.map((key) => {
-          const tag = this._tagsByKey.get(key);
+        const sets = options.requireTags.map((lookup) => {
+          let tag: Tag;
+          if (typeof lookup === "string") {
+            tag = this._tagsByKey.get(lookup);
+          } else {
+            tag = this.toTagGivenPortableTag(lookup);
+          }
+
           if (tag == null) {
             return new Set<string>();
           }
@@ -485,9 +499,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  toEntryCount(requireTagKeys?: string[]): number {
+  toEntryCount(requireTags?: TagLookup[]): number {
     const keys = this.toEntryKeys({
-      requireTagKeys,
+      requireTags,
     });
 
     return keys.length;

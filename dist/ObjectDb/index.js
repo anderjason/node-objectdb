@@ -258,8 +258,15 @@ class ObjectDb extends skytree_1.Actor {
         let entryKeys = undefined;
         let fullCacheKey = undefined;
         if (options.cacheKey != null) {
-            const tagKeys = (_a = options.requireTagKeys) !== null && _a !== void 0 ? _a : [];
-            const tags = tagKeys.map(key => this._tagsByKey.get(key)).filter((t) => t != null);
+            const tagLookups = (_a = options.requireTags) !== null && _a !== void 0 ? _a : [];
+            const tags = tagLookups.map(lookup => {
+                if (typeof lookup === "string") {
+                    return this._tagsByKey.get(lookup);
+                }
+                else {
+                    return this.toTagGivenPortableTag(lookup);
+                }
+            }).filter((t) => t != null);
             const hashCodes = tags.map((tag) => tag.toHashCode());
             const cacheKeyData = `${options.cacheKey}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.direction}:${(_c = options.orderByMetric) === null || _c === void 0 ? void 0 : _c.key}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
@@ -272,12 +279,18 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         if (entryKeys == null) {
-            if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
+            if (options.requireTags == null || options.requireTags.length === 0) {
                 entryKeys = Array.from(this._entryKeys);
             }
             else {
-                const sets = options.requireTagKeys.map((key) => {
-                    const tag = this._tagsByKey.get(key);
+                const sets = options.requireTags.map((lookup) => {
+                    let tag;
+                    if (typeof lookup === "string") {
+                        tag = this._tagsByKey.get(lookup);
+                    }
+                    else {
+                        tag = this.toTagGivenPortableTag(lookup);
+                    }
                     if (tag == null) {
                         return new Set();
                     }
@@ -339,9 +352,9 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance.");
         }
     }
-    toEntryCount(requireTagKeys) {
+    toEntryCount(requireTags) {
         const keys = this.toEntryKeys({
-            requireTagKeys,
+            requireTags,
         });
         return keys.length;
     }
