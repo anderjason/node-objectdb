@@ -143,9 +143,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       )
     `);
 
-    db.runQuery("DROP TABLE IF EXISTS tagEntries");
-    db.runQuery("DROP TABLE IF EXISTS tags");
-
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS tagPrefixes (
         key TEXT PRIMARY KEY,
