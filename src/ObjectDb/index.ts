@@ -592,8 +592,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-    console.log("tagGivenPropertyKeyAndValue", propertyKey, property);
-
     switch (property.type) {
       case "select":
         const options = property.options;
@@ -603,7 +601,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         }
 
         return {
-          tagPrefix: property.key,
+          tagPrefix: property.label,
           tagValue: option.label
         };
       default:

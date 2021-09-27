@@ -419,7 +419,6 @@ class ObjectDb extends skytree_1.Actor {
         if (property == null) {
             return;
         }
-        console.log("tagGivenPropertyKeyAndValue", propertyKey, property);
         switch (property.type) {
             case "select":
                 const options = property.options;
@@ -428,7 +427,7 @@ class ObjectDb extends skytree_1.Actor {
                     return;
                 }
                 return {
-                    tagPrefix: property.key,
+                    tagPrefix: property.label,
                     tagValue: option.label
                 };
             default:
