@@ -411,7 +411,7 @@ class ObjectDb extends skytree_1.Actor {
             }
         });
     }
-    tagGivenPropertyKeyAndValue(propertyKey, value) {
+    tagGivenPropertyKeyAndValue(propertyKey, tagValue) {
         if (propertyKey == null) {
             return;
         }
@@ -419,11 +419,12 @@ class ObjectDb extends skytree_1.Actor {
         if (property == null) {
             return;
         }
+        console.log("tagGivenPropertyKeyAndValue", propertyKey, property);
         switch (property.type) {
             case "select":
                 return {
                     tagPrefix: property.key,
-                    tagValue: value
+                    tagValue
                 };
             default:
                 return undefined;
@@ -433,6 +434,9 @@ class ObjectDb extends skytree_1.Actor {
         const result = [];
         Object.keys(entry.propertyValues).forEach((key) => {
             const value = entry.propertyValues[key];
+            if (value == null) {
+                return;
+            }
             const tag = this.tagGivenPropertyKeyAndValue(key, value);
             if (tag != null) {
                 result.push(tag);

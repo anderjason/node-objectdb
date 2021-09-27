@@ -5,7 +5,8 @@ function uniquePortableTags(tags = []) {
     const tagMap = new Map();
     for (const tag of tags) {
         if (tag.tagPrefix != null && tag.tagValue != null) {
-            tagMap.set(tag.tagPrefix, tag);
+            const key = tag.tagPrefix + tag.tagValue;
+            tagMap.set(key, tag);
         }
     }
     return Array.from(tagMap.values());
