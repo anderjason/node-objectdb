@@ -543,6 +543,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._db
       .prepareCached("UPDATE meta SET properties = ?")
       .run(JSON.stringify(portableProperties));
+
+    this.rebuildMetadata();
   }
 
   removeMetadataGivenEntryKey(entryKey: string): void {

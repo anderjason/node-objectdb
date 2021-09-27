@@ -382,6 +382,7 @@ class ObjectDb extends skytree_1.Actor {
         this._db
             .prepareCached("UPDATE meta SET properties = ?")
             .run(JSON.stringify(portableProperties));
+        this.rebuildMetadata();
     }
     removeMetadataGivenEntryKey(entryKey) {
         const tagKeys = this._db
