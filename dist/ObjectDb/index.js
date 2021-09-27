@@ -443,7 +443,11 @@ class ObjectDb extends skytree_1.Actor {
     rebuildMetadataGivenEntry(entry) {
         this.stopwatch.start("rebuildMetadataGivenEntry");
         this.removeMetadataGivenEntryKey(entry.key);
-        const portableTags = uniquePortableTags_1.uniquePortableTags(this.props.tagsGivenEntry(entry));
+        const tags = [
+            ...this.propertyTagKeysGivenEntry(entry),
+            ...this.props.tagsGivenEntry(entry)
+        ];
+        const portableTags = uniquePortableTags_1.uniquePortableTags(tags);
         const metricValues = this.props.metricsGivenEntry(entry);
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
         metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();

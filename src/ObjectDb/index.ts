@@ -621,7 +621,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.stopwatch.start("rebuildMetadataGivenEntry");
     this.removeMetadataGivenEntryKey(entry.key);
 
-    const portableTags = uniquePortableTags(this.props.tagsGivenEntry(entry));
+    const tags = [
+      ...this.propertyTagKeysGivenEntry(entry),
+      ...this.props.tagsGivenEntry(entry)
+    ];
+
+    const portableTags = uniquePortableTags(tags);
     const metricValues = this.props.metricsGivenEntry(entry);
 
     metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
