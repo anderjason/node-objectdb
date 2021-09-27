@@ -22,7 +22,7 @@ export interface Order {
 }
 
 export interface ObjectDbReadOptions {
-  requireTags?: PortableTag[];
+  requireTagKeys?: string[];
   orderByMetric?: Order;
   limit?: number;
   offset?: number;
@@ -379,11 +379,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
-      const portableTags = options.requireTags ?? [];
-      const optionalTags = portableTags.map((pt) => {
-        return this.tagGivenPortableTag(pt, false)
-      });
-      const tags = optionalTags.filter((t) => t != null);
+      const tagKeys = options.requireTagKeys ?? [];
+      const tags = tagKeys.map(key => this._tagsByKey.get(key)).filter((t) => t != null);
       const hashCodes = tags.map((tag) => tag.toHashCode());
 
       const cacheKeyData = `${options.cacheKey}:${
@@ -401,11 +398,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     if (entryKeys == null) {
-      if (options.requireTags == null || options.requireTags.length === 0) {
+      if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
         entryKeys = Array.from(this._entryKeys);
       } else {
-        const sets = options.requireTags.map((portableTag) => {
-          const tag = this.tagGivenPortableTag(portableTag, false);
+        const sets = options.requireTagKeys.map((key) => {
+          const tag = this._tagsByKey.get(key);
           if (tag == null) {
             return new Set<string>();
           }
@@ -488,9 +485,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  toEntryCount(requireTags?: PortableTag[]): number {
+  toEntryCount(requireTagKeys?: string[]): number {
     const keys = this.toEntryKeys({
-      requireTags,
+      requireTagKeys,
     });
 
     return keys.length;
@@ -650,7 +647,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return tagPrefix;
   }
 
-  tagGivenPropertyKeyAndValue(propertyKey: string, value: any): PortableTag {
+  private tagGivenPropertyKeyAndValue(propertyKey: string, value: any): PortableTag {
     if (propertyKey == null) {
       return;
     }
@@ -711,7 +708,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
 
     portableTags.forEach((portableTag) => {
-      const tag = this.tagGivenPortableTag(portableTag, true);
+      const tag = this.toTagGivenPortableTag(portableTag, true);
       tag.addEntryKey(entry.key);
     });
 
@@ -764,7 +761,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  tagGivenPortableTag(
+  toTagGivenPortableTag(
     portableTag: PortableTag,
     createIfMissing: boolean = false
   ): Tag {

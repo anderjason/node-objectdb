@@ -258,11 +258,8 @@ class ObjectDb extends skytree_1.Actor {
         let entryKeys = undefined;
         let fullCacheKey = undefined;
         if (options.cacheKey != null) {
-            const portableTags = (_a = options.requireTags) !== null && _a !== void 0 ? _a : [];
-            const optionalTags = portableTags.map((pt) => {
-                return this.tagGivenPortableTag(pt, false);
-            });
-            const tags = optionalTags.filter((t) => t != null);
+            const tagKeys = (_a = options.requireTagKeys) !== null && _a !== void 0 ? _a : [];
+            const tags = tagKeys.map(key => this._tagsByKey.get(key)).filter((t) => t != null);
             const hashCodes = tags.map((tag) => tag.toHashCode());
             const cacheKeyData = `${options.cacheKey}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.direction}:${(_c = options.orderByMetric) === null || _c === void 0 ? void 0 : _c.key}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
@@ -275,12 +272,12 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         if (entryKeys == null) {
-            if (options.requireTags == null || options.requireTags.length === 0) {
+            if (options.requireTagKeys == null || options.requireTagKeys.length === 0) {
                 entryKeys = Array.from(this._entryKeys);
             }
             else {
-                const sets = options.requireTags.map((portableTag) => {
-                    const tag = this.tagGivenPortableTag(portableTag, false);
+                const sets = options.requireTagKeys.map((key) => {
+                    const tag = this._tagsByKey.get(key);
                     if (tag == null) {
                         return new Set();
                     }
@@ -342,9 +339,9 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance.");
         }
     }
-    toEntryCount(requireTags) {
+    toEntryCount(requireTagKeys) {
         const keys = this.toEntryKeys({
-            requireTags,
+            requireTagKeys,
         });
         return keys.length;
     }
@@ -505,7 +502,7 @@ class ObjectDb extends skytree_1.Actor {
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
         metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
         portableTags.forEach((portableTag) => {
-            const tag = this.tagGivenPortableTag(portableTag, true);
+            const tag = this.toTagGivenPortableTag(portableTag, true);
             tag.addEntryKey(entry.key);
         });
         Object.keys(metricValues).forEach((metricKey) => {
@@ -541,7 +538,7 @@ class ObjectDb extends skytree_1.Actor {
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
     }
-    tagGivenPortableTag(portableTag, createIfMissing = false) {
+    toTagGivenPortableTag(portableTag, createIfMissing = false) {
         if (portableTag.tagPrefixLabel == null) {
             throw new Error("Missing tagPrefixLabel in portableTag");
         }
