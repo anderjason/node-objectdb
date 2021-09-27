@@ -6,6 +6,7 @@ import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { Tag } from "../Tag";
 import { PortableTag } from "../Tag/PortableTag";
+import { TagPrefix } from "../TagPrefix";
 export interface Order {
     key: string;
     direction: "ascending" | "descending";
@@ -47,7 +48,8 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly entryWillChange: TypedEvent<EntryChange<T>>;
     readonly entryDidChange: TypedEvent<EntryChange<T>>;
     readonly stopwatch: Stopwatch;
-    private _tagPrefixes;
+    private _tagPrefixesByKey;
+    private _tagPrefixesByNormalizedLabel;
     private _tagsByKey;
     private _tagsByHashcode;
     private _metrics;
@@ -59,7 +61,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     onActivate(): void;
     get tags(): Tag[];
     get metrics(): Metric[];
-    get tagPrefixes(): string[];
+    get tagPrefixes(): TagPrefix[];
     private load;
     toEntryKeys(options?: ObjectDbReadOptions): string[];
     forEach(fn: (entry: Entry<T>) => void): void;
@@ -77,6 +79,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private saveProperties;
     removeMetadataGivenEntryKey(entryKey: string): void;
     rebuildMetadata(): void;
+    toTagPrefixGivenLabel(tagPrefixLabel: string, createIfMissing: boolean): TagPrefix;
     tagGivenPropertyKeyAndValue(propertyKey: string, value: any): PortableTag;
     propertyTagKeysGivenEntry(entry: Entry<T>): PortableTag[];
     rebuildMetadataGivenEntry(entry: Entry<T>): void;

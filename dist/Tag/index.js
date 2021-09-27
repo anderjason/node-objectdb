@@ -22,14 +22,14 @@ class Tag extends skytree_1.Actor {
         if (props.db == null) {
             throw new Error("db is required");
         }
-        const tagNormalizedValue = (_a = props.tagNormalizedValue) !== null && _a !== void 0 ? _a : normalizedValueGivenString(props.tagValue);
+        const normalizedLabel = (_a = props.normalizedLabel) !== null && _a !== void 0 ? _a : normalizedValueGivenString(props.label);
         this.key = props.tagKey;
-        this.tagPrefix = props.tagPrefix;
-        this.tagValue = props.tagValue;
-        this.tagNormalizedValue = tagNormalizedValue;
+        this.tagPrefixKey = props.tagPrefixKey;
+        this.label = props.label;
+        this.normalizedLabel = normalizedLabel;
         const { db } = this.props;
-        if (props.tagNormalizedValue == null) {
-            db.prepareCached("UPDATE tags SET tagNormalizedValue = ? WHERE key = ?").run(tagNormalizedValue, this.key);
+        if (props.normalizedLabel == null) {
+            db.prepareCached("UPDATE tags SET normalizedLabel = ? WHERE key = ?").run(normalizedLabel, this.key);
         }
         this.props.stopwatch.start("tag:prepareCached");
         this._insertEntryKeyQuery = db.prepareCached("INSERT INTO tagEntries (tagKey, entryKey) VALUES (?, ?)");
@@ -50,7 +50,7 @@ class Tag extends skytree_1.Actor {
         this.props.stopwatch.start("tag:loadOnce");
         const { db } = this.props;
         this.props.stopwatch.start("tag:insertIntoTags");
-        db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue, tagNormalizedValue) VALUES (?, ?, ?, ?)").run(this.key, this.tagPrefix, this.tagValue, this.tagNormalizedValue);
+        db.prepareCached("INSERT OR IGNORE INTO tags (key, tagPrefixKey, label, normalizedLabel) VALUES (?, ?, ?, ?)").run(this.key, this.tagPrefixKey, this.label, this.normalizedLabel);
         this.props.stopwatch.stop("tag:insertIntoTags");
         this.props.stopwatch.start("tag:selectEntryKeys");
         const rows = db
@@ -75,7 +75,7 @@ class Tag extends skytree_1.Actor {
         this._deleteEntryKeyQuery.run(this.key, entryKey);
     }
     toHashCode() {
-        return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix, this.tagNormalizedValue);
+        return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefixKey, this.normalizedLabel);
     }
 }
 exports.Tag = Tag;

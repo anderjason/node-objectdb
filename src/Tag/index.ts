@@ -7,12 +7,12 @@ import { DbInstance } from "../SqlClient";
 
 export interface TagProps {
   tagKey: string;
-  tagPrefix: string;
-  tagValue: string;
+  tagPrefixKey: string;
+  label: string;
   db: DbInstance;
   stopwatch: Stopwatch;
 
-  tagNormalizedValue?: string;
+  normalizedLabel?: string;
 }
 
 export function normalizedValueGivenString(tagValue: string): string {
@@ -25,9 +25,9 @@ export function hashCodeGivenTagPrefixAndNormalizedValue(tagPrefix: string, norm
 
 export class Tag extends Actor<TagProps> {
   readonly key: string;
-  readonly tagPrefix: string;
-  readonly tagValue: string;
-  readonly tagNormalizedValue: string;
+  readonly tagPrefixKey: string;
+  readonly label: string;
+  readonly normalizedLabel: string;
 
   get entryKeys(): ReadOnlySet<string> {
     this.loadOnce();
@@ -56,19 +56,19 @@ export class Tag extends Actor<TagProps> {
       throw new Error("db is required");
     }
 
-    const tagNormalizedValue = props.tagNormalizedValue ?? normalizedValueGivenString(props.tagValue);
+    const normalizedLabel = props.normalizedLabel ?? normalizedValueGivenString(props.label);
 
     this.key = props.tagKey;
-    this.tagPrefix = props.tagPrefix;
-    this.tagValue = props.tagValue;
-    this.tagNormalizedValue = tagNormalizedValue;
+    this.tagPrefixKey = props.tagPrefixKey;
+    this.label = props.label;
+    this.normalizedLabel = normalizedLabel;
 
     const { db } = this.props;
 
-    if (props.tagNormalizedValue == null) {
+    if (props.normalizedLabel == null) {
       db.prepareCached(
-        "UPDATE tags SET tagNormalizedValue = ? WHERE key = ?"
-      ).run(tagNormalizedValue, this.key);
+        "UPDATE tags SET normalizedLabel = ? WHERE key = ?"
+      ).run(normalizedLabel, this.key);
     }
 
     this.props.stopwatch.start("tag:prepareCached");
@@ -92,8 +92,8 @@ export class Tag extends Actor<TagProps> {
 
     this.props.stopwatch.start("tag:insertIntoTags");
     db.prepareCached(
-      "INSERT OR IGNORE INTO tags (key, tagPrefix, tagValue, tagNormalizedValue) VALUES (?, ?, ?, ?)"
-    ).run(this.key, this.tagPrefix, this.tagValue, this.tagNormalizedValue);
+      "INSERT OR IGNORE INTO tags (key, tagPrefixKey, label, normalizedLabel) VALUES (?, ?, ?, ?)"
+    ).run(this.key, this.tagPrefixKey, this.label, this.normalizedLabel);
     this.props.stopwatch.stop("tag:insertIntoTags");
 
     this.props.stopwatch.start("tag:selectEntryKeys");
@@ -128,6 +128,6 @@ export class Tag extends Actor<TagProps> {
   }
 
   toHashCode(): number {
-    return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix, this.tagNormalizedValue);
+    return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefixKey, this.normalizedLabel);
   }
 }

@@ -10,6 +10,7 @@ const Entry_1 = require("../Entry");
 const Metric_1 = require("../Metric");
 const SqlClient_1 = require("../SqlClient");
 const Tag_1 = require("../Tag");
+const TagPrefix_1 = require("../TagPrefix");
 const uniquePortableTags_1 = require("./uniquePortableTags");
 class ObjectDb extends skytree_1.Actor {
     constructor(props) {
@@ -17,7 +18,8 @@ class ObjectDb extends skytree_1.Actor {
         this.collectionDidChange = new observable_1.TypedEvent();
         this.entryWillChange = new observable_1.TypedEvent();
         this.entryDidChange = new observable_1.TypedEvent();
-        this._tagPrefixes = new Set();
+        this._tagPrefixesByKey = new Map();
+        this._tagPrefixesByNormalizedLabel = new Map();
         this._tagsByKey = new Map();
         this._tagsByHashcode = new Map();
         this._metrics = new Map();
@@ -52,7 +54,7 @@ class ObjectDb extends skytree_1.Actor {
         return Array.from(this._metrics.values());
     }
     get tagPrefixes() {
-        return Array.from(this._tagPrefixes);
+        return Array.from(this._tagPrefixesByKey.values());
     }
     load() {
         if (this.isActive == false) {
@@ -65,22 +67,23 @@ class ObjectDb extends skytree_1.Actor {
         properties TEXT NOT NULL
       )
     `);
+        db.runQuery("DROP TABLE IF EXISTS tagEntries");
+        db.runQuery("DROP TABLE IF EXISTS tags");
+        db.runQuery(`
+      CREATE TABLE IF NOT EXISTS tagPrefixes (
+        key TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        normalizedLabel TEXT NOT NULL
+      )
+    `);
         db.runQuery(`
       CREATE TABLE IF NOT EXISTS tags (
         key TEXT PRIMARY KEY,
-        tagPrefix TEXT NOT NULL,
-        tagValue TEXT NOT NULL
+        tagPrefixKey TEXT NOT NULL,
+        label TEXT NOT NULL,
+        normalizedLabel TEXT NOT NULL
       )
     `);
-        try {
-            db.runQuery(`
-        ALTER TABLE tags
-        ADD COLUMN tagNormalizedValue TEXT
-      `);
-        }
-        catch (err) {
-            // ignore
-        }
         db.runQuery(`
       CREATE TABLE IF NOT EXISTS metrics (
         key text PRIMARY KEY
@@ -123,12 +126,16 @@ class ObjectDb extends skytree_1.Actor {
       )
     `);
         db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagPrefix 
-      ON tags(tagPrefix);
+      CREATE INDEX IF NOT EXISTS idxTagPrefixNormalizedLabel
+      ON tagPrefixes(normalizedLabel);
+    `);
+        db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagPrefixKey
+      ON tags(tagPrefixKey);
     `);
         db.runQuery(`
       CREATE INDEX IF NOT EXISTS idxTagPrefixValue
-      ON tags(tagPrefix, tagNormalizedValue);
+      ON tags(tagPrefixKey, normalizedLabel);
     `);
         db.runQuery(`
       CREATE INDEX IF NOT EXISTS idxTagEntriesTagKey 
@@ -175,8 +182,11 @@ class ObjectDb extends skytree_1.Actor {
                 this._properties.set(key, properties[key]);
             }
         });
+        this.stopwatch.start("selectTagPrefixes");
+        const tagPrefixRows = db.toRows("SELECT key, label, normalizedLabel FROM tagPrefixes");
+        this.stopwatch.stop("selectTagPrefixes");
         this.stopwatch.start("selectTagKeys");
-        const tagRows = db.toRows("SELECT key, tagPrefix, tagValue, tagNormalizedValue FROM tags");
+        const tagRows = db.toRows("SELECT key, tagPrefixKey, label, normalizedLabel FROM tags");
         this.stopwatch.stop("selectTagKeys");
         this.stopwatch.start("selectEntryKeys");
         db.toRows("SELECT key FROM entries").forEach((row) => {
@@ -188,17 +198,37 @@ class ObjectDb extends skytree_1.Actor {
             .toRows("SELECT key FROM metrics")
             .map((row) => row.key);
         this.stopwatch.stop("selectMetricKeys");
+        this.stopwatch.start("createTagPrefixes");
+        const tagPrefixCount = tagPrefixRows.length;
+        for (let i = 0; i < tagPrefixCount; i++) {
+            const row = tagPrefixRows[i];
+            const { key, label, normalizedLabel } = row;
+            this.stopwatch.start("createTagPrefix");
+            const tagPrefix = new TagPrefix_1.TagPrefix({
+                tagPrefixKey: key,
+                label,
+                normalizedLabel,
+                db: this._db,
+                stopwatch: this.stopwatch,
+            });
+            this.stopwatch.stop("createTagPrefix");
+            this.stopwatch.start("activateTagPrefix");
+            this.addActor(tagPrefix);
+            this.stopwatch.stop("activateTagPrefix");
+            this._tagPrefixesByKey.set(tagPrefix.key, tagPrefix);
+            this._tagPrefixesByNormalizedLabel.set(tagPrefix.normalizedLabel, tagPrefix);
+        }
         this.stopwatch.start("createTags");
         const tagKeyCount = tagRows.length;
         for (let i = 0; i < tagKeyCount; i++) {
             const tagRow = tagRows[i];
-            const { key, tagPrefix, tagValue, tagNormalizedValue } = tagRow;
+            const { key, tagPrefixKey, label, normalizedLabel } = tagRow;
             this.stopwatch.start("createTag");
             const tag = new Tag_1.Tag({
                 tagKey: key,
-                tagPrefix,
-                tagValue,
-                tagNormalizedValue,
+                tagPrefixKey,
+                label,
+                normalizedLabel,
                 db: this._db,
                 stopwatch: this.stopwatch,
             });
@@ -207,7 +237,6 @@ class ObjectDb extends skytree_1.Actor {
             this.addActor(tag);
             this.stopwatch.stop("activateTag");
             this._tagsByKey.set(key, tag);
-            this._tagPrefixes.add(tag.tagPrefix);
             this._tagsByHashcode.set(tag.toHashCode(), tag);
         }
         this.stopwatch.stop("createTags");
@@ -232,7 +261,7 @@ class ObjectDb extends skytree_1.Actor {
         if (options.cacheKey != null) {
             const portableTags = (_a = options.requireTags) !== null && _a !== void 0 ? _a : [];
             const tags = portableTags.map((pt) => this.tagGivenPortableTag(pt, false));
-            const hashCodes = tags.map(tag => tag.toHashCode());
+            const hashCodes = tags.map((tag) => tag.toHashCode());
             const cacheKeyData = `${options.cacheKey}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.direction}:${(_c = options.orderByMetric) === null || _c === void 0 ? void 0 : _c.key}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
         }
@@ -244,8 +273,7 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         if (entryKeys == null) {
-            if (options.requireTags == null ||
-                options.requireTags.length === 0) {
+            if (options.requireTags == null || options.requireTags.length === 0) {
                 entryKeys = Array.from(this._entryKeys);
             }
             else {
@@ -412,6 +440,20 @@ class ObjectDb extends skytree_1.Actor {
             }
         });
     }
+    toTagPrefixGivenLabel(tagPrefixLabel, createIfMissing) {
+        const normalizedLabel = Tag_1.normalizedValueGivenString(tagPrefixLabel);
+        let tagPrefix = this._tagPrefixesByNormalizedLabel.get(normalizedLabel);
+        if (tagPrefix == null && createIfMissing) {
+            tagPrefix = this.addActor(new TagPrefix_1.TagPrefix({
+                tagPrefixKey: util_1.StringUtil.stringOfRandomCharacters(6),
+                label: tagPrefixLabel,
+                stopwatch: this.stopwatch,
+                db: this._db,
+            }));
+            this._tagPrefixesByNormalizedLabel.set(normalizedLabel, tagPrefix);
+        }
+        return tagPrefix;
+    }
     tagGivenPropertyKeyAndValue(propertyKey, value) {
         if (propertyKey == null) {
             return;
@@ -423,13 +465,13 @@ class ObjectDb extends skytree_1.Actor {
         switch (property.type) {
             case "select":
                 const options = property.options;
-                const option = options.find(op => op.key === value);
+                const option = options.find((op) => op.key === value);
                 if (option == null) {
                     return;
                 }
                 return {
                     tagPrefix: property.label,
-                    tagValue: option.label
+                    tagValue: option.label,
                 };
             default:
                 return undefined;
@@ -454,7 +496,7 @@ class ObjectDb extends skytree_1.Actor {
         this.removeMetadataGivenEntryKey(entry.key);
         const tags = [
             ...this.propertyTagKeysGivenEntry(entry),
-            ...this.props.tagsGivenEntry(entry)
+            ...this.props.tagsGivenEntry(entry),
         ];
         const portableTags = uniquePortableTags_1.uniquePortableTags(tags);
         const metricValues = this.props.metricsGivenEntry(entry);
@@ -503,15 +545,15 @@ class ObjectDb extends skytree_1.Actor {
         let tag = this._tagsByHashcode.get(hashCode);
         if (tag == null && createIfMissing == true) {
             const tagKey = util_1.StringUtil.stringOfRandomCharacters(12);
+            const tagPrefix = this.toTagPrefixGivenLabel(portableTag.tagPrefix, true);
             tag = this.addActor(new Tag_1.Tag({
                 tagKey,
-                tagPrefix: portableTag.tagPrefix,
-                tagValue: portableTag.tagValue,
+                tagPrefixKey: tagPrefix.key,
+                label: portableTag.tagValue,
                 db: this._db,
                 stopwatch: this.stopwatch,
             }));
             this._tagsByKey.set(tagKey, tag);
-            this._tagPrefixes.add(portableTag.tagPrefix);
             this._tagsByHashcode.set(hashCode, tag);
         }
         return tag;

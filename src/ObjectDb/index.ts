@@ -13,6 +13,7 @@ import {
   Tag,
 } from "../Tag";
 import { PortableTag } from "../Tag/PortableTag";
+import { TagPrefix } from "../TagPrefix";
 import { uniquePortableTags } from "./uniquePortableTags";
 
 export interface Order {
@@ -74,7 +75,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   readonly stopwatch: Stopwatch;
 
-  private _tagPrefixes = new Set<string>();
+  private _tagPrefixesByKey = new Map<string, TagPrefix>();
+  private _tagPrefixesByNormalizedLabel = new Map<string, TagPrefix>();
   private _tagsByKey = new Map<string, Tag>();
   private _tagsByHashcode = new Map<number, Tag>();
   private _metrics = new Map<string, Metric>();
@@ -123,8 +125,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return Array.from(this._metrics.values());
   }
 
-  get tagPrefixes(): string[] {
-    return Array.from(this._tagPrefixes);
+  get tagPrefixes(): TagPrefix[] {
+    return Array.from(this._tagPrefixesByKey.values());
   }
 
   private load(): void {
@@ -141,22 +143,25 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       )
     `);
 
+    db.runQuery("DROP TABLE IF EXISTS tagEntries");
+    db.runQuery("DROP TABLE IF EXISTS tags");
+
     db.runQuery(`
-      CREATE TABLE IF NOT EXISTS tags (
+      CREATE TABLE IF NOT EXISTS tagPrefixes (
         key TEXT PRIMARY KEY,
-        tagPrefix TEXT NOT NULL,
-        tagValue TEXT NOT NULL
+        label TEXT NOT NULL,
+        normalizedLabel TEXT NOT NULL
       )
     `);
 
-    try {
-      db.runQuery(`
-        ALTER TABLE tags
-        ADD COLUMN tagNormalizedValue TEXT
-      `);
-    } catch (err) {
-      // ignore
-    }
+    db.runQuery(`
+      CREATE TABLE IF NOT EXISTS tags (
+        key TEXT PRIMARY KEY,
+        tagPrefixKey TEXT NOT NULL,
+        label TEXT NOT NULL,
+        normalizedLabel TEXT NOT NULL
+      )
+    `);
 
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS metrics (
@@ -204,13 +209,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     `);
 
     db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagPrefix 
-      ON tags(tagPrefix);
+      CREATE INDEX IF NOT EXISTS idxTagPrefixNormalizedLabel
+      ON tagPrefixes(normalizedLabel);
+    `);
+    
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxTagPrefixKey
+      ON tags(tagPrefixKey);
     `);
 
     db.runQuery(`
       CREATE INDEX IF NOT EXISTS idxTagPrefixValue
-      ON tags(tagPrefix, tagNormalizedValue);
+      ON tags(tagPrefixKey, normalizedLabel);
     `);
 
     db.runQuery(`
@@ -268,9 +278,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       }
     });
 
+    this.stopwatch.start("selectTagPrefixes");
+    const tagPrefixRows = db.toRows(
+      "SELECT key, label, normalizedLabel FROM tagPrefixes"
+    );
+    this.stopwatch.stop("selectTagPrefixes");
+
     this.stopwatch.start("selectTagKeys");
     const tagRows = db.toRows(
-      "SELECT key, tagPrefix, tagValue, tagNormalizedValue FROM tags"
+      "SELECT key, tagPrefixKey, label, normalizedLabel FROM tags"
     );
     this.stopwatch.stop("selectTagKeys");
 
@@ -286,18 +302,45 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       .map((row) => row.key);
     this.stopwatch.stop("selectMetricKeys");
 
+    this.stopwatch.start("createTagPrefixes");
+    const tagPrefixCount = tagPrefixRows.length;
+    for (let i = 0; i < tagPrefixCount; i++) {
+      const row = tagPrefixRows[i];
+      const { key, label, normalizedLabel } = row;
+
+      this.stopwatch.start("createTagPrefix");
+      const tagPrefix = new TagPrefix({
+        tagPrefixKey: key,
+        label,
+        normalizedLabel,
+        db: this._db,
+        stopwatch: this.stopwatch,
+      });
+      this.stopwatch.stop("createTagPrefix");
+
+      this.stopwatch.start("activateTagPrefix");
+      this.addActor(tagPrefix);
+      this.stopwatch.stop("activateTagPrefix");
+
+      this._tagPrefixesByKey.set(tagPrefix.key, tagPrefix);
+      this._tagPrefixesByNormalizedLabel.set(
+        tagPrefix.normalizedLabel,
+        tagPrefix
+      );
+    }
+
     this.stopwatch.start("createTags");
     const tagKeyCount = tagRows.length;
     for (let i = 0; i < tagKeyCount; i++) {
       const tagRow = tagRows[i];
-      const { key, tagPrefix, tagValue, tagNormalizedValue } = tagRow;
+      const { key, tagPrefixKey, label, normalizedLabel } = tagRow;
 
       this.stopwatch.start("createTag");
       const tag = new Tag({
         tagKey: key,
-        tagPrefix,
-        tagValue,
-        tagNormalizedValue,
+        tagPrefixKey,
+        label,
+        normalizedLabel,
         db: this._db,
         stopwatch: this.stopwatch,
       });
@@ -308,7 +351,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       this.stopwatch.stop("activateTag");
 
       this._tagsByKey.set(key, tag);
-      this._tagPrefixes.add(tag.tagPrefix);
       this._tagsByHashcode.set(tag.toHashCode(), tag);
     }
     this.stopwatch.stop("createTags");
@@ -340,9 +382,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
       const portableTags = options.requireTags ?? [];
-      const tags = portableTags.map((pt) => this.tagGivenPortableTag(pt, false));
-      const hashCodes = tags.map(tag => tag.toHashCode());
-      const cacheKeyData = `${options.cacheKey}:${options.orderByMetric?.direction}:${options.orderByMetric?.key}:${hashCodes.join(",")}`;
+      const tags = portableTags.map((pt) =>
+        this.tagGivenPortableTag(pt, false)
+      );
+      const hashCodes = tags.map((tag) => tag.toHashCode());
+      const cacheKeyData = `${options.cacheKey}:${
+        options.orderByMetric?.direction
+      }:${options.orderByMetric?.key}:${hashCodes.join(",")}`;
       fullCacheKey = StringUtil.hashCodeGivenString(cacheKeyData);
     }
 
@@ -355,10 +401,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     if (entryKeys == null) {
-      if (
-        options.requireTags == null ||
-        options.requireTags.length === 0
-      ) {
+      if (options.requireTags == null || options.requireTags.length === 0) {
         entryKeys = Array.from(this._entryKeys);
       } else {
         const sets = options.requireTags.map((portableTag) => {
@@ -584,6 +627,29 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
   }
 
+  toTagPrefixGivenLabel(
+    tagPrefixLabel: string,
+    createIfMissing: boolean
+  ): TagPrefix {
+    const normalizedLabel = normalizedValueGivenString(tagPrefixLabel);
+    let tagPrefix = this._tagPrefixesByNormalizedLabel.get(normalizedLabel);
+
+    if (tagPrefix == null && createIfMissing) {
+      tagPrefix = this.addActor(
+        new TagPrefix({
+          tagPrefixKey: StringUtil.stringOfRandomCharacters(6),
+          label: tagPrefixLabel,
+          stopwatch: this.stopwatch,
+          db: this._db,
+        })
+      );
+
+      this._tagPrefixesByNormalizedLabel.set(normalizedLabel, tagPrefix);
+    }
+
+    return tagPrefix;
+  }
+
   tagGivenPropertyKeyAndValue(propertyKey: string, value: any): PortableTag {
     if (propertyKey == null) {
       return;
@@ -597,14 +663,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     switch (property.type) {
       case "select":
         const options = property.options;
-        const option = options.find(op => op.key === value);
+        const option = options.find((op) => op.key === value);
         if (option == null) {
           return;
         }
 
         return {
           tagPrefix: property.label,
-          tagValue: option.label
+          tagValue: option.label,
         };
       default:
         return undefined;
@@ -635,7 +701,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const tags = [
       ...this.propertyTagKeysGivenEntry(entry),
-      ...this.props.tagsGivenEntry(entry)
+      ...this.props.tagsGivenEntry(entry),
     ];
 
     const portableTags = uniquePortableTags(tags);
@@ -698,7 +764,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  tagGivenPortableTag(portableTag: PortableTag, createIfMissing: boolean = false): Tag {
+  tagGivenPortableTag(
+    portableTag: PortableTag,
+    createIfMissing: boolean = false
+  ): Tag {
     const normalizedValue = normalizedValueGivenString(portableTag.tagValue);
     const hashCode = hashCodeGivenTagPrefixAndNormalizedValue(
       portableTag.tagPrefix,
@@ -710,18 +779,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (tag == null && createIfMissing == true) {
       const tagKey = StringUtil.stringOfRandomCharacters(12);
 
+      const tagPrefix = this.toTagPrefixGivenLabel(portableTag.tagPrefix, true);
+
       tag = this.addActor(
         new Tag({
           tagKey,
-          tagPrefix: portableTag.tagPrefix,
-          tagValue: portableTag.tagValue,
+          tagPrefixKey: tagPrefix.key,
+          label: portableTag.tagValue,
           db: this._db,
           stopwatch: this.stopwatch,
         })
       );
 
       this._tagsByKey.set(tagKey, tag);
-      this._tagPrefixes.add(portableTag.tagPrefix);
       this._tagsByHashcode.set(hashCode, tag);
     }
 

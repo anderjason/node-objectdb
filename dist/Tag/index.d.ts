@@ -4,19 +4,19 @@ import { ReadOnlySet } from "../ReadOnlySet";
 import { DbInstance } from "../SqlClient";
 export interface TagProps {
     tagKey: string;
-    tagPrefix: string;
-    tagValue: string;
+    tagPrefixKey: string;
+    label: string;
     db: DbInstance;
     stopwatch: Stopwatch;
-    tagNormalizedValue?: string;
+    normalizedLabel?: string;
 }
 export declare function normalizedValueGivenString(tagValue: string): string;
 export declare function hashCodeGivenTagPrefixAndNormalizedValue(tagPrefix: string, normalizedValue: string): number;
 export declare class Tag extends Actor<TagProps> {
     readonly key: string;
-    readonly tagPrefix: string;
-    readonly tagValue: string;
-    readonly tagNormalizedValue: string;
+    readonly tagPrefixKey: string;
+    readonly label: string;
+    readonly normalizedLabel: string;
     get entryKeys(): ReadOnlySet<string>;
     private _entryKeys;
     private _readOnlyEntryKeys;

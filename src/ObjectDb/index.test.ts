@@ -78,15 +78,15 @@ Test.define("ObjectDb can assign tags", () => {
   db.activate();
 
   const rows = db
-    .prepareCached("SELECT t.tagPrefix, t.tagValue, t.tagNormalizedValue FROM tagEntries AS te LEFT JOIN tags AS t ON t.key = te.tagKey WHERE te.entryKey = ?")
+    .prepareCached("SELECT tp.label as prefixLabel, t.label, t.normalizedLabel FROM tagEntries AS te LEFT JOIN tags AS t ON t.key = te.tagKey LEFT JOIN tagPrefixes AS tp ON tp.key = t.tagPrefixKey WHERE te.entryKey = ?")
     .all(entry.key);
 
   db.deactivate();
 
   console.log(rows);
   
-  Test.assert(rows.some(row => row.tagPrefix === "color" && row.tagValue === "red" && row.tagNormalizedValue === "red"));
-  Test.assert(rows.some(row => row.tagPrefix === "color" && row.tagValue === "Blue" && row.tagNormalizedValue === "blue"));
+  Test.assert(rows.some(row => row.prefixLabel === "color" && row.label === "red" && row.normalizedLabel === "red"));
+  Test.assert(rows.some(row => row.prefixLabel === "color" && row.label === "Blue" && row.normalizedLabel === "blue"));
   Test.assert(rows.length == 2);
 });
 
