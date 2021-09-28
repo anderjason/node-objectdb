@@ -798,7 +798,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   toOptionalTagGivenKey(
     tagKey: string
-  ): Tag {
+  ): Tag | undefined {
     if (tagKey == null) {
       throw new Error("tagKey is required");
     }
