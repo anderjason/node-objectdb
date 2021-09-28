@@ -569,6 +569,12 @@ class ObjectDb extends skytree_1.Actor {
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
     }
+    toTagGivenKey(tagKey) {
+        if (tagKey == null) {
+            throw new Error("tagKey is required");
+        }
+        return this._tagsByKey.get(tagKey);
+    }
     toTagGivenPortableTag(portableTag, createIfMissing = false) {
         if (portableTag.tagPrefixLabel == null) {
             throw new Error("Missing tagPrefixLabel in portableTag");

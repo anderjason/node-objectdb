@@ -85,7 +85,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _properties = new Map<string, PropertyDefinition>();
   private _entryKeys = new Set<string>();
   private _caches = new Map<number, CacheData>();
-  
+
   private _db: DbInstance;
 
   constructor(props: ObjectDbProps<T>) {
@@ -796,6 +796,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
+  toTagGivenKey(
+    tagKey: string
+  ): Tag {
+    if (tagKey == null) {
+      throw new Error("tagKey is required");
+    }
+
+    return this._tagsByKey.get(tagKey);
+  }
+  
   toTagGivenPortableTag(
     portableTag: PortableTag,
     createIfMissing: boolean = false
