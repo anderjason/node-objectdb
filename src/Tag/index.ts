@@ -130,7 +130,7 @@ export class Tag extends Actor<TagProps> {
   }
 
   toHashCode(): number {
-    return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix.key, this.normalizedLabel);
+    return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix.normalizedLabel, this.normalizedLabel);
   }
 
   toPortableTag(): PortableTag {

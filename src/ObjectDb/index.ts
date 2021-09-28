@@ -156,7 +156,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let isUpgradingTags = false;
     try {
-      const row = db.prepareCached("SELECT sql FROM sqlite_master WHERE name = ?").all("tags")[0];
+      const row = db
+        .prepareCached("SELECT sql FROM sqlite_master WHERE name = ?")
+        .all("tags")[0];
       isUpgradingTags = !row.sql.includes("normalizedLabel");
     } catch (err) {
       //
@@ -226,7 +228,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       CREATE INDEX IF NOT EXISTS idxTagPrefixNormalizedLabel
       ON tagPrefixes(normalizedLabel);
     `);
-    
+
     db.runQuery(`
       CREATE INDEX IF NOT EXISTS idxTagPrefixKey
       ON tags(tagPrefixKey);
@@ -403,13 +405,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
       const tagLookups = options.requireTags ?? [];
-      const tags = tagLookups.map(lookup => {
-        if (typeof lookup === "string") {
-          return this._tagsByKey.get(lookup)
-        } else {
-          return this.toTagGivenPortableTag(lookup);
-        }
-      }).filter((t) => t != null);
+      const tags = tagLookups
+        .map((lookup) => this.toOptionalTagGivenLookup(lookup))
+        .filter((t) => t != null);
       const hashCodes = tags.map((tag) => tag.toHashCode());
 
       const cacheKeyData = `${options.cacheKey}:${
@@ -431,13 +429,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         entryKeys = Array.from(this._entryKeys);
       } else {
         const sets = options.requireTags.map((lookup) => {
-          let tag: Tag;
-          if (typeof lookup === "string") {
-            tag = this._tagsByKey.get(lookup);
-          } else {
-            tag = this.toTagGivenPortableTag(lookup);
-          }
-
+          const tag = this.toOptionalTagGivenLookup(lookup);
           if (tag == null) {
             return new Set<string>();
           }
@@ -682,7 +674,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return tagPrefix;
   }
 
-  private tagGivenPropertyKeyAndValue(propertyKey: string, value: any): PortableTag {
+  private tagGivenPropertyKeyAndValue(
+    propertyKey: string,
+    value: any
+  ): PortableTag {
     if (propertyKey == null) {
       return;
     }
@@ -796,17 +791,27 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  toOptionalTagGivenKey(
-    tagKey: string
-  ): Tag | undefined {
+  private toOptionalTagGivenKey(tagKey: string): Tag | undefined {
     if (tagKey == null) {
       throw new Error("tagKey is required");
     }
 
     return this._tagsByKey.get(tagKey);
   }
-  
-  toTagGivenPortableTag(
+
+  toOptionalTagGivenLookup(lookup: TagLookup): Tag | undefined {
+    if (lookup == null) {
+      throw new Error("lookup is required");
+    }
+
+    if (typeof lookup === "string") {
+      return this._tagsByKey.get(lookup);
+    } else {
+      return this.toTagGivenPortableTag(lookup);
+    }
+  }
+
+  private toTagGivenPortableTag(
     portableTag: PortableTag,
     createIfMissing: boolean = false
   ): Tag {
@@ -818,10 +823,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Missing tagLabel in portableTag");
     }
 
-    const normalizedValue = normalizedValueGivenString(portableTag.tagLabel);
+    const normalizedPrefixLabel = normalizedValueGivenString(portableTag.tagPrefixLabel);
+    const normalizedLabel = normalizedValueGivenString(portableTag.tagLabel);
+    
     const hashCode = hashCodeGivenTagPrefixAndNormalizedValue(
-      portableTag.tagPrefixLabel,
-      normalizedValue
+      normalizedPrefixLabel,
+      normalizedLabel
     );
 
     let tag = this._tagsByHashcode.get(hashCode);
@@ -829,7 +836,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (tag == null && createIfMissing == true) {
       const tagKey = StringUtil.stringOfRandomCharacters(12);
 
-      const tagPrefix = this.toTagPrefixGivenLabel(portableTag.tagPrefixLabel, true);
+      const tagPrefix = this.toTagPrefixGivenLabel(
+        portableTag.tagPrefixLabel,
+        true
+      );
 
       tag = this.addActor(
         new Tag({

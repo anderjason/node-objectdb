@@ -76,7 +76,9 @@ class ObjectDb extends skytree_1.Actor {
     `);
         let isUpgradingTags = false;
         try {
-            const row = db.prepareCached("SELECT sql FROM sqlite_master WHERE name = ?").all("tags")[0];
+            const row = db
+                .prepareCached("SELECT sql FROM sqlite_master WHERE name = ?")
+                .all("tags")[0];
             isUpgradingTags = !row.sql.includes("normalizedLabel");
         }
         catch (err) {
@@ -277,14 +279,9 @@ class ObjectDb extends skytree_1.Actor {
         let fullCacheKey = undefined;
         if (options.cacheKey != null) {
             const tagLookups = (_a = options.requireTags) !== null && _a !== void 0 ? _a : [];
-            const tags = tagLookups.map(lookup => {
-                if (typeof lookup === "string") {
-                    return this._tagsByKey.get(lookup);
-                }
-                else {
-                    return this.toTagGivenPortableTag(lookup);
-                }
-            }).filter((t) => t != null);
+            const tags = tagLookups
+                .map((lookup) => this.toOptionalTagGivenLookup(lookup))
+                .filter((t) => t != null);
             const hashCodes = tags.map((tag) => tag.toHashCode());
             const cacheKeyData = `${options.cacheKey}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.direction}:${(_c = options.orderByMetric) === null || _c === void 0 ? void 0 : _c.key}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
@@ -302,13 +299,7 @@ class ObjectDb extends skytree_1.Actor {
             }
             else {
                 const sets = options.requireTags.map((lookup) => {
-                    let tag;
-                    if (typeof lookup === "string") {
-                        tag = this._tagsByKey.get(lookup);
-                    }
-                    else {
-                        tag = this.toTagGivenPortableTag(lookup);
-                    }
+                    const tag = this.toOptionalTagGivenLookup(lookup);
                     if (tag == null) {
                         return new Set();
                     }
@@ -575,6 +566,17 @@ class ObjectDb extends skytree_1.Actor {
         }
         return this._tagsByKey.get(tagKey);
     }
+    toOptionalTagGivenLookup(lookup) {
+        if (lookup == null) {
+            throw new Error("lookup is required");
+        }
+        if (typeof lookup === "string") {
+            return this._tagsByKey.get(lookup);
+        }
+        else {
+            return this.toTagGivenPortableTag(lookup);
+        }
+    }
     toTagGivenPortableTag(portableTag, createIfMissing = false) {
         if (portableTag.tagPrefixLabel == null) {
             throw new Error("Missing tagPrefixLabel in portableTag");
@@ -582,8 +584,9 @@ class ObjectDb extends skytree_1.Actor {
         if (portableTag.tagLabel == null) {
             throw new Error("Missing tagLabel in portableTag");
         }
-        const normalizedValue = Tag_1.normalizedValueGivenString(portableTag.tagLabel);
-        const hashCode = Tag_1.hashCodeGivenTagPrefixAndNormalizedValue(portableTag.tagPrefixLabel, normalizedValue);
+        const normalizedPrefixLabel = Tag_1.normalizedValueGivenString(portableTag.tagPrefixLabel);
+        const normalizedLabel = Tag_1.normalizedValueGivenString(portableTag.tagLabel);
+        const hashCode = Tag_1.hashCodeGivenTagPrefixAndNormalizedValue(normalizedPrefixLabel, normalizedLabel);
         let tag = this._tagsByHashcode.get(hashCode);
         if (tag == null && createIfMissing == true) {
             const tagKey = util_1.StringUtil.stringOfRandomCharacters(12);

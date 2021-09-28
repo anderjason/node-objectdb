@@ -75,7 +75,7 @@ class Tag extends skytree_1.Actor {
         this._deleteEntryKeyQuery.run(this.key, entryKey);
     }
     toHashCode() {
-        return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix.key, this.normalizedLabel);
+        return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix.normalizedLabel, this.normalizedLabel);
     }
     toPortableTag() {
         return {
