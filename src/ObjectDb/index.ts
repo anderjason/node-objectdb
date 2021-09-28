@@ -153,6 +153,20 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       )
     `);
 
+    let isUpgradingTags = false;
+    try {
+      const row = db.prepareCached("SELECT sql FROM sqlite_master WHERE name = ?").all("tags")[0];
+      isUpgradingTags = !row.sql.includes("normalizedLabel");
+    } catch (err) {
+      //
+    }
+
+    if (isUpgradingTags == true) {
+      console.log("Rebuilding tags table");
+      db.runQuery("DROP TABLE tagEntries");
+      db.runQuery("DROP TABLE tags");
+    }
+
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS tags (
         key TEXT PRIMARY KEY,
@@ -370,6 +384,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       this._metrics.set(metricKey, metric);
     }
     this.stopwatch.stop("createMetrics");
+
+    if (isUpgradingTags == true) {
+      console.log("Rebuilding metadata...");
+      this.rebuildMetadata();
+      console.log("Done");
+    }
   }
 
   toEntryKeys(options: ObjectDbReadOptions = {}): string[] {
