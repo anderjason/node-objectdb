@@ -796,7 +796,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  toTagGivenKey(
+  toOptionalTagGivenKey(
     tagKey: string
   ): Tag {
     if (tagKey == null) {

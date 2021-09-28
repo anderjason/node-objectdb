@@ -569,7 +569,7 @@ class ObjectDb extends skytree_1.Actor {
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
     }
-    toTagGivenKey(tagKey) {
+    toOptionalTagGivenKey(tagKey) {
         if (tagKey == null) {
             throw new Error("tagKey is required");
         }

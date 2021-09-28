@@ -85,7 +85,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     propertyTagKeysGivenEntry(entry: Entry<T>): PortableTag[];
     rebuildMetadataGivenEntry(entry: Entry<T>): void;
     writeEntry(entry: Entry<T> | PortableEntry<T>): void;
-    toTagGivenKey(tagKey: string): Tag;
+    toOptionalTagGivenKey(tagKey: string): Tag;
     toTagGivenPortableTag(portableTag: PortableTag, createIfMissing?: boolean): Tag;
     metricGivenMetricKey(metricKey: string): Metric;
     writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Entry<T>;
