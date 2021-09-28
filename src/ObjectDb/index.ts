@@ -85,6 +85,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _properties = new Map<string, PropertyDefinition>();
   private _entryKeys = new Set<string>();
   private _caches = new Map<number, CacheData>();
+  
   private _db: DbInstance;
 
   constructor(props: ObjectDbProps<T>) {
