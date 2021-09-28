@@ -5,6 +5,7 @@ import { Actor } from "skytree";
 import { ReadOnlySet } from "../ReadOnlySet";
 import { DbInstance } from "../SqlClient";
 import { TagPrefix } from "../TagPrefix";
+import { PortableTag } from "./PortableTag";
 
 export interface TagProps {
   tagKey: string;
@@ -130,5 +131,12 @@ export class Tag extends Actor<TagProps> {
 
   toHashCode(): number {
     return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix.key, this.normalizedLabel);
+  }
+
+  toPortableTag(): PortableTag {
+    return {
+      tagPrefixLabel: this.tagPrefix.label,
+      tagLabel: this.label,
+    };
   }
 }

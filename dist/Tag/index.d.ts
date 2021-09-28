@@ -3,6 +3,7 @@ import { Actor } from "skytree";
 import { ReadOnlySet } from "../ReadOnlySet";
 import { DbInstance } from "../SqlClient";
 import { TagPrefix } from "../TagPrefix";
+import { PortableTag } from "./PortableTag";
 export interface TagProps {
     tagKey: string;
     tagPrefix: TagPrefix;
@@ -28,4 +29,5 @@ export declare class Tag extends Actor<TagProps> {
     addEntryKey(entryKey: string): void;
     deleteEntryKey(entryKey: string): void;
     toHashCode(): number;
+    toPortableTag(): PortableTag;
 }

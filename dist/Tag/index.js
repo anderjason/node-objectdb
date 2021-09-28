@@ -77,6 +77,12 @@ class Tag extends skytree_1.Actor {
     toHashCode() {
         return hashCodeGivenTagPrefixAndNormalizedValue(this.tagPrefix.key, this.normalizedLabel);
     }
+    toPortableTag() {
+        return {
+            tagPrefixLabel: this.tagPrefix.label,
+            tagLabel: this.label,
+        };
+    }
 }
 exports.Tag = Tag;
 //# sourceMappingURL=index.js.map
