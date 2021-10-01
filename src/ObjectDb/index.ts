@@ -717,6 +717,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     switch (property.type) {
       case "select":
         const options = property.options;
+        if (value == null) {
+          return {
+            tagPrefixLabel: property.label,
+            tagLabel: "Not set",
+          };
+        }
+
         const option = options.find((op) => op.key === value);
         if (option == null) {
           return;
