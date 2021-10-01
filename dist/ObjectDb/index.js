@@ -74,21 +74,6 @@ class ObjectDb extends skytree_1.Actor {
         normalizedLabel TEXT NOT NULL
       )
     `);
-        let isUpgradingTags = false;
-        try {
-            const row = db
-                .prepareCached("SELECT sql FROM sqlite_master WHERE name = ?")
-                .all("tags")[0];
-            isUpgradingTags = !row.sql.includes("normalizedLabel");
-        }
-        catch (err) {
-            //
-        }
-        if (isUpgradingTags == true) {
-            console.log("Rebuilding tags table");
-            db.runQuery("DROP TABLE tagEntries");
-            db.runQuery("DROP TABLE tags");
-        }
         db.runQuery(`
       CREATE TABLE IF NOT EXISTS tags (
         key TEXT PRIMARY KEY,
@@ -108,6 +93,22 @@ class ObjectDb extends skytree_1.Actor {
         data TEXT NOT NULL,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL
+      )
+    `);
+        db.runQuery(`
+      CREATE TABLE IF NOT EXISTS properties (
+        key text PRIMARY KEY,
+        definition TEXT NOT NULL
+      )
+    `);
+        db.runQuery(`
+      CREATE TABLE IF NOT EXISTS propertyValues (
+        entryKey TEXT NOT NULL,
+        propertyKey TEXT NOT NULL,
+        propertyValue TEXT NOT NULL,
+        FOREIGN KEY(propertyKey) REFERENCES properties(key),
+        FOREIGN KEY(entryKey) REFERENCES entries(key),
+        UNIQUE(propertyKey, entryKey)
       )
     `);
         try {
@@ -170,6 +171,14 @@ class ObjectDb extends skytree_1.Actor {
       CREATE INDEX IF NOT EXISTS idxMetricValuesMetricValue
       ON metricValues(metricValue);
     `);
+        db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idsPropertyValuesEntryKey
+      ON propertyValues(entryKey);
+    `);
+        db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxPropertyValuesPropertyKey
+      ON propertyValues(propertyKey);
+    `);
         this.stopwatch.start("pruneTagsAndMetrics");
         db.runQuery(`
       DELETE FROM tags WHERE key IN (
@@ -187,13 +196,10 @@ class ObjectDb extends skytree_1.Actor {
     `);
         this.stopwatch.stop("pruneTagsAndMetrics");
         db.prepareCached("INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)").run("{}");
-        db.toRows("SELECT properties FROM meta").forEach((row) => {
-            var _a;
-            const properties = JSON.parse((_a = row.properties) !== null && _a !== void 0 ? _a : "{}");
+        db.toRows("SELECT key, definition FROM properties").forEach((row) => {
+            const { key, definition } = row;
             // assign property definitions
-            for (const key of Object.keys(properties)) {
-                this._properties.set(key, properties[key]);
-            }
+            this._properties.set(key, JSON.parse(definition));
         });
         this.stopwatch.start("selectTagPrefixes");
         const tagPrefixRows = db.toRows("SELECT key, label, normalizedLabel FROM tagPrefixes");
@@ -265,11 +271,6 @@ class ObjectDb extends skytree_1.Actor {
             this._metrics.set(metricKey, metric);
         }
         this.stopwatch.stop("createMetrics");
-        if (isUpgradingTags == true) {
-            console.log("Rebuilding metadata...");
-            this.rebuildMetadata();
-            console.log("Done");
-        }
     }
     toEntryKeys(options = {}) {
         var _a, _b, _c;
@@ -409,29 +410,39 @@ class ObjectDb extends skytree_1.Actor {
         return result;
     }
     setProperty(property) {
+        let tagPrefix = this._tagPrefixesByKey.get(property.key);
+        if (tagPrefix == null) {
+            tagPrefix = this.addActor(new TagPrefix_1.TagPrefix({
+                tagPrefixKey: property.key,
+                label: property.label,
+                stopwatch: this.stopwatch,
+                db: this._db,
+            }));
+        }
         this._properties.set(property.key, property);
-        this.saveProperties();
+        const definition = JSON.stringify(property);
+        this._db
+            .prepareCached(`
+      INSERT INTO properties (key, definition)
+      VALUES(?, ?)
+      ON CONFLICT(key) 
+      DO UPDATE SET definition=?;
+      `)
+            .run([property.key, definition, definition]);
     }
     deletePropertyKey(key) {
         this._properties.delete(key);
-        this.saveProperties();
+        this._db
+            .prepareCached("DELETE FROM propertyValues WHERE propertyKey = ?")
+            .run(key);
+        this._db.prepareCached("DELETE FROM properties WHERE key = ?").run(key);
+        // TODO delete tagEntries, tags and tagPrefix
     }
     toPropertyGivenKey(key) {
         return this._properties.get(key);
     }
     toProperties() {
         return Array.from(this._properties.values());
-    }
-    saveProperties() {
-        // convert this._properties to a plain javascript object
-        const portableProperties = {};
-        this._properties.forEach((property, key) => {
-            portableProperties[key] = property;
-        });
-        this._db
-            .prepareCached("UPDATE meta SET properties = ?")
-            .run(JSON.stringify(portableProperties));
-        this.rebuildMetadata();
     }
     removeMetadataGivenEntryKey(entryKey) {
         const tagKeys = this._db

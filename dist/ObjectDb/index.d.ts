@@ -77,7 +77,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     deletePropertyKey(key: string): void;
     toPropertyGivenKey(key: string): PropertyDefinition;
     toProperties(): PropertyDefinition[];
-    private saveProperties;
     removeMetadataGivenEntryKey(entryKey: string): void;
     rebuildMetadata(): void;
     toTagPrefixGivenLabel(tagPrefixLabel: string, createIfMissing: boolean): TagPrefix;

@@ -1,6 +1,7 @@
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict } from "@anderjason/observable";
 import { Test } from "@anderjason/tests";
+import { ArrayUtil } from "@anderjason/util";
 import { ObjectDb } from ".";
 import { DbInstance } from "../SqlClient";
 import { PortableTag } from "../Tag/PortableTag";
@@ -13,7 +14,8 @@ interface TestEntryData {
   message: string;
 }
 
-Test.define("ObjectDb can be created", () => {
+Test.define("ObjectDb can be created", async () => {
+  await localFile.deleteFile();
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => [],
@@ -24,7 +26,8 @@ Test.define("ObjectDb can be created", () => {
   fileDb.deactivate();
 });
 
-Test.define("ObjectDb can write and read a row", () => {
+Test.define("ObjectDb can write and read a row", async () => {
+  await localFile.deleteFile();
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => [],
@@ -48,7 +51,8 @@ Test.define("ObjectDb can write and read a row", () => {
   fileDb.deactivate();
 });
 
-Test.define("ObjectDb can assign tags", () => {
+Test.define("ObjectDb can assign tags", async () => {
+  await localFile.deleteFile();
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => {
@@ -107,7 +111,8 @@ Test.define("ObjectDb can assign tags", () => {
   Test.assert(rows.length == 2);
 });
 
-Test.define("ObjectDb can assign metrics", () => {
+Test.define("ObjectDb can assign metrics", async () => {
+  await localFile.deleteFile();
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => [],
@@ -143,7 +148,8 @@ Test.define("ObjectDb can assign metrics", () => {
   Test.assertIsEqual(row.metricValue, "11");
 });
 
-Test.define("ObjectDb can have properties", () => {
+Test.define("ObjectDb can have properties", async () => {
+  await localFile.deleteFile();
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => [],
@@ -176,13 +182,73 @@ Test.define("ObjectDb can have properties", () => {
   fileDb.deactivate();
 });
 
-Test.define("ObjectDb can find entries by portable tag", () => {
+Test.define("ObjectDb can filter by property automatically", async () => {
+  await localFile.deleteFile();
+  const fileDb = new ObjectDb<TestEntryData>({
+    localFile,
+    tagsGivenEntry: (entry) => [],
+    metricsGivenEntry: (entry) => ({}),
+  });
+  fileDb.activate();
+
+  fileDb.setProperty({
+    key: "status",
+    label: "Status",
+    listOrder: 0,
+    type: "select",
+    options: [
+      { key: "low", label: "Low" },
+      { key: "medium", label: "Medium" },
+      { key: "high", label: "High" },
+    ],
+  });
+
+  fileDb.writeEntryData({
+    message: "low status",
+  }, {
+    status: "low",
+  });
+
+  fileDb.writeEntryData({
+    message: "medium status",
+  }, {
+    status: "medium",
+  });
+  
+  const matchLow = fileDb.toEntries({
+    requireTags: [{
+      tagPrefixLabel: "Status",
+      tagLabel: "low",
+    }]
+  });
+
+  const matchMedium = fileDb.toEntries({
+    requireTags: [{
+      tagPrefixLabel: "Status",
+      tagLabel: "medium",
+    }]
+  });
+
+  Test.assert(!ArrayUtil.arrayIsEmptyOrNull(matchLow));
+  Test.assert(matchLow.length == 1);
+  Test.assert(matchLow[0].data.message === "low status");
+
+  Test.assert(!ArrayUtil.arrayIsEmptyOrNull(matchMedium));
+  Test.assert(matchMedium.length == 1);
+  Test.assert(matchMedium[0].data.message === "medium status");
+
+  fileDb.deactivate();
+});
+
+Test.define("ObjectDb can find entries by portable tag", async () => {
   function tagGivenMessage(message: string): PortableTag {
     return {
       tagPrefixLabel: "message",
       tagLabel: message,
     };
   }
+
+  await localFile.deleteFile();
 
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
@@ -192,7 +258,7 @@ Test.define("ObjectDb can find entries by portable tag", () => {
     metricsGivenEntry: (entry) => ({}),
   });
   fileDb.activate();
-
+  
   const one = fileDb.writeEntryData({
     message: "one",
   });

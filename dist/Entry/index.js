@@ -13,14 +13,17 @@ class Entry extends PropsObject_1.PropsObject {
         this.status = "unknown";
     }
     load() {
-        var _a;
-        const row = this.props.db.toFirstRow("SELECT data, propertyValues, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
+        const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
         if (row == null) {
             this.status = "new";
             return false;
         }
+        const propertyValues = this.props.db.prepareCached("SELECT propertyKey, propertyValue FROM propertyValues WHERE entryKey = ?").all(this.key);
         this.data = JSON.parse(row.data);
-        this.propertyValues = JSON.parse((_a = row.propertyValues) !== null && _a !== void 0 ? _a : "{}");
+        this.propertyValues = {};
+        propertyValues.forEach((row) => {
+            this.propertyValues[row.propertyKey] = JSON.parse(row.propertyValue);
+        });
         this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAt);
         this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAt);
         this.status = "saved";
@@ -34,23 +37,25 @@ class Entry extends PropsObject_1.PropsObject {
         }
         const createdAtMs = this.createdAt.toEpochMilliseconds();
         const updatedAtMs = this.updatedAt.toEpochMilliseconds();
-        const propertyValues = JSON.stringify(this.propertyValues);
-        this.props.db.runQuery(`
-      INSERT INTO entries (key, data, propertyValues, createdAt, updatedAt)
-      VALUES(?, ?, ?, ?, ?)
+        this.props.db.prepareCached(`
+      INSERT INTO entries (key, data, createdAt, updatedAt)
+      VALUES(?, ?, ?, ?)
       ON CONFLICT(key) 
-      DO UPDATE SET data=?, propertyValues=?, createdAt=?, updatedAt=?;
-      `, [
+      DO UPDATE SET data=?, createdAt=?, updatedAt=?;
+      `).run([
             this.key,
             data,
-            propertyValues,
             createdAtMs,
             updatedAtMs,
             data,
-            propertyValues,
             createdAtMs,
             updatedAtMs,
         ]);
+        this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ?").run(this.key);
+        const query = this.props.db.prepareCached("INSERT INTO propertyValues (entryKey, propertyKey, propertyValue) VALUES (?, ?, ?)");
+        Object.keys(this.propertyValues).forEach((propertyKey) => {
+            query.run(this.key, propertyKey, JSON.stringify(this.propertyValues[propertyKey]));
+        });
         this.status = "saved";
     }
     toPortableEntry() {

@@ -154,22 +154,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       )
     `);
 
-    let isUpgradingTags = false;
-    try {
-      const row = db
-        .prepareCached("SELECT sql FROM sqlite_master WHERE name = ?")
-        .all("tags")[0];
-      isUpgradingTags = !row.sql.includes("normalizedLabel");
-    } catch (err) {
-      //
-    }
-
-    if (isUpgradingTags == true) {
-      console.log("Rebuilding tags table");
-      db.runQuery("DROP TABLE tagEntries");
-      db.runQuery("DROP TABLE tags");
-    }
-
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS tags (
         key TEXT PRIMARY KEY,
@@ -191,6 +175,24 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         data TEXT NOT NULL,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL
+      )
+    `);
+
+    db.runQuery(`
+      CREATE TABLE IF NOT EXISTS properties (
+        key text PRIMARY KEY,
+        definition TEXT NOT NULL
+      )
+    `);
+
+    db.runQuery(`
+      CREATE TABLE IF NOT EXISTS propertyValues (
+        entryKey TEXT NOT NULL,
+        propertyKey TEXT NOT NULL,
+        propertyValue TEXT NOT NULL,
+        FOREIGN KEY(propertyKey) REFERENCES properties(key),
+        FOREIGN KEY(entryKey) REFERENCES entries(key),
+        UNIQUE(propertyKey, entryKey)
       )
     `);
 
@@ -264,6 +266,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       ON metricValues(metricValue);
     `);
 
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idsPropertyValuesEntryKey
+      ON propertyValues(entryKey);
+    `);
+
+    db.runQuery(`
+      CREATE INDEX IF NOT EXISTS idxPropertyValuesPropertyKey
+      ON propertyValues(propertyKey);
+    `);
+
     this.stopwatch.start("pruneTagsAndMetrics");
     db.runQuery(`
       DELETE FROM tags WHERE key IN (
@@ -285,14 +297,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       "INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)"
     ).run("{}");
 
-    db.toRows("SELECT properties FROM meta").forEach((row) => {
-      const properties = JSON.parse(row.properties ?? "{}");
+    db.toRows("SELECT key, definition FROM properties").forEach(
+      (row) => {
+        const { key, definition } = row;
 
-      // assign property definitions
-      for (const key of Object.keys(properties)) {
-        this._properties.set(key, properties[key]);
+        // assign property definitions
+        this._properties.set(key, JSON.parse(definition));
       }
-    });
+    );
 
     this.stopwatch.start("selectTagPrefixes");
     const tagPrefixRows = db.toRows(
@@ -387,12 +399,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       this._metrics.set(metricKey, metric);
     }
     this.stopwatch.stop("createMetrics");
-
-    if (isUpgradingTags == true) {
-      console.log("Rebuilding metadata...");
-      this.rebuildMetadata();
-      console.log("Done");
-    }
   }
 
   toEntryKeys(options: ObjectDbReadOptions = {}): string[] {
@@ -583,13 +589,42 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   setProperty(property: PropertyDefinition): void {
+    let tagPrefix = this._tagPrefixesByKey.get(property.key);
+    if (tagPrefix == null) {
+      tagPrefix = this.addActor(
+        new TagPrefix({
+          tagPrefixKey: property.key,
+          label: property.label,
+          stopwatch: this.stopwatch,
+          db: this._db,
+        })
+      );
+    }
+
     this._properties.set(property.key, property);
-    this.saveProperties();
+
+    const definition = JSON.stringify(property);
+    this._db
+      .prepareCached(
+        `
+      INSERT INTO properties (key, definition)
+      VALUES(?, ?)
+      ON CONFLICT(key) 
+      DO UPDATE SET definition=?;
+      `
+      )
+      .run([property.key, definition, definition]);
   }
 
   deletePropertyKey(key: string): void {
     this._properties.delete(key);
-    this.saveProperties();
+
+    this._db
+      .prepareCached("DELETE FROM propertyValues WHERE propertyKey = ?")
+      .run(key);
+    this._db.prepareCached("DELETE FROM properties WHERE key = ?").run(key);
+
+    // TODO delete tagEntries, tags and tagPrefix
   }
 
   toPropertyGivenKey(key: string): PropertyDefinition {
@@ -598,20 +633,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   toProperties(): PropertyDefinition[] {
     return Array.from(this._properties.values());
-  }
-
-  private saveProperties(): void {
-    // convert this._properties to a plain javascript object
-    const portableProperties: Dict<PropertyDefinition> = {};
-    this._properties.forEach((property, key) => {
-      portableProperties[key] = property;
-    });
-
-    this._db
-      .prepareCached("UPDATE meta SET properties = ?")
-      .run(JSON.stringify(portableProperties));
-
-    this.rebuildMetadata();
   }
 
   removeMetadataGivenEntryKey(entryKey: string): void {
@@ -823,9 +844,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Missing tagLabel in portableTag");
     }
 
-    const normalizedPrefixLabel = normalizedValueGivenString(portableTag.tagPrefixLabel);
+    const normalizedPrefixLabel = normalizedValueGivenString(
+      portableTag.tagPrefixLabel
+    );
     const normalizedLabel = normalizedValueGivenString(portableTag.tagLabel);
-    
+
     const hashCode = hashCodeGivenTagPrefixAndNormalizedValue(
       normalizedPrefixLabel,
       normalizedLabel
