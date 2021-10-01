@@ -52,9 +52,22 @@ class Entry extends PropsObject_1.PropsObject {
             updatedAtMs,
         ]);
         this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ?").run(this.key);
-        const query = this.props.db.prepareCached("INSERT INTO propertyValues (entryKey, propertyKey, propertyValue) VALUES (?, ?, ?)");
+        const insertQuery = this.props.db.prepareCached(`
+      INSERT INTO propertyValues (entryKey, propertyKey, propertyValue) 
+      VALUES (?, ?, ?)
+      ON CONFLICT(entryKey, propertyKey)
+      DO UPDATE SET propertyValue=?;
+    `);
+        const deleteQuery = this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ? AND propertyKey = ?");
         Object.keys(this.propertyValues).forEach((propertyKey) => {
-            query.run(this.key, propertyKey, JSON.stringify(this.propertyValues[propertyKey]));
+            const value = this.propertyValues[propertyKey];
+            if (value != null) {
+                const valueStr = JSON.stringify(value);
+                insertQuery.run(this.key, propertyKey, valueStr, valueStr);
+            }
+            else {
+                deleteQuery.run(this.key, propertyKey);
+            }
         });
         this.status = "saved";
     }
