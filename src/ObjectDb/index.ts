@@ -599,6 +599,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
           db: this._db,
         })
       );
+
+      this._tagPrefixesByKey.set(tagPrefix.key, tagPrefix);
+      this._tagPrefixesByNormalizedLabel.set(
+        tagPrefix.normalizedLabel,
+        tagPrefix
+      );
     }
 
     this._properties.set(property.key, property);

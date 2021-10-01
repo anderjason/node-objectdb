@@ -418,6 +418,8 @@ class ObjectDb extends skytree_1.Actor {
                 stopwatch: this.stopwatch,
                 db: this._db,
             }));
+            this._tagPrefixesByKey.set(tagPrefix.key, tagPrefix);
+            this._tagPrefixesByNormalizedLabel.set(tagPrefix.normalizedLabel, tagPrefix);
         }
         this._properties.set(property.key, property);
         const definition = JSON.stringify(property);
