@@ -1,5 +1,6 @@
 import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
+import { ObjectDb } from "..";
 import { PropsObject } from "../PropsObject";
 import { DbInstance } from "../SqlClient";
 export declare type EntryStatus = "unknown" | "new" | "saved" | "updated" | "deleted";
@@ -19,6 +20,7 @@ export interface EntryProps<T> {
     createdAt?: Instant;
     updatedAt?: Instant;
     db: DbInstance;
+    objectDb: ObjectDb<T>;
 }
 export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     readonly key: string;

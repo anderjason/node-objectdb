@@ -240,6 +240,51 @@ Test.define("ObjectDb can filter by property automatically", async () => {
   fileDb.deactivate();
 });
 
+Test.define("Select properties without a value can be filtered with 'Not set'", async () => {
+  await localFile.deleteFile();
+  const fileDb = new ObjectDb<TestEntryData>({
+    localFile,
+    tagsGivenEntry: (entry) => [],
+    metricsGivenEntry: (entry) => ({}),
+  });
+  fileDb.activate();
+
+  fileDb.setProperty({
+    key: "status",
+    label: "Status",
+    listOrder: 0,
+    type: "select",
+    options: [
+      { key: "low", label: "Low" },
+      { key: "medium", label: "Medium" },
+      { key: "high", label: "High" },
+    ],
+  });
+
+  fileDb.writeEntryData({
+    message: "low status",
+  });
+
+  fileDb.writeEntryData({
+    message: "medium status",
+  }, {
+    status: "medium",
+  });
+  
+  const matchLow = fileDb.toEntries({
+    requireTags: [{
+      tagPrefixLabel: "Status",
+      tagLabel: "Not set",
+    }]
+  });
+
+  Test.assert(!ArrayUtil.arrayIsEmptyOrNull(matchLow));
+  Test.assert(matchLow.length == 1);
+  Test.assert(matchLow[0].data.message === "low status");
+
+  fileDb.deactivate();
+});
+
 Test.define("ObjectDb can find entries by portable tag", async () => {
   function tagGivenMessage(message: string): PortableTag {
     return {

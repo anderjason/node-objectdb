@@ -401,6 +401,7 @@ class ObjectDb extends skytree_1.Actor {
         const result = new Entry_1.Entry({
             key: entryKey,
             db: this._db,
+            objectDb: this,
         });
         const didLoad = result.load();
         this.stopwatch.stop("toOptionalEntryGivenKey");
@@ -519,12 +520,9 @@ class ObjectDb extends skytree_1.Actor {
     }
     propertyTagKeysGivenEntry(entry) {
         const result = [];
-        Object.keys(entry.propertyValues).forEach((key) => {
-            const value = entry.propertyValues[key];
-            if (value == null) {
-                return;
-            }
-            const tag = this.tagGivenPropertyKeyAndValue(key, value);
+        this.toProperties().forEach((property) => {
+            const value = entry.propertyValues[property.key];
+            const tag = this.tagGivenPropertyKeyAndValue(property.key, value);
             if (tag != null) {
                 result.push(tag);
             }
@@ -578,12 +576,6 @@ class ObjectDb extends skytree_1.Actor {
             default:
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
-    }
-    toOptionalTagGivenKey(tagKey) {
-        if (tagKey == null) {
-            throw new Error("tagKey is required");
-        }
-        return this._tagsByKey.get(tagKey);
     }
     toOptionalTagGivenLookup(lookup) {
         if (lookup == null) {
@@ -665,6 +657,7 @@ class ObjectDb extends skytree_1.Actor {
                 db: this._db,
                 createdAt: createdAt || now,
                 updatedAt: now,
+                objectDb: this,
             });
             didCreateNewEntry = true;
         }

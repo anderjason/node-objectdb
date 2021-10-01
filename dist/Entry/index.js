@@ -59,14 +59,14 @@ class Entry extends PropsObject_1.PropsObject {
       DO UPDATE SET propertyValue=?;
     `);
         const deleteQuery = this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ? AND propertyKey = ?");
-        Object.keys(this.propertyValues).forEach((propertyKey) => {
-            const value = this.propertyValues[propertyKey];
+        this.props.objectDb.toProperties().forEach((property) => {
+            const value = this.propertyValues[property.key];
             if (value != null) {
                 const valueStr = JSON.stringify(value);
-                insertQuery.run(this.key, propertyKey, valueStr, valueStr);
+                insertQuery.run(this.key, property.key, valueStr, valueStr);
             }
             else {
-                deleteQuery.run(this.key, propertyKey);
+                deleteQuery.run(this.key, property.key);
             }
         });
         this.status = "saved";

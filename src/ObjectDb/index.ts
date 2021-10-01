@@ -575,6 +575,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const result: Entry<T> = new Entry<T>({
       key: entryKey,
       db: this._db,
+      objectDb: this,
     });
 
     const didLoad = result.load();
@@ -741,13 +742,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   propertyTagKeysGivenEntry(entry: Entry<T>): PortableTag[] {
     const result: PortableTag[] = [];
 
-    Object.keys(entry.propertyValues).forEach((key) => {
-      const value = entry.propertyValues[key];
-      if (value == null) {
-        return;
-      }
-
-      const tag = this.tagGivenPropertyKeyAndValue(key, value);
+    this.toProperties().forEach((property) => {
+      const value = entry.propertyValues[property.key];
+      const tag = this.tagGivenPropertyKeyAndValue(property.key, value);
       if (tag != null) {
         result.push(tag);
       }
@@ -823,14 +820,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       default:
         throw new Error(`Unsupported entry status '${entry.status}'`);
     }
-  }
-
-  private toOptionalTagGivenKey(tagKey: string): Tag | undefined {
-    if (tagKey == null) {
-      throw new Error("tagKey is required");
-    }
-
-    return this._tagsByKey.get(tagKey);
   }
 
   toOptionalTagGivenLookup(lookup: TagLookup): Tag | undefined {
@@ -956,6 +945,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         db: this._db,
         createdAt: createdAt || now,
         updatedAt: now,
+        objectDb: this,
       });
       didCreateNewEntry = true;
     }

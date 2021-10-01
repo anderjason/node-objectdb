@@ -84,7 +84,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     propertyTagKeysGivenEntry(entry: Entry<T>): PortableTag[];
     rebuildMetadataGivenEntry(entry: Entry<T>): void;
     writeEntry(entry: Entry<T> | PortableEntry<T>): void;
-    private toOptionalTagGivenKey;
     toOptionalTagGivenLookup(lookup: TagLookup): Tag | undefined;
     private toTagGivenPortableTag;
     metricGivenMetricKey(metricKey: string): Metric;
