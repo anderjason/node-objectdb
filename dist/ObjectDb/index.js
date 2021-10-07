@@ -56,7 +56,7 @@ class ObjectDb extends skytree_1.Actor {
     get tagPrefixes() {
         return Array.from(this._tagPrefixesByKey.values());
     }
-    load() {
+    async load() {
         if (this.isActive == false) {
             return;
         }
@@ -272,7 +272,7 @@ class ObjectDb extends skytree_1.Actor {
         }
         this.stopwatch.stop("createMetrics");
     }
-    toEntryKeys(options = {}) {
+    async toEntryKeys(options = {}) {
         var _a, _b, _c;
         this.stopwatch.start("toEntryKeys");
         const now = time_1.Instant.ofNow();
@@ -280,9 +280,13 @@ class ObjectDb extends skytree_1.Actor {
         let fullCacheKey = undefined;
         if (options.cacheKey != null) {
             const tagLookups = (_a = options.requireTags) !== null && _a !== void 0 ? _a : [];
-            const tags = tagLookups
-                .map((lookup) => this.toOptionalTagGivenLookup(lookup))
-                .filter((t) => t != null);
+            const tags = [];
+            for (const lookup of tagLookups) {
+                const tag = await this.toOptionalTagGivenLookup(lookup);
+                if (tag != null) {
+                    tags.push(tag);
+                }
+            }
             const hashCodes = tags.map((tag) => tag.toHashCode());
             const cacheKeyData = `${options.cacheKey}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.direction}:${(_c = options.orderByMetric) === null || _c === void 0 ? void 0 : _c.key}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
@@ -290,7 +294,7 @@ class ObjectDb extends skytree_1.Actor {
         if (fullCacheKey != null) {
             const cacheData = this._caches.get(fullCacheKey);
             if (cacheData != null) {
-                cacheData.expiresAt = now.withAddedDuration(time_1.Duration.givenSeconds(120));
+                cacheData.expiresAt = now.withAddedDuration(time_1.Duration.givenSeconds(300));
                 entryKeys = cacheData.entryKeys;
             }
         }
@@ -299,21 +303,25 @@ class ObjectDb extends skytree_1.Actor {
                 entryKeys = Array.from(this._entryKeys);
             }
             else {
-                const sets = options.requireTags.map((lookup) => {
-                    const tag = this.toOptionalTagGivenLookup(lookup);
+                const sets = [];
+                for (const tagLookup of options.requireTags) {
+                    const tag = await this.toOptionalTagGivenLookup(tagLookup);
                     if (tag == null) {
-                        return new Set();
+                        sets.push(new Set());
                     }
-                    return new Set(tag.entryKeys.values());
-                });
+                    else {
+                        sets.push(new Set(tag.entryKeys.values()));
+                    }
+                }
                 entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
             }
             const order = options.orderByMetric;
             if (order != null) {
                 const metric = this._metrics.get(order.key);
                 if (metric != null) {
+                    const entryMetricValues = await metric.toEntryMetricValues();
                     entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (entryKey) => {
-                        return metric.entryMetricValues.get(entryKey);
+                        return entryMetricValues.get(entryKey);
                     }, order.direction);
                 }
             }
@@ -321,7 +329,7 @@ class ObjectDb extends skytree_1.Actor {
         if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
             this._caches.set(fullCacheKey, {
                 entryKeys,
-                expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(120)),
+                expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(300)),
             });
         }
         let start = 0;
@@ -337,21 +345,21 @@ class ObjectDb extends skytree_1.Actor {
         return result;
     }
     // TC: O(N)
-    forEach(fn) {
-        this._entryKeys.forEach((entryKey) => {
-            const entry = this.toOptionalEntryGivenKey(entryKey);
-            fn(entry);
-        });
+    async forEach(fn) {
+        for (const entryKey of this._entryKeys) {
+            const entry = await this.toOptionalEntryGivenKey(entryKey);
+            await fn(entry);
+        }
     }
-    hasEntry(entryKey) {
-        const keys = this.toEntryKeys();
+    async hasEntry(entryKey) {
+        const keys = await this.toEntryKeys();
         return keys.includes(entryKey);
     }
-    runTransaction(fn) {
+    async runTransaction(fn) {
         let failed = false;
-        this._db.runTransaction(() => {
+        this._db.runTransaction(async () => {
             try {
-                fn();
+                await fn();
             }
             catch (err) {
                 failed = true;
@@ -362,35 +370,35 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance.");
         }
     }
-    toEntryCount(requireTags) {
-        const keys = this.toEntryKeys({
+    async toEntryCount(requireTags) {
+        const keys = await this.toEntryKeys({
             requireTags,
         });
         return keys.length;
     }
-    toEntries(options = {}) {
-        const entryKeys = this.toEntryKeys(options);
+    async toEntries(options = {}) {
+        const entryKeys = await this.toEntryKeys(options);
         const entries = [];
-        entryKeys.forEach((entryKey) => {
-            const result = this.toOptionalEntryGivenKey(entryKey);
+        for (const entryKey of entryKeys) {
+            const result = await this.toOptionalEntryGivenKey(entryKey);
             if (result != null) {
                 entries.push(result);
             }
-        });
+        }
         return entries;
     }
-    toOptionalFirstEntry(options = {}) {
-        const results = this.toEntries(Object.assign(Object.assign({}, options), { limit: 1 }));
+    async toOptionalFirstEntry(options = {}) {
+        const results = await this.toEntries(Object.assign(Object.assign({}, options), { limit: 1 }));
         return results[0];
     }
-    toEntryGivenKey(entryKey) {
-        const result = this.toOptionalEntryGivenKey(entryKey);
+    async toEntryGivenKey(entryKey) {
+        const result = await this.toOptionalEntryGivenKey(entryKey);
         if (result == null) {
             throw new Error(`Entry not found for key '${entryKey}'`);
         }
         return result;
     }
-    toOptionalEntryGivenKey(entryKey) {
+    async toOptionalEntryGivenKey(entryKey) {
         if (entryKey == null) {
             throw new Error("Entry key is required");
         }
@@ -403,14 +411,14 @@ class ObjectDb extends skytree_1.Actor {
             db: this._db,
             objectDb: this,
         });
-        const didLoad = result.load();
+        const didLoad = await result.load();
         this.stopwatch.stop("toOptionalEntryGivenKey");
         if (!didLoad) {
             return undefined;
         }
         return result;
     }
-    setProperty(property) {
+    async setProperty(property) {
         let tagPrefix = this._tagPrefixesByKey.get(property.key);
         if (tagPrefix == null) {
             tagPrefix = this.addActor(new TagPrefix_1.TagPrefix({
@@ -433,7 +441,7 @@ class ObjectDb extends skytree_1.Actor {
       `)
             .run([property.key, definition, definition]);
     }
-    deletePropertyKey(key) {
+    async deletePropertyKey(key) {
         this._properties.delete(key);
         this._db
             .prepareCached("DELETE FROM propertyValues WHERE propertyKey = ?")
@@ -441,13 +449,13 @@ class ObjectDb extends skytree_1.Actor {
         this._db.prepareCached("DELETE FROM properties WHERE key = ?").run(key);
         // TODO delete tagEntries, tags and tagPrefix
     }
-    toPropertyGivenKey(key) {
+    async toPropertyGivenKey(key) {
         return this._properties.get(key);
     }
-    toProperties() {
+    async toProperties() {
         return Array.from(this._properties.values());
     }
-    removeMetadataGivenEntryKey(entryKey) {
+    async removeMetadataGivenEntryKey(entryKey) {
         const tagKeys = this._db
             .prepareCached("select distinct tagKey from tagEntries where entryKey = ?")
             .all(entryKey)
@@ -462,20 +470,21 @@ class ObjectDb extends skytree_1.Actor {
             .prepareCached("select distinct metricKey from metricValues where entryKey = ?")
             .all(entryKey)
             .map((row) => row.metricKey);
-        metricKeys.forEach((metricKey) => {
-            const metric = this.metricGivenMetricKey(metricKey);
+        for (const metricKey of metricKeys) {
+            const metric = await this.metricGivenMetricKey(metricKey);
             metric.deleteKey(entryKey);
-        });
+        }
     }
-    rebuildMetadata() {
-        this.toEntryKeys().forEach((entryKey) => {
-            const entry = this.toOptionalEntryGivenKey(entryKey);
+    async rebuildMetadata() {
+        const entryKeys = await this.toEntryKeys();
+        for (const entryKey of entryKeys) {
+            const entry = await this.toOptionalEntryGivenKey(entryKey);
             if (entry != null) {
                 this.rebuildMetadataGivenEntry(entry);
             }
-        });
+        }
     }
-    toTagPrefixGivenLabel(tagPrefixLabel, createIfMissing) {
+    async toTagPrefixGivenLabel(tagPrefixLabel, createIfMissing) {
         const normalizedLabel = Tag_1.normalizedValueGivenString(tagPrefixLabel);
         let tagPrefix = this._tagPrefixesByNormalizedLabel.get(normalizedLabel);
         if (tagPrefix == null && createIfMissing) {
@@ -489,11 +498,11 @@ class ObjectDb extends skytree_1.Actor {
         }
         return tagPrefix;
     }
-    tagGivenPropertyKeyAndValue(propertyKey, value) {
+    async tagGivenPropertyKeyAndValue(propertyKey, value) {
         if (propertyKey == null) {
             return;
         }
-        const property = this.toPropertyGivenKey(propertyKey);
+        const property = await this.toPropertyGivenKey(propertyKey);
         if (property == null) {
             return;
         }
@@ -518,66 +527,68 @@ class ObjectDb extends skytree_1.Actor {
                 return undefined;
         }
     }
-    propertyTagKeysGivenEntry(entry) {
+    async propertyTagKeysGivenEntry(entry) {
         const result = [];
-        this.toProperties().forEach((property) => {
+        const properties = await this.toProperties();
+        for (const property of properties) {
             const value = entry.propertyValues[property.key];
-            const tag = this.tagGivenPropertyKeyAndValue(property.key, value);
+            const tag = await this.tagGivenPropertyKeyAndValue(property.key, value);
             if (tag != null) {
                 result.push(tag);
             }
-        });
+        }
         return result;
     }
-    rebuildMetadataGivenEntry(entry) {
+    async rebuildMetadataGivenEntry(entry) {
         this.stopwatch.start("rebuildMetadataGivenEntry");
-        this.removeMetadataGivenEntryKey(entry.key);
+        await this.removeMetadataGivenEntryKey(entry.key);
+        const propertyTags = await this.propertyTagKeysGivenEntry(entry);
         const tags = [
-            ...this.propertyTagKeysGivenEntry(entry),
+            ...propertyTags,
             ...this.props.tagsGivenEntry(entry),
         ];
         const portableTags = uniquePortableTags_1.uniquePortableTags(tags);
         const metricValues = this.props.metricsGivenEntry(entry);
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
         metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
-        portableTags.forEach((portableTag) => {
-            const tag = this.toTagGivenPortableTag(portableTag, true);
+        for (const portableTag of portableTags) {
+            const tag = await this.toTagGivenPortableTag(portableTag, true);
             tag.addEntryKey(entry.key);
-        });
-        Object.keys(metricValues).forEach((metricKey) => {
-            const metric = this.metricGivenMetricKey(metricKey);
+        }
+        for (const metricKey of Object.keys(metricValues)) {
+            const metric = await this.metricGivenMetricKey(metricKey);
             const metricValue = metricValues[metricKey];
             metric.setValue(entry.key, metricValue);
-        });
+        }
         this.stopwatch.stop("rebuildMetadataGivenEntry");
     }
-    writeEntry(entry) {
+    async writeEntry(entry) {
         if (entry == null) {
             throw new Error("Entry is required");
         }
         switch (entry.status) {
             case "deleted":
-                this.deleteEntryKey(entry.key);
+                await this.deleteEntryKey(entry.key);
                 break;
             case "new":
             case "saved":
             case "updated":
             case "unknown":
                 if ("createdAt" in entry) {
-                    this.writeEntryData(entry.data, entry.propertyValues, entry.key, entry.createdAt);
+                    await this.writeEntryData(entry.data, entry.propertyValues, entry.key, entry.createdAt);
                 }
                 else {
                     const createdAt = entry.createdAtEpochMs != null
                         ? time_1.Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
                         : undefined;
-                    this.writeEntryData(entry.data, entry.propertyValues, entry.key, createdAt);
+                    await this.writeEntryData(entry.data, entry.propertyValues, entry.key, createdAt);
                 }
                 break;
             default:
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
     }
-    toOptionalTagGivenLookup(lookup) {
+    async toOptionalTagGivenLookup(lookup) {
         if (lookup == null) {
             throw new Error("lookup is required");
         }
@@ -588,7 +599,7 @@ class ObjectDb extends skytree_1.Actor {
             return this.toTagGivenPortableTag(lookup);
         }
     }
-    toTagGivenPortableTag(portableTag, createIfMissing = false) {
+    async toTagGivenPortableTag(portableTag, createIfMissing = false) {
         if (portableTag.tagPrefixLabel == null) {
             throw new Error("Missing tagPrefixLabel in portableTag");
         }
@@ -601,7 +612,7 @@ class ObjectDb extends skytree_1.Actor {
         let tag = this._tagsByHashcode.get(hashCode);
         if (tag == null && createIfMissing == true) {
             const tagKey = util_1.StringUtil.stringOfRandomCharacters(12);
-            const tagPrefix = this.toTagPrefixGivenLabel(portableTag.tagPrefixLabel, true);
+            const tagPrefix = await this.toTagPrefixGivenLabel(portableTag.tagPrefixLabel, true);
             tag = this.addActor(new Tag_1.Tag({
                 tagKey,
                 tagPrefix,
@@ -614,7 +625,7 @@ class ObjectDb extends skytree_1.Actor {
         }
         return tag;
     }
-    metricGivenMetricKey(metricKey) {
+    async metricGivenMetricKey(metricKey) {
         let metric = this._metrics.get(metricKey);
         if (metric == null) {
             metric = this.addActor(new Metric_1.Metric({
@@ -625,15 +636,15 @@ class ObjectDb extends skytree_1.Actor {
         }
         return metric;
     }
-    writeEntryData(entryData, propertyValues = {}, entryKey, createdAt) {
-        var _a;
+    async writeEntryData(entryData, propertyValues = {}, entryKey, createdAt) {
         if (entryKey == null) {
             entryKey = node_crypto_1.UniqueId.ofRandom().toUUIDString();
         }
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        const oldPortableEntry = (_a = this.toOptionalEntryGivenKey(entryKey)) === null || _a === void 0 ? void 0 : _a.toPortableEntry();
+        const oldEntry = await this.toOptionalEntryGivenKey(entryKey);
+        const oldPortableEntry = oldEntry === null || oldEntry === void 0 ? void 0 : oldEntry.toPortableEntry();
         const oldData = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.data;
         const oldPropertyValues = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.propertyValues;
         if (util_1.ObjectUtil.objectIsDeepEqual(oldData, entryData) &&
@@ -650,7 +661,7 @@ class ObjectDb extends skytree_1.Actor {
         this.stopwatch.start("writeEntryData");
         const now = time_1.Instant.ofNow();
         let didCreateNewEntry = false;
-        let entry = this.toOptionalEntryGivenKey(entryKey);
+        let entry = await this.toOptionalEntryGivenKey(entryKey);
         if (entry == null) {
             entry = new Entry_1.Entry({
                 key: entryKey,
@@ -664,10 +675,10 @@ class ObjectDb extends skytree_1.Actor {
         entry.data = entryData;
         entry.propertyValues = propertyValues;
         this.stopwatch.start("save");
-        entry.save();
+        await entry.save();
         this.stopwatch.stop("save");
         this._entryKeys.add(entryKey);
-        this.rebuildMetadataGivenEntry(entry);
+        await this.rebuildMetadataGivenEntry(entry);
         if (didCreateNewEntry) {
             this.collectionDidChange.emit();
         }
@@ -675,11 +686,11 @@ class ObjectDb extends skytree_1.Actor {
         this.stopwatch.stop("writeEntryData");
         return entry;
     }
-    deleteEntryKey(entryKey) {
+    async deleteEntryKey(entryKey) {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        const existingRecord = this.toOptionalEntryGivenKey(entryKey);
+        const existingRecord = await this.toOptionalEntryGivenKey(entryKey);
         if (existingRecord == null) {
             return;
         }
@@ -688,7 +699,7 @@ class ObjectDb extends skytree_1.Actor {
             oldData: existingRecord.data,
         };
         this.entryWillChange.emit(change);
-        this.removeMetadataGivenEntryKey(entryKey);
+        await this.removeMetadataGivenEntryKey(entryKey);
         this._db.runQuery(`
       DELETE FROM entries WHERE key = ?
     `, [entryKey]);

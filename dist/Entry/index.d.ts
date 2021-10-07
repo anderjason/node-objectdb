@@ -30,7 +30,7 @@ export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     propertyValues: Dict<JSONSerializable>;
     status: EntryStatus;
     constructor(props: EntryProps<T>);
-    load(): boolean;
-    save(): void;
+    load(): Promise<boolean>;
+    save(): Promise<void>;
     toPortableEntry(): PortableEntry<T>;
 }

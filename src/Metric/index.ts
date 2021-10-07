@@ -11,16 +11,6 @@ export interface MetricProps {
 export class Metric extends Actor<MetricProps> {
   readonly key: string;
 
-  get entryMetricValues(): ReadOnlyMap<string, string> {
-    this.loadOnce();
-
-    if (this._readOnlyMetricValues == null) {
-      this._readOnlyMetricValues = new ReadOnlyMap(this._entryMetricValues);
-    }
-
-    return this._readOnlyMetricValues;
-  }
-
   private _entryMetricValues: Map<string, string>;  // this is initialized in loadOnce
   private _readOnlyMetricValues: ReadOnlyMap<string, string>;
 
@@ -54,7 +44,17 @@ export class Metric extends Actor<MetricProps> {
 
   onActivate() {}
 
-  private loadOnce(): void {
+  async toEntryMetricValues(): Promise<ReadOnlyMap<string, string>> {
+    await this.loadOnce();
+
+    if (this._readOnlyMetricValues == null) {
+      this._readOnlyMetricValues = new ReadOnlyMap(this._entryMetricValues);
+    }
+
+    return this._readOnlyMetricValues;
+  }
+
+  private async loadOnce(): Promise<void> {
     if (this._entryMetricValues != null) {
       return;
     }
@@ -77,15 +77,15 @@ export class Metric extends Actor<MetricProps> {
     });
   }
 
-  setValue(key: string, newValue: string): void {
-    this.loadOnce();
+  async setValue(key: string, newValue: string): Promise<void> {
+    await this.loadOnce();
 
     this._upsertEntryMetricValueQuery.run(this.key, key, newValue);
     this._entryMetricValues.set(key, newValue);
   }
 
-  deleteKey(key: string): void {
-    this.loadOnce();
+  async deleteKey(key: string): Promise<void> {
+    await this.loadOnce();
 
     this._deleteEntryMetricValueQuery.run(this.key, key);
   }

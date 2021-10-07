@@ -20,15 +20,15 @@ class Metric extends skytree_1.Actor {
     `);
         this._deleteEntryMetricValueQuery = db.prepareCached("DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?");
     }
-    get entryMetricValues() {
-        this.loadOnce();
+    onActivate() { }
+    async toEntryMetricValues() {
+        await this.loadOnce();
         if (this._readOnlyMetricValues == null) {
             this._readOnlyMetricValues = new ReadOnlyMap_1.ReadOnlyMap(this._entryMetricValues);
         }
         return this._readOnlyMetricValues;
     }
-    onActivate() { }
-    loadOnce() {
+    async loadOnce() {
         if (this._entryMetricValues != null) {
             return;
         }
@@ -42,13 +42,13 @@ class Metric extends skytree_1.Actor {
             this._entryMetricValues.set(row.entryKey, row.metricValue);
         });
     }
-    setValue(key, newValue) {
-        this.loadOnce();
+    async setValue(key, newValue) {
+        await this.loadOnce();
         this._upsertEntryMetricValueQuery.run(this.key, key, newValue);
         this._entryMetricValues.set(key, newValue);
     }
-    deleteKey(key) {
-        this.loadOnce();
+    async deleteKey(key) {
+        await this.loadOnce();
         this._deleteEntryMetricValueQuery.run(this.key, key);
     }
 }

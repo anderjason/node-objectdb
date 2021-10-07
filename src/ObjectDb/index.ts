@@ -117,6 +117,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         },
       })
     );
+
     this.load();
   }
 
@@ -132,7 +133,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return Array.from(this._tagPrefixesByKey.values());
   }
 
-  private load(): void {
+  private async load(): Promise<void> {
     if (this.isActive == false) {
       return;
     }
@@ -297,14 +298,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       "INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)"
     ).run("{}");
 
-    db.toRows("SELECT key, definition FROM properties").forEach(
-      (row) => {
-        const { key, definition } = row;
+    db.toRows("SELECT key, definition FROM properties").forEach((row) => {
+      const { key, definition } = row;
 
-        // assign property definitions
-        this._properties.set(key, JSON.parse(definition));
-      }
-    );
+      // assign property definitions
+      this._properties.set(key, JSON.parse(definition));
+    });
 
     this.stopwatch.start("selectTagPrefixes");
     const tagPrefixRows = db.toRows(
@@ -401,7 +400,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.stopwatch.stop("createMetrics");
   }
 
-  toEntryKeys(options: ObjectDbReadOptions = {}): string[] {
+  async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
     this.stopwatch.start("toEntryKeys");
 
     const now = Instant.ofNow();
@@ -411,9 +410,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
       const tagLookups = options.requireTags ?? [];
-      const tags = tagLookups
-        .map((lookup) => this.toOptionalTagGivenLookup(lookup))
-        .filter((t) => t != null);
+      const tags: Tag[] = [];
+      
+      for (const lookup of tagLookups) {
+        const tag = await this.toOptionalTagGivenLookup(lookup);
+        if (tag != null) {
+          tags.push(tag);
+        }
+      }
+
       const hashCodes = tags.map((tag) => tag.toHashCode());
 
       const cacheKeyData = `${options.cacheKey}:${
@@ -425,7 +430,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (fullCacheKey != null) {
       const cacheData = this._caches.get(fullCacheKey);
       if (cacheData != null) {
-        cacheData.expiresAt = now.withAddedDuration(Duration.givenSeconds(120));
+        cacheData.expiresAt = now.withAddedDuration(Duration.givenSeconds(300));
         entryKeys = cacheData.entryKeys;
       }
     }
@@ -434,14 +439,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       if (options.requireTags == null || options.requireTags.length === 0) {
         entryKeys = Array.from(this._entryKeys);
       } else {
-        const sets = options.requireTags.map((lookup) => {
-          const tag = this.toOptionalTagGivenLookup(lookup);
-          if (tag == null) {
-            return new Set<string>();
-          }
+        const sets: Set<string>[] = [];
 
-          return new Set(tag.entryKeys.values());
-        });
+        for (const tagLookup of options.requireTags) {
+          const tag = await this.toOptionalTagGivenLookup(tagLookup);
+          if (tag == null) {
+            sets.push(new Set<string>());
+          } else {
+            sets.push(new Set(tag.entryKeys.values()));
+          }
+        }
 
         entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
       }
@@ -450,10 +457,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       if (order != null) {
         const metric = this._metrics.get(order.key);
         if (metric != null) {
+          const entryMetricValues = await metric.toEntryMetricValues();
+
           entryKeys = ArrayUtil.arrayWithOrderFromValue(
             entryKeys,
             (entryKey) => {
-              return metric.entryMetricValues.get(entryKey);
+              return entryMetricValues.get(entryKey);
             },
             order.direction
           );
@@ -464,7 +473,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
       this._caches.set(fullCacheKey, {
         entryKeys,
-        expiresAt: now.withAddedDuration(Duration.givenSeconds(120)),
+        expiresAt: now.withAddedDuration(Duration.givenSeconds(300)),
       });
     }
 
@@ -487,24 +496,24 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   // TC: O(N)
-  forEach(fn: (entry: Entry<T>) => void): void {
-    this._entryKeys.forEach((entryKey) => {
-      const entry = this.toOptionalEntryGivenKey(entryKey);
-      fn(entry);
-    });
+  async forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void> {
+    for (const entryKey of this._entryKeys) {
+      const entry = await this.toOptionalEntryGivenKey(entryKey);
+      await fn(entry);
+    }
   }
 
-  hasEntry(entryKey: string): boolean {
-    const keys = this.toEntryKeys();
+  async hasEntry(entryKey: string): Promise<boolean> {
+    const keys = await this.toEntryKeys();
     return keys.includes(entryKey);
   }
 
-  runTransaction(fn: () => void): void {
+  async runTransaction(fn: () => Promise<void>): Promise<void> {
     let failed = false;
 
-    this._db.runTransaction(() => {
+    this._db.runTransaction(async () => {
       try {
-        fn();
+        await fn();
       } catch (err) {
         failed = true;
         console.error(err);
@@ -518,33 +527,33 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  toEntryCount(requireTags?: TagLookup[]): number {
-    const keys = this.toEntryKeys({
+  async toEntryCount(requireTags?: TagLookup[]): Promise<number> {
+    const keys = await this.toEntryKeys({
       requireTags,
     });
 
     return keys.length;
   }
 
-  toEntries(options: ObjectDbReadOptions = {}): Entry<T>[] {
-    const entryKeys = this.toEntryKeys(options);
+  async toEntries(options: ObjectDbReadOptions = {}): Promise<Entry<T>[]> {
+    const entryKeys = await this.toEntryKeys(options);
 
     const entries: Entry<T>[] = [];
 
-    entryKeys.forEach((entryKey) => {
-      const result = this.toOptionalEntryGivenKey(entryKey);
+    for (const entryKey of entryKeys) {
+      const result = await this.toOptionalEntryGivenKey(entryKey);
       if (result != null) {
         entries.push(result);
       }
-    });
+    }
 
     return entries;
   }
 
-  toOptionalFirstEntry(
+  async toOptionalFirstEntry(
     options: ObjectDbReadOptions = {}
-  ): Entry<T> | undefined {
-    const results = this.toEntries({
+  ): Promise<Entry<T> | undefined> {
+    const results = await this.toEntries({
       ...options,
       limit: 1,
     });
@@ -552,8 +561,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return results[0];
   }
 
-  toEntryGivenKey(entryKey: string): Entry<T> {
-    const result = this.toOptionalEntryGivenKey(entryKey);
+  async toEntryGivenKey(entryKey: string): Promise<Entry<T>> {
+    const result = await this.toOptionalEntryGivenKey(entryKey);
     if (result == null) {
       throw new Error(`Entry not found for key '${entryKey}'`);
     }
@@ -561,7 +570,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
-  toOptionalEntryGivenKey(entryKey: string): Entry<T> | undefined {
+  async toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined> {
     if (entryKey == null) {
       throw new Error("Entry key is required");
     }
@@ -578,7 +587,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       objectDb: this,
     });
 
-    const didLoad = result.load();
+    const didLoad = await result.load();
 
     this.stopwatch.stop("toOptionalEntryGivenKey");
 
@@ -589,7 +598,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
-  setProperty(property: PropertyDefinition): void {
+  async setProperty(property: PropertyDefinition): Promise<void> {
     let tagPrefix = this._tagPrefixesByKey.get(property.key);
     if (tagPrefix == null) {
       tagPrefix = this.addActor(
@@ -623,7 +632,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       .run([property.key, definition, definition]);
   }
 
-  deletePropertyKey(key: string): void {
+  async deletePropertyKey(key: string): Promise<void> {
     this._properties.delete(key);
 
     this._db
@@ -634,15 +643,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     // TODO delete tagEntries, tags and tagPrefix
   }
 
-  toPropertyGivenKey(key: string): PropertyDefinition {
+  async toPropertyGivenKey(key: string): Promise<PropertyDefinition> {
     return this._properties.get(key);
   }
 
-  toProperties(): PropertyDefinition[] {
+  async toProperties(): Promise<PropertyDefinition[]> {
     return Array.from(this._properties.values());
   }
 
-  removeMetadataGivenEntryKey(entryKey: string): void {
+  async removeMetadataGivenEntryKey(entryKey: string): Promise<void> {
     const tagKeys = this._db
       .prepareCached(
         "select distinct tagKey from tagEntries where entryKey = ?"
@@ -664,25 +673,27 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       .all(entryKey)
       .map((row) => row.metricKey);
 
-    metricKeys.forEach((metricKey) => {
-      const metric = this.metricGivenMetricKey(metricKey);
+    for (const metricKey of metricKeys) {
+      const metric = await this.metricGivenMetricKey(metricKey);
       metric.deleteKey(entryKey);
-    });
+    }
   }
 
-  rebuildMetadata(): void {
-    this.toEntryKeys().forEach((entryKey) => {
-      const entry = this.toOptionalEntryGivenKey(entryKey);
+  async rebuildMetadata(): Promise<void> {
+    const entryKeys = await this.toEntryKeys();
+
+    for (const entryKey of entryKeys) {
+      const entry = await this.toOptionalEntryGivenKey(entryKey);
       if (entry != null) {
         this.rebuildMetadataGivenEntry(entry);
       }
-    });
+    }
   }
 
-  toTagPrefixGivenLabel(
+  async toTagPrefixGivenLabel(
     tagPrefixLabel: string,
     createIfMissing: boolean
-  ): TagPrefix {
+  ): Promise<TagPrefix> {
     const normalizedLabel = normalizedValueGivenString(tagPrefixLabel);
     let tagPrefix = this._tagPrefixesByNormalizedLabel.get(normalizedLabel);
 
@@ -702,15 +713,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return tagPrefix;
   }
 
-  private tagGivenPropertyKeyAndValue(
+  private async tagGivenPropertyKeyAndValue(
     propertyKey: string,
     value: any
-  ): PortableTag {
+  ): Promise<PortableTag> {
     if (propertyKey == null) {
       return;
     }
 
-    const property = this.toPropertyGivenKey(propertyKey);
+    const property = await this.toPropertyGivenKey(propertyKey);
     if (property == null) {
       return;
     }
@@ -739,26 +750,29 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  propertyTagKeysGivenEntry(entry: Entry<T>): PortableTag[] {
+  async propertyTagKeysGivenEntry(entry: Entry<T>): Promise<PortableTag[]> {
     const result: PortableTag[] = [];
 
-    this.toProperties().forEach((property) => {
+    const properties = await this.toProperties();
+
+    for (const property of properties) {
       const value = entry.propertyValues[property.key];
-      const tag = this.tagGivenPropertyKeyAndValue(property.key, value);
+      const tag = await this.tagGivenPropertyKeyAndValue(property.key, value);
       if (tag != null) {
         result.push(tag);
       }
-    });
+    }
 
     return result;
   }
 
-  rebuildMetadataGivenEntry(entry: Entry<T>): void {
+  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
     this.stopwatch.start("rebuildMetadataGivenEntry");
-    this.removeMetadataGivenEntryKey(entry.key);
+    await this.removeMetadataGivenEntryKey(entry.key);
 
+    const propertyTags = await this.propertyTagKeysGivenEntry(entry);
     const tags = [
-      ...this.propertyTagKeysGivenEntry(entry),
+      ...propertyTags,
       ...this.props.tagsGivenEntry(entry),
     ];
 
@@ -768,36 +782,36 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
     metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
 
-    portableTags.forEach((portableTag) => {
-      const tag = this.toTagGivenPortableTag(portableTag, true);
+    for (const portableTag of portableTags) {
+      const tag = await this.toTagGivenPortableTag(portableTag, true);
       tag.addEntryKey(entry.key);
-    });
+    }
 
-    Object.keys(metricValues).forEach((metricKey) => {
-      const metric = this.metricGivenMetricKey(metricKey);
+    for (const metricKey of Object.keys(metricValues)) {
+      const metric = await this.metricGivenMetricKey(metricKey);
 
       const metricValue = metricValues[metricKey];
       metric.setValue(entry.key, metricValue);
-    });
+    }
 
     this.stopwatch.stop("rebuildMetadataGivenEntry");
   }
 
-  writeEntry(entry: Entry<T> | PortableEntry<T>): void {
+  async writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void> {
     if (entry == null) {
       throw new Error("Entry is required");
     }
 
     switch (entry.status) {
       case "deleted":
-        this.deleteEntryKey(entry.key);
+        await this.deleteEntryKey(entry.key);
         break;
       case "new":
       case "saved":
       case "updated":
       case "unknown":
         if ("createdAt" in entry) {
-          this.writeEntryData(
+          await this.writeEntryData(
             entry.data,
             entry.propertyValues,
             entry.key,
@@ -808,7 +822,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
             entry.createdAtEpochMs != null
               ? Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
               : undefined;
-          this.writeEntryData(
+
+          await this.writeEntryData(
             entry.data,
             entry.propertyValues,
             entry.key,
@@ -822,7 +837,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  toOptionalTagGivenLookup(lookup: TagLookup): Tag | undefined {
+  async toOptionalTagGivenLookup(lookup: TagLookup): Promise<Tag | undefined> {
     if (lookup == null) {
       throw new Error("lookup is required");
     }
@@ -834,10 +849,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  private toTagGivenPortableTag(
+  private async toTagGivenPortableTag(
     portableTag: PortableTag,
     createIfMissing: boolean = false
-  ): Tag {
+  ): Promise<Tag> {
     if (portableTag.tagPrefixLabel == null) {
       throw new Error("Missing tagPrefixLabel in portableTag");
     }
@@ -861,7 +876,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (tag == null && createIfMissing == true) {
       const tagKey = StringUtil.stringOfRandomCharacters(12);
 
-      const tagPrefix = this.toTagPrefixGivenLabel(
+      const tagPrefix = await this.toTagPrefixGivenLabel(
         portableTag.tagPrefixLabel,
         true
       );
@@ -883,7 +898,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return tag;
   }
 
-  metricGivenMetricKey(metricKey: string): Metric {
+  async metricGivenMetricKey(metricKey: string): Promise<Metric> {
     let metric = this._metrics.get(metricKey);
     if (metric == null) {
       metric = this.addActor(
@@ -898,12 +913,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return metric;
   }
 
-  writeEntryData(
+  async writeEntryData(
     entryData: T,
     propertyValues: Dict<JSONSerializable> = {},
     entryKey?: string,
     createdAt?: Instant
-  ): Entry<T> {
+  ): Promise<Entry<T>> {
     if (entryKey == null) {
       entryKey = UniqueId.ofRandom().toUUIDString();
     }
@@ -912,8 +927,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const oldPortableEntry =
-      this.toOptionalEntryGivenKey(entryKey)?.toPortableEntry();
+    const oldEntry = await this.toOptionalEntryGivenKey(entryKey);
+    const oldPortableEntry = oldEntry?.toPortableEntry();
     const oldData = oldPortableEntry?.data;
     const oldPropertyValues = oldPortableEntry?.propertyValues;
 
@@ -938,7 +953,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const now = Instant.ofNow();
     let didCreateNewEntry = false;
 
-    let entry = this.toOptionalEntryGivenKey(entryKey);
+    let entry = await this.toOptionalEntryGivenKey(entryKey);
     if (entry == null) {
       entry = new Entry<T>({
         key: entryKey,
@@ -954,11 +969,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry.propertyValues = propertyValues;
 
     this.stopwatch.start("save");
-    entry.save();
+    await entry.save();
     this.stopwatch.stop("save");
 
     this._entryKeys.add(entryKey);
-    this.rebuildMetadataGivenEntry(entry);
+    await this.rebuildMetadataGivenEntry(entry);
 
     if (didCreateNewEntry) {
       this.collectionDidChange.emit();
@@ -971,12 +986,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return entry;
   }
 
-  deleteEntryKey(entryKey: string): void {
+  async deleteEntryKey(entryKey: string): Promise<void> {
     if (entryKey.length < 5) {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const existingRecord = this.toOptionalEntryGivenKey(entryKey);
+    const existingRecord = await this.toOptionalEntryGivenKey(entryKey);
     if (existingRecord == null) {
       return;
     }
@@ -988,7 +1003,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.entryWillChange.emit(change);
 
-    this.removeMetadataGivenEntryKey(entryKey);
+    await this.removeMetadataGivenEntryKey(entryKey);
 
     this._db.runQuery(
       `

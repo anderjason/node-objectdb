@@ -50,7 +50,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.status = "unknown";
   }
 
-  load(): boolean {
+  async load(): Promise<boolean> {
     const row = this.props.db.toFirstRow(
       "SELECT data, createdAt, updatedAt FROM entries WHERE key = ?",
       [this.key]
@@ -75,7 +75,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     return true;
   }
 
-  save(): void {
+  async save(): Promise<void> {
     const data = JSON.stringify(this.data);
 
     this.updatedAt = Instant.ofNow();
@@ -117,7 +117,9 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
 
     const deleteQuery = this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ? AND propertyKey = ?");
 
-    this.props.objectDb.toProperties().forEach((property) => {
+    const properties = await this.props.objectDb.toProperties();
+    
+    for (const property of properties) {
       const value = this.propertyValues[property.key];
       if (value != null) {
         const valueStr = JSON.stringify(value);
@@ -125,7 +127,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
       } else {
         deleteQuery.run(this.key, property.key);
       }
-    });
+    }
 
     this.status = "saved";
   }

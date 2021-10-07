@@ -28,6 +28,7 @@ Test.define("ObjectDb can be created", async () => {
 
 Test.define("ObjectDb can write and read a row", async () => {
   await localFile.deleteFile();
+
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => [],
@@ -35,7 +36,7 @@ Test.define("ObjectDb can write and read a row", async () => {
   });
   fileDb.activate();
 
-  const entry = fileDb.writeEntryData({
+  const entry = await fileDb.writeEntryData({
     message: "hello world",
   });
 
@@ -45,7 +46,7 @@ Test.define("ObjectDb can write and read a row", async () => {
   Test.assert(entry.updatedAt != null);
   Test.assert(entry.data.message === "hello world");
 
-  const result = fileDb.toEntryGivenKey(entry.key);
+  const result = await fileDb.toEntryGivenKey(entry.key);
   Test.assertIsDeepEqual(result.data, entry.data);
 
   fileDb.deactivate();
@@ -53,6 +54,7 @@ Test.define("ObjectDb can write and read a row", async () => {
 
 Test.define("ObjectDb can assign tags", async () => {
   await localFile.deleteFile();
+
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => {
@@ -71,7 +73,7 @@ Test.define("ObjectDb can assign tags", async () => {
   });
   fileDb.activate();
 
-  const entry = fileDb.writeEntryData({
+  const entry = await fileDb.writeEntryData({
     message: "hello world",
   });
 
@@ -113,6 +115,7 @@ Test.define("ObjectDb can assign tags", async () => {
 
 Test.define("ObjectDb can assign metrics", async () => {
   await localFile.deleteFile();
+
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => [],
@@ -126,7 +129,7 @@ Test.define("ObjectDb can assign metrics", async () => {
   });
   fileDb.activate();
 
-  const entry = fileDb.writeEntryData({
+  const entry = await fileDb.writeEntryData({
     message: "hello world",
   });
 
@@ -150,6 +153,7 @@ Test.define("ObjectDb can assign metrics", async () => {
 
 Test.define("ObjectDb can have properties", async () => {
   await localFile.deleteFile();
+
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => [],
@@ -163,7 +167,7 @@ Test.define("ObjectDb can have properties", async () => {
   });
   fileDb.activate();
 
-  fileDb.setProperty({
+  await fileDb.setProperty({
     key: "status",
     label: "Status",
     listOrder: 0,
@@ -175,7 +179,7 @@ Test.define("ObjectDb can have properties", async () => {
     ],
   });
 
-  const statusDefinition = fileDb.toPropertyGivenKey("status");
+  const statusDefinition = await fileDb.toPropertyGivenKey("status");
   Test.assert(statusDefinition != null);
   Test.assert(statusDefinition.label === "Status");
 
@@ -184,6 +188,7 @@ Test.define("ObjectDb can have properties", async () => {
 
 Test.define("ObjectDb can filter by property automatically", async () => {
   await localFile.deleteFile();
+
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => [],
@@ -191,7 +196,7 @@ Test.define("ObjectDb can filter by property automatically", async () => {
   });
   fileDb.activate();
 
-  fileDb.setProperty({
+  await fileDb.setProperty({
     key: "status",
     label: "Status",
     listOrder: 0,
@@ -203,26 +208,26 @@ Test.define("ObjectDb can filter by property automatically", async () => {
     ],
   });
 
-  fileDb.writeEntryData({
+  await fileDb.writeEntryData({
     message: "low status",
   }, {
     status: "low",
   });
 
-  fileDb.writeEntryData({
+  await fileDb.writeEntryData({
     message: "medium status",
   }, {
     status: "medium",
   });
   
-  const matchLow = fileDb.toEntries({
+  const matchLow = await fileDb.toEntries({
     requireTags: [{
       tagPrefixLabel: "Status",
       tagLabel: "low",
     }]
   });
 
-  const matchMedium = fileDb.toEntries({
+  const matchMedium = await fileDb.toEntries({
     requireTags: [{
       tagPrefixLabel: "Status",
       tagLabel: "medium",
@@ -242,6 +247,7 @@ Test.define("ObjectDb can filter by property automatically", async () => {
 
 Test.define("Select properties without a value can be filtered with 'Not set'", async () => {
   await localFile.deleteFile();
+
   const fileDb = new ObjectDb<TestEntryData>({
     localFile,
     tagsGivenEntry: (entry) => [],
@@ -249,7 +255,7 @@ Test.define("Select properties without a value can be filtered with 'Not set'", 
   });
   fileDb.activate();
 
-  fileDb.setProperty({
+  await fileDb.setProperty({
     key: "status",
     label: "Status",
     listOrder: 0,
@@ -261,17 +267,17 @@ Test.define("Select properties without a value can be filtered with 'Not set'", 
     ],
   });
 
-  fileDb.writeEntryData({
+  await fileDb.writeEntryData({
     message: "low status",
   });
 
-  fileDb.writeEntryData({
+  await fileDb.writeEntryData({
     message: "medium status",
   }, {
     status: "medium",
   });
   
-  const matchLow = fileDb.toEntries({
+  const matchLow = await fileDb.toEntries({
     requireTags: [{
       tagPrefixLabel: "Status",
       tagLabel: "Not set",
@@ -304,25 +310,25 @@ Test.define("ObjectDb can find entries by portable tag", async () => {
   });
   fileDb.activate();
   
-  const one = fileDb.writeEntryData({
+  const one = await fileDb.writeEntryData({
     message: "one",
   });
 
-  const two = fileDb.writeEntryData({
+  const two = await fileDb.writeEntryData({
     message: "two",
   });
 
   Test.assert(one.key !== two.key);
 
-  const resultOne = fileDb.toOptionalFirstEntry({
+  const resultOne = await fileDb.toOptionalFirstEntry({
     requireTags: [tagGivenMessage("one")],
   });
 
-  const resultTwo = fileDb.toOptionalFirstEntry({
+  const resultTwo = await fileDb.toOptionalFirstEntry({
     requireTags: [tagGivenMessage("two")],
   });
 
-  const resultThree = fileDb.toOptionalFirstEntry({
+  const resultThree = await fileDb.toOptionalFirstEntry({
     requireTags: [tagGivenMessage("three")],
   });
 
@@ -332,7 +338,7 @@ Test.define("ObjectDb can find entries by portable tag", async () => {
   Test.assert(resultOne.key === one.key);
   Test.assert(resultTwo.key === two.key);
 
-  const count = fileDb.toEntryCount([tagGivenMessage("one")]);
+  const count = await fileDb.toEntryCount([tagGivenMessage("one")]);
   Test.assert(count === 1);
 
   fileDb.deactivate();

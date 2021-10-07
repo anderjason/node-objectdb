@@ -12,7 +12,7 @@ class Entry extends PropsObject_1.PropsObject {
         this.updatedAt = props.updatedAt || props.createdAt;
         this.status = "unknown";
     }
-    load() {
+    async load() {
         const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
         if (row == null) {
             this.status = "new";
@@ -29,7 +29,7 @@ class Entry extends PropsObject_1.PropsObject {
         this.status = "saved";
         return true;
     }
-    save() {
+    async save() {
         const data = JSON.stringify(this.data);
         this.updatedAt = time_1.Instant.ofNow();
         if (this.createdAt == null) {
@@ -59,7 +59,8 @@ class Entry extends PropsObject_1.PropsObject {
       DO UPDATE SET propertyValue=?;
     `);
         const deleteQuery = this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ? AND propertyKey = ?");
-        this.props.objectDb.toProperties().forEach((property) => {
+        const properties = await this.props.objectDb.toProperties();
+        for (const property of properties) {
             const value = this.propertyValues[property.key];
             if (value != null) {
                 const valueStr = JSON.stringify(value);
@@ -68,7 +69,7 @@ class Entry extends PropsObject_1.PropsObject {
             else {
                 deleteQuery.run(this.key, property.key);
             }
-        });
+        }
         this.status = "saved";
     }
     toPortableEntry() {

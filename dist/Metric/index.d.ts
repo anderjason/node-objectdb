@@ -7,14 +7,14 @@ export interface MetricProps {
 }
 export declare class Metric extends Actor<MetricProps> {
     readonly key: string;
-    get entryMetricValues(): ReadOnlyMap<string, string>;
     private _entryMetricValues;
     private _readOnlyMetricValues;
     private _upsertEntryMetricValueQuery;
     private _deleteEntryMetricValueQuery;
     constructor(props: MetricProps);
     onActivate(): void;
+    toEntryMetricValues(): Promise<ReadOnlyMap<string, string>>;
     private loadOnce;
-    setValue(key: string, newValue: string): void;
-    deleteKey(key: string): void;
+    setValue(key: string, newValue: string): Promise<void>;
+    deleteKey(key: string): Promise<void>;
 }
