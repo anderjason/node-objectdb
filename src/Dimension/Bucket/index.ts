@@ -1,2 +1,0 @@
-import { Actor } from "skytree";
-

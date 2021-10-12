@@ -25,7 +25,7 @@ export interface Order {
 export type TagLookup = string | PortableTag;
 
 export interface ObjectDbReadOptions {
-  requireTags?: TagLookup[];
+  filter?: AbsoluteBucketIdentifier[];
   orderByMetric?: Order;
   limit?: number;
   offset?: number;
@@ -35,7 +35,6 @@ export interface ObjectDbReadOptions {
 export interface ObjectDbProps<T> {
   localFile: LocalFile;
 
-  tagsGivenEntry: (entry: Entry<T>) => PortableTag[];
   metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
 
   cacheSize?: number;
@@ -82,10 +81,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   protected _isLoaded = Observable.givenValue(false, Observable.isStrictEqual);
   readonly isLoaded = ReadOnlyObservable.givenObservable(this._isLoaded);
 
-  private _tagPrefixesByKey = new Map<string, TagPrefix>();
-  private _tagPrefixesByNormalizedLabel = new Map<string, TagPrefix>();
-  private _tagsByKey = new Map<string, Tag>();
-  private _tagsByHashcode = new Map<number, Tag>();
   private _dimensionsByKey = new Map<string, Dimension<T, DimensionProps>>();
   private _metrics = new Map<string, Metric>();
   private _properties = new Map<string, PropertyDefinition>();
@@ -127,16 +122,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.load();
   }
 
-  get tags(): Tag[] {
-    return Array.from(this._tagsByKey.values());
-  }
-
   get metrics(): Metric[] {
     return Array.from(this._metrics.values());
-  }
-
-  get tagPrefixes(): TagPrefix[] {
-    return Array.from(this._tagPrefixesByKey.values());
   }
 
   private async load(): Promise<void> {
@@ -150,23 +137,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       CREATE TABLE IF NOT EXISTS meta (
         id INTEGER PRIMARY KEY CHECK (id = 0),
         properties TEXT NOT NULL
-      )
-    `);
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS tagPrefixes (
-        key TEXT PRIMARY KEY,
-        label TEXT NOT NULL,
-        normalizedLabel TEXT NOT NULL
-      )
-    `);
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS tags (
-        key TEXT PRIMARY KEY,
-        tagPrefixKey TEXT NOT NULL,
-        label TEXT NOT NULL,
-        normalizedLabel TEXT NOT NULL
       )
     `);
 
@@ -220,16 +190,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     db.runQuery(`
-      CREATE TABLE IF NOT EXISTS tagEntries (
-        tagKey TEXT NOT NULL,
-        entryKey TEXT NOT NULL,
-        FOREIGN KEY(tagKey) REFERENCES tags(key),
-        FOREIGN KEY(entryKey) REFERENCES entries(key),
-        UNIQUE(tagKey, entryKey)
-      )
-    `);
-
-    db.runQuery(`
       CREATE TABLE IF NOT EXISTS metricValues (
         metricKey TEXT NOT NULL,
         entryKey TEXT NOT NULL,
@@ -238,31 +198,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         FOREIGN KEY(entryKey) REFERENCES entries(key)
         UNIQUE(metricKey, entryKey)
       )
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagPrefixNormalizedLabel
-      ON tagPrefixes(normalizedLabel);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagPrefixKey
-      ON tags(tagPrefixKey);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagPrefixValue
-      ON tags(tagPrefixKey, normalizedLabel);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagEntriesTagKey 
-      ON tagEntries(tagKey);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagEntriesEntryKey
-      ON tagEntries(entryKey);
     `);
 
     db.runQuery(`
@@ -290,23 +225,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       ON propertyValues(propertyKey);
     `);
 
-    this.stopwatch.start("pruneTagsAndMetrics");
-    db.runQuery(`
-      DELETE FROM tags WHERE key IN (
-        SELECT t.key FROM tags AS t
-        LEFT JOIN tagEntries AS te ON te.tagKey = t.key
-        WHERE te.entryKey IS NULL
-      );    
-    `);
-    db.runQuery(`
-      DELETE FROM metrics WHERE key IN (
-        SELECT m.key FROM metrics AS m
-        LEFT JOIN metricValues AS mv ON mv.metricKey = m.key
-        WHERE mv.entryKey IS NULL
-      );    
-    `);
-    this.stopwatch.stop("pruneTagsAndMetrics");
-
     db.prepareCached(
       "INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)"
     ).run("{}");
@@ -317,18 +235,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       // assign property definitions
       this._properties.set(key, JSON.parse(definition));
     });
-
-    this.stopwatch.start("selectTagPrefixes");
-    const tagPrefixRows = db.toRows(
-      "SELECT key, label, normalizedLabel FROM tagPrefixes"
-    );
-    this.stopwatch.stop("selectTagPrefixes");
-
-    this.stopwatch.start("selectTagKeys");
-    const tagRows = db.toRows(
-      "SELECT key, tagPrefixKey, label, normalizedLabel FROM tags"
-    );
-    this.stopwatch.stop("selectTagKeys");
 
     this.stopwatch.start("selectEntryKeys");
     db.toRows("SELECT key FROM entries").forEach((row) => {
@@ -341,61 +247,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       .toRows("SELECT key FROM metrics")
       .map((row) => row.key);
     this.stopwatch.stop("selectMetricKeys");
-
-    this.stopwatch.start("createTagPrefixes");
-    const tagPrefixCount = tagPrefixRows.length;
-    for (let i = 0; i < tagPrefixCount; i++) {
-      const row = tagPrefixRows[i];
-      const { key, label, normalizedLabel } = row;
-
-      this.stopwatch.start("createTagPrefix");
-      const tagPrefix = new TagPrefix({
-        tagPrefixKey: key,
-        label,
-        normalizedLabel,
-        db: this._db,
-        stopwatch: this.stopwatch,
-      });
-      this.stopwatch.stop("createTagPrefix");
-
-      this.stopwatch.start("activateTagPrefix");
-      this.addActor(tagPrefix);
-      this.stopwatch.stop("activateTagPrefix");
-
-      this._tagPrefixesByKey.set(tagPrefix.key, tagPrefix);
-      this._tagPrefixesByNormalizedLabel.set(
-        tagPrefix.normalizedLabel,
-        tagPrefix
-      );
-    }
-    this.stopwatch.stop("createTagPrefixes");
-
-    this.stopwatch.start("createTags");
-    const tagKeyCount = tagRows.length;
-    for (let i = 0; i < tagKeyCount; i++) {
-      const tagRow = tagRows[i];
-      const { key, tagPrefixKey, label, normalizedLabel } = tagRow;
-
-      const tagPrefix = this._tagPrefixesByKey.get(tagPrefixKey);
-      this.stopwatch.start("createTag");
-      const tag = new Tag({
-        tagKey: key,
-        tagPrefix,
-        label,
-        normalizedLabel,
-        db: this._db,
-        stopwatch: this.stopwatch,
-      });
-      this.stopwatch.stop("createTag");
-
-      this.stopwatch.start("activateTag");
-      this.addActor(tag);
-      this.stopwatch.stop("activateTag");
-
-      this._tagsByKey.set(key, tag);
-      this._tagsByHashcode.set(tag.toHashCode(), tag);
-    }
-    this.stopwatch.stop("createTags");
 
     this.stopwatch.start("createMetrics");
     const metricKeyCount = metricKeys.length;
@@ -439,17 +290,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
-      const tagLookups = options.requireTags ?? [];
-      const tags: Tag[] = [];
+      const bucketIdentifiers: AbsoluteBucketIdentifier[] = options.filter ?? [];
+      const buckets: Bucket<T>[] = [];
       
-      for (const lookup of tagLookups) {
-        const tag = await this.toOptionalTagGivenLookup(lookup);
-        if (tag != null) {
-          tags.push(tag);
+      for (const bucketIdentifier of bucketIdentifiers) {
+        const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+        if (bucket != null) {
+          buckets.push(bucket);
         }
       }
 
-      const hashCodes = tags.map((tag) => tag.toHashCode());
+      const hashCodes = buckets.map((bucket) => bucket.toHashCode());
 
       const cacheKeyData = `${options.cacheKey}:${
         options.orderByMetric?.direction
@@ -466,17 +317,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     if (entryKeys == null) {
-      if (options.requireTags == null || options.requireTags.length === 0) {
+      if (options.filter == null || options.filter.length === 0) {
         entryKeys = Array.from(this._entryKeys);
       } else {
         const sets: Set<string>[] = [];
 
-        for (const tagLookup of options.requireTags) {
-          const tag = await this.toOptionalTagGivenLookup(tagLookup);
-          if (tag == null) {
+        for (const bucketIdentifier of options.filter) {
+          const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+          if (bucket == null) {
             sets.push(new Set<string>());
           } else {
-            sets.push(new Set(tag.entryKeys.values()));
+            const entryKeys: Set<string> = await bucket.toEntryKeys();
+            sets.push(entryKeys);
           }
         }
 
@@ -557,9 +409,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  async toEntryCount(requireTags?: TagLookup[]): Promise<number> {
+  async toEntryCount(filter?: AbsoluteBucketIdentifier[]): Promise<number> {
     const keys = await this.toEntryKeys({
-      requireTags,
+      filter,
     });
 
     return keys.length;
@@ -629,72 +481,23 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async setProperty(property: PropertyDefinition): Promise<void> {
-    let tagPrefix = this._tagPrefixesByKey.get(property.key);
-    if (tagPrefix == null) {
-      tagPrefix = this.addActor(
-        new TagPrefix({
-          tagPrefixKey: property.key,
-          label: property.label,
-          stopwatch: this.stopwatch,
-          db: this._db,
-        })
-      );
-
-      this._tagPrefixesByKey.set(tagPrefix.key, tagPrefix);
-      this._tagPrefixesByNormalizedLabel.set(
-        tagPrefix.normalizedLabel,
-        tagPrefix
-      );
-    }
-
-    this._properties.set(property.key, property);
-
-    const definition = JSON.stringify(property);
-    this._db
-      .prepareCached(
-        `
-      INSERT INTO properties (key, definition)
-      VALUES(?, ?)
-      ON CONFLICT(key) 
-      DO UPDATE SET definition=?;
-      `
-      )
-      .run([property.key, definition, definition]);
   }
 
   async deletePropertyKey(key: string): Promise<void> {
-    this._properties.delete(key);
-
-    this._db
-      .prepareCached("DELETE FROM propertyValues WHERE propertyKey = ?")
-      .run(key);
-    this._db.prepareCached("DELETE FROM properties WHERE key = ?").run(key);
-
-    // TODO delete tagEntries, tags and tagPrefix
   }
 
   async toPropertyGivenKey(key: string): Promise<PropertyDefinition> {
-    return this._properties.get(key);
+    return undefined;
   }
 
   async toProperties(): Promise<PropertyDefinition[]> {
-    return Array.from(this._properties.values());
+    return [];
   }
 
   async removeMetadataGivenEntryKey(entryKey: string): Promise<void> {
-    const tagKeys = this._db
-      .prepareCached(
-        "select distinct tagKey from tagEntries where entryKey = ?"
-      )
-      .all(entryKey)
-      .map((row) => row.tagKey);
-
-    tagKeys.forEach((tagKey) => {
-      const tag = this._tagsByKey.get(tagKey);
-      if (tag != null) {
-        tag.deleteEntryKey(entryKey);
-      }
-    });
+    for (const dimension of this._dimensionsByKey.values()) {
+      await dimension.deleteEntryKey(entryKey);
+    }
 
     const metricKeys = this._db
       .prepareCached(
@@ -720,66 +523,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  async toTagPrefixGivenLabel(
-    tagPrefixLabel: string,
-    createIfMissing: boolean
-  ): Promise<TagPrefix> {
-    const normalizedLabel = normalizedValueGivenString(tagPrefixLabel);
-    let tagPrefix = this._tagPrefixesByNormalizedLabel.get(normalizedLabel);
-
-    if (tagPrefix == null && createIfMissing) {
-      tagPrefix = this.addActor(
-        new TagPrefix({
-          tagPrefixKey: StringUtil.stringOfRandomCharacters(6),
-          label: tagPrefixLabel,
-          stopwatch: this.stopwatch,
-          db: this._db,
-        })
-      );
-
-      this._tagPrefixesByNormalizedLabel.set(normalizedLabel, tagPrefix);
-    }
-
-    return tagPrefix;
-  }
-
-  private async tagGivenPropertyKeyAndValue(
-    propertyKey: string,
-    value: any
-  ): Promise<PortableTag> {
-    if (propertyKey == null) {
-      return;
-    }
-
-    const property = await this.toPropertyGivenKey(propertyKey);
-    if (property == null) {
-      return;
-    }
-
-    switch (property.type) {
-      case "select":
-        const options = property.options;
-        if (value == null) {
-          return {
-            tagPrefixLabel: property.label,
-            tagLabel: "Not set",
-          };
-        }
-
-        const option = options.find((op) => op.key === value);
-        if (option == null) {
-          return;
-        }
-
-        return {
-          tagPrefixLabel: property.label,
-          tagLabel: option.label,
-        };
-      default:
-        return undefined;
-    }
-  }
-
   toOptionalBucketGivenIdentifier(bucketIdentifier: AbsoluteBucketIdentifier): Bucket<T> | undefined {
     if (bucketIdentifier == null) {
       return undefined;
@@ -793,43 +536,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
   }
 
-  async propertyTagKeysGivenEntry(entry: Entry<T>): Promise<PortableTag[]> {
-    const result: PortableTag[] = [];
-
-    const properties = await this.toProperties();
-
-    for (const property of properties) {
-      const value = entry.propertyValues[property.key];
-      const tag = await this.tagGivenPropertyKeyAndValue(property.key, value);
-      if (tag != null) {
-        result.push(tag);
-      }
-    }
-
-    return result;
-  }
-
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
     this.stopwatch.start("rebuildMetadataGivenEntry");
     await this.removeMetadataGivenEntryKey(entry.key);
 
-    const propertyTags = await this.propertyTagKeysGivenEntry(entry);
-    const tags = [
-      ...propertyTags,
-      ...this.props.tagsGivenEntry(entry),
-    ];
-
-    const portableTags = uniquePortableTags(tags);
     const metricValues = this.props.metricsGivenEntry(entry);
 
     metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
     metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
 
-    for (const portableTag of portableTags) {
-      const tag = await this.toTagGivenPortableTag(portableTag, true);
-      tag.addEntryKey(entry.key);
+    for (const dimension of this._dimensionsByKey.values()) {
+      await dimension.entryDidChange(entry.key);
     }
-
+    
     for (const metricKey of Object.keys(metricValues)) {
       const metric = await this.metricGivenMetricKey(metricKey);
 
@@ -878,67 +597,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       default:
         throw new Error(`Unsupported entry status '${entry.status}'`);
     }
-  }
-
-  async toOptionalTagGivenLookup(lookup: TagLookup): Promise<Tag | undefined> {
-    if (lookup == null) {
-      throw new Error("lookup is required");
-    }
-
-    if (typeof lookup === "string") {
-      return this._tagsByKey.get(lookup);
-    } else {
-      return this.toTagGivenPortableTag(lookup);
-    }
-  }
-
-  private async toTagGivenPortableTag(
-    portableTag: PortableTag,
-    createIfMissing: boolean = false
-  ): Promise<Tag> {
-    if (portableTag.tagPrefixLabel == null) {
-      throw new Error("Missing tagPrefixLabel in portableTag");
-    }
-
-    if (portableTag.tagLabel == null) {
-      throw new Error("Missing tagLabel in portableTag");
-    }
-
-    const normalizedPrefixLabel = normalizedValueGivenString(
-      portableTag.tagPrefixLabel
-    );
-    const normalizedLabel = normalizedValueGivenString(portableTag.tagLabel);
-
-    const hashCode = hashCodeGivenTagPrefixAndNormalizedValue(
-      normalizedPrefixLabel,
-      normalizedLabel
-    );
-
-    let tag = this._tagsByHashcode.get(hashCode);
-
-    if (tag == null && createIfMissing == true) {
-      const tagKey = StringUtil.stringOfRandomCharacters(12);
-
-      const tagPrefix = await this.toTagPrefixGivenLabel(
-        portableTag.tagPrefixLabel,
-        true
-      );
-
-      tag = this.addActor(
-        new Tag({
-          tagKey,
-          tagPrefix,
-          label: portableTag.tagLabel,
-          db: this._db,
-          stopwatch: this.stopwatch,
-        })
-      );
-
-      this._tagsByKey.set(tagKey, tag);
-      this._tagsByHashcode.set(hashCode, tag);
-    }
-
-    return tag;
   }
 
   async metricGivenMetricKey(metricKey: string): Promise<Metric> {

@@ -2,9 +2,10 @@ import {
   Observable,
   ReadOnlyObservable,
   Receipt,
-  TypedEvent
+  TypedEvent,
 } from "@anderjason/observable";
 import { Debounce, Duration } from "@anderjason/time";
+import { StringUtil } from "@anderjason/util";
 import { Actor } from "skytree";
 import { Entry, ObjectDb } from "..";
 import { ReadOnlySet } from "../ReadOnlySet";
@@ -17,8 +18,10 @@ export interface BucketProps<T> {
   storage?: any;
 }
 
-function isAbsoluteBucketIdentifier(identifier: RelativeBucketIdentifier): identifier is AbsoluteBucketIdentifier {
-  return 'dimensionKey' in identifier;
+function isAbsoluteBucketIdentifier(
+  identifier: RelativeBucketIdentifier
+): identifier is AbsoluteBucketIdentifier {
+  return "dimensionKey" in identifier;
 }
 
 export abstract class Bucket<T> extends Actor<BucketProps<T>> {
@@ -28,6 +31,19 @@ export abstract class Bucket<T> extends Actor<BucketProps<T>> {
 
   abstract hasEntryKey(entryKey: string): Promise<boolean>;
   abstract toPortableObject(): PortableBucket;
+  abstract toEntryKeys(): Promise<Set<string>>;
+
+  toBucketIdentifier(): AbsoluteBucketIdentifier {
+    return {
+      dimensionKey: this.props.dimension.key,
+      ...this.props.identifier,
+    };
+  }
+
+  toHashCode(): number {
+    const key = this.props.dimension.key + this.props.identifier.bucketKey;
+    return StringUtil.hashCodeGivenString(key);
+  }
 }
 
 export interface RelativeBucketIdentifier {
@@ -80,7 +96,7 @@ export abstract class Dimension<
     this._saveLater = new Debounce({
       duration: Duration.givenSeconds(1),
       fn: () => {
-        this.save()
+        this.save();
       },
     });
   }
@@ -107,6 +123,8 @@ export abstract class Dimension<
   }
 
   abstract onLoad(data: PortableDimension): void;
+  abstract deleteEntryKey(entryKey: string): Promise<void>;
+  abstract entryDidChange(entryKey: string): Promise<void>;
 
   async save(): Promise<void> {
     const data = JSON.stringify(this.toPortableObject());
@@ -167,20 +185,7 @@ export class MaterializedDimension<T> extends Dimension<
 
     this.cancelOnDeactivate(
       this.objectDb.entryDidChange.subscribe(async (change) => {
-        this._isUpdated.setValue(false);
-        this._waitingForEntryKeys.add(change.key);
-
-        const entry = await this.objectDb.toOptionalEntryGivenKey(change.key);
-        if (entry == null) {
-          await this.removeEntryKey(change.key);
-        } else {
-          await this.rebuildEntry(entry);
-        }
-
-        this._waitingForEntryKeys.delete(change.key);
-        if (this._waitingForEntryKeys.size === 0) {
-          this._isUpdated.setValue(true);
-        }
+        this.entryDidChange(change.key);
       })
     );
   }
@@ -197,19 +202,39 @@ export class MaterializedDimension<T> extends Dimension<
     }
   }
 
-  async removeEntryKey(entryKey: string): Promise<void> {
-    for (const bucket of this._buckets.values()) {
-      (bucket as MaterializedBucket<T>).removeEntryKey(entryKey);
+  async entryDidChange(entryKey: string): Promise<void> {
+    this._isUpdated.setValue(false);
+    this._waitingForEntryKeys.add(entryKey);
+
+    const entry = await this.objectDb.toOptionalEntryGivenKey(entryKey);
+    if (entry == null) {
+      await this.deleteEntryKey(entryKey);
+    } else {
+      await this.rebuildEntry(entry);
+    }
+
+    this._waitingForEntryKeys.delete(entryKey);
+    if (this._waitingForEntryKeys.size === 0) {
+      this._isUpdated.setValue(true);
     }
   }
 
-  async rebuildEntry(entry: Entry<T>): Promise<void> {
-    const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry) ?? [];
+  async deleteEntryKey(entryKey: string): Promise<void> {
+    for (const bucket of this._buckets.values()) {
+      (bucket as MaterializedBucket<T>).deleteEntryKey(entryKey);
+    }
+  }
+
+  private async rebuildEntry(entry: Entry<T>): Promise<void> {
+    const bucketIdentifiers =
+      this.props.bucketIdentifiersGivenEntry(entry) ?? [];
 
     for (const bucketIdentifier of bucketIdentifiers) {
       if (isAbsoluteBucketIdentifier(bucketIdentifier)) {
         if (bucketIdentifier.dimensionKey !== this.props.key) {
-          throw new Error("Received an absolute bucket identifier for a different dimension");
+          throw new Error(
+            "Received an absolute bucket identifier for a different dimension"
+          );
         }
       }
 
@@ -217,7 +242,7 @@ export class MaterializedDimension<T> extends Dimension<
       if (!this._buckets.has(bucketIdentifier.bucketKey)) {
         const bucket = new MaterializedBucket({
           identifier: bucketIdentifier,
-          dimension: this
+          dimension: this,
         });
 
         this.addBucket(bucket);
@@ -234,7 +259,7 @@ export class MaterializedDimension<T> extends Dimension<
 
     for (const bucket of this._buckets.values()) {
       if (!bucketKeys.has(bucket.props.identifier.bucketKey)) {
-        (bucket as MaterializedBucket<T>).removeEntryKey(entry.key);
+        (bucket as MaterializedBucket<T>).deleteEntryKey(entry.key);
       }
     }
   }
@@ -266,6 +291,10 @@ export class MaterializedBucket<T> extends Bucket<T> {
     }
   }
 
+  async toEntryKeys(): Promise<Set<string>> {
+    return new Set(this._entryKeys);
+  }
+
   async hasEntryKey(entryKey: string): Promise<boolean> {
     return this.entryKeys.has(entryKey);
   }
@@ -279,20 +308,13 @@ export class MaterializedBucket<T> extends Bucket<T> {
     this.didChange.emit();
   }
 
-  removeEntryKey(entryKey: string): void {
+  deleteEntryKey(entryKey: string): void {
     if (!this._entryKeys.has(entryKey)) {
       return;
     }
 
     this._entryKeys.delete(entryKey);
     this.didChange.emit();
-  }
-
-  toBucketIdentifier(): AbsoluteBucketIdentifier {
-    return {
-      dimensionKey: this.props.dimension.key,
-      ...this.props.identifier
-    }
   }
 
   toPortableObject(): PortableBucket {
