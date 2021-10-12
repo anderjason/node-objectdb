@@ -26,7 +26,7 @@ export class DbInstance extends Actor<Sqlite3ActorProps> {
       new Receipt(() => {
         this._db.pragma("optimize");
         this._db.close();
-        console.log("Closed database", this.props.localFile.toAbsolutePath());
+        // console.log("Closed database", this.props.localFile.toAbsolutePath());
         this._db = undefined;
       })
     );

@@ -3,6 +3,7 @@ import { Dict } from "@anderjason/observable";
 import { Test } from "@anderjason/tests";
 import { ArrayUtil } from "@anderjason/util";
 import { ObjectDb } from ".";
+import { MaterializedDimension } from "../Dimension";
 import { DbInstance } from "../SqlClient";
 import { PortableTag } from "../Tag/PortableTag";
 
@@ -91,8 +92,6 @@ Test.define("ObjectDb can assign tags", async () => {
     .all(entry.key);
 
   db.deactivate();
-
-  console.log(rows);
 
   Test.assert(
     rows.some(
@@ -208,30 +207,40 @@ Test.define("ObjectDb can filter by property automatically", async () => {
     ],
   });
 
-  await fileDb.writeEntryData({
-    message: "low status",
-  }, {
-    status: "low",
-  });
+  await fileDb.writeEntryData(
+    {
+      message: "low status",
+    },
+    {
+      status: "low",
+    }
+  );
 
-  await fileDb.writeEntryData({
-    message: "medium status",
-  }, {
-    status: "medium",
-  });
-  
+  await fileDb.writeEntryData(
+    {
+      message: "medium status",
+    },
+    {
+      status: "medium",
+    }
+  );
+
   const matchLow = await fileDb.toEntries({
-    requireTags: [{
-      tagPrefixLabel: "Status",
-      tagLabel: "low",
-    }]
+    requireTags: [
+      {
+        tagPrefixLabel: "Status",
+        tagLabel: "low",
+      },
+    ],
   });
 
   const matchMedium = await fileDb.toEntries({
-    requireTags: [{
-      tagPrefixLabel: "Status",
-      tagLabel: "medium",
-    }]
+    requireTags: [
+      {
+        tagPrefixLabel: "Status",
+        tagLabel: "medium",
+      },
+    ],
   });
 
   Test.assert(!ArrayUtil.arrayIsEmptyOrNull(matchLow));
@@ -245,51 +254,59 @@ Test.define("ObjectDb can filter by property automatically", async () => {
   fileDb.deactivate();
 });
 
-Test.define("Select properties without a value can be filtered with 'Not set'", async () => {
-  await localFile.deleteFile();
+Test.define(
+  "Select properties without a value can be filtered with 'Not set'",
+  async () => {
+    await localFile.deleteFile();
 
-  const fileDb = new ObjectDb<TestEntryData>({
-    localFile,
-    tagsGivenEntry: (entry) => [],
-    metricsGivenEntry: (entry) => ({}),
-  });
-  fileDb.activate();
+    const fileDb = new ObjectDb<TestEntryData>({
+      localFile,
+      tagsGivenEntry: (entry) => [],
+      metricsGivenEntry: (entry) => ({}),
+    });
+    fileDb.activate();
 
-  await fileDb.setProperty({
-    key: "status",
-    label: "Status",
-    listOrder: 0,
-    type: "select",
-    options: [
-      { key: "low", label: "Low" },
-      { key: "medium", label: "Medium" },
-      { key: "high", label: "High" },
-    ],
-  });
+    await fileDb.setProperty({
+      key: "status",
+      label: "Status",
+      listOrder: 0,
+      type: "select",
+      options: [
+        { key: "low", label: "Low" },
+        { key: "medium", label: "Medium" },
+        { key: "high", label: "High" },
+      ],
+    });
 
-  await fileDb.writeEntryData({
-    message: "low status",
-  });
+    await fileDb.writeEntryData({
+      message: "low status",
+    });
 
-  await fileDb.writeEntryData({
-    message: "medium status",
-  }, {
-    status: "medium",
-  });
-  
-  const matchLow = await fileDb.toEntries({
-    requireTags: [{
-      tagPrefixLabel: "Status",
-      tagLabel: "Not set",
-    }]
-  });
+    await fileDb.writeEntryData(
+      {
+        message: "medium status",
+      },
+      {
+        status: "medium",
+      }
+    );
 
-  Test.assert(!ArrayUtil.arrayIsEmptyOrNull(matchLow));
-  Test.assert(matchLow.length == 1);
-  Test.assert(matchLow[0].data.message === "low status");
+    const matchLow = await fileDb.toEntries({
+      requireTags: [
+        {
+          tagPrefixLabel: "Status",
+          tagLabel: "Not set",
+        },
+      ],
+    });
 
-  fileDb.deactivate();
-});
+    Test.assert(!ArrayUtil.arrayIsEmptyOrNull(matchLow));
+    Test.assert(matchLow.length == 1);
+    Test.assert(matchLow[0].data.message === "low status");
+
+    fileDb.deactivate();
+  }
+);
 
 Test.define("ObjectDb can find entries by portable tag", async () => {
   function tagGivenMessage(message: string): PortableTag {
@@ -309,7 +326,7 @@ Test.define("ObjectDb can find entries by portable tag", async () => {
     metricsGivenEntry: (entry) => ({}),
   });
   fileDb.activate();
-  
+
   const one = await fileDb.writeEntryData({
     message: "one",
   });
@@ -342,4 +359,136 @@ Test.define("ObjectDb can find entries by portable tag", async () => {
   Test.assert(count === 1);
 
   fileDb.deactivate();
+});
+
+Test.define("ObjectDb supports materialized dimensions", async () => {
+  const md = new MaterializedDimension<TestEntryData>({
+    key: "message",
+    label: "Message",
+    bucketIdentifiersGivenEntry: (entry) => {
+      return [
+        {
+          bucketKey: entry.data.message,
+          bucketLabel: entry.data.message,
+        },
+      ];
+    },
+  });
+
+  await localFile.deleteFile();
+
+  const fileDb = new ObjectDb<TestEntryData>({
+    localFile,
+    tagsGivenEntry: (entry) => [],
+    metricsGivenEntry: (entry) => ({}),
+    dimensions: [md]
+  });
+  fileDb.activate();
+
+  const one = await fileDb.writeEntryData({
+    message: "one",
+  });
+
+  const two = await fileDb.writeEntryData({
+    message: "two",
+  });
+
+  await md.isUpdated.toPromise(v => v == true);
+
+  const bucketOne = md.toOptionalBucketGivenKey("one");
+  const bucketTwo = md.toOptionalBucketGivenKey("two");
+
+  Test.assert(await bucketOne.hasEntryKey(one.key) == true);
+  Test.assert(await bucketOne.hasEntryKey(two.key) == false);
+
+  Test.assert(await bucketTwo.hasEntryKey(one.key) == false);
+  Test.assert(await bucketTwo.hasEntryKey(two.key) == true);
+
+  two.data.message = "three";
+  two.status = "updated";
+  await fileDb.writeEntry(two);
+
+  await md.isUpdated.toPromise(v => v == true);
+
+  const bucketThree = md.toOptionalBucketGivenKey("three");
+  Test.assert(await bucketOne.hasEntryKey(two.key) == false);
+  Test.assert(await bucketTwo.hasEntryKey(two.key) == false);
+  Test.assert(await bucketThree.hasEntryKey(two.key) == true);
+
+  fileDb.deactivate();
+});
+
+Test.define("ObjectDb materialized dimensions save their state", async () => {
+  const md = new MaterializedDimension<TestEntryData>({
+    key: "message",
+    label: "Message",
+    bucketIdentifiersGivenEntry: (entry) => {
+      return [
+        {
+          bucketKey: entry.data.message,
+          bucketLabel: entry.data.message,
+        },
+      ];
+    },
+  });
+
+  await localFile.deleteFile();
+
+  const fileDb = new ObjectDb<TestEntryData>({
+    localFile,
+    tagsGivenEntry: (entry) => [],
+    metricsGivenEntry: (entry) => ({}),
+    dimensions: [md]
+  });
+  fileDb.activate();
+
+  const one = await fileDb.writeEntryData({
+    message: "one",
+  });
+
+  const two = await fileDb.writeEntryData({
+    message: "two",
+  });
+
+  await fileDb.isLoaded.toPromise(v => v == true);
+  await md.isUpdated.toPromise(v => v == true);
+
+  md.save();
+  fileDb.deactivate();
+
+  // ----
+
+  const md2 = new MaterializedDimension<TestEntryData>({
+    key: "message",   // key needs to match the key of the first materialized dimension
+    label: "Message",
+    bucketIdentifiersGivenEntry: (entry) => {
+      return [
+        {
+          bucketKey: entry.data.message,
+          bucketLabel: entry.data.message,
+        },
+      ];
+    },
+  });
+
+  const fileDb2 = new ObjectDb<TestEntryData>({
+    localFile,
+    tagsGivenEntry: (entry) => [],
+    metricsGivenEntry: (entry) => ({}),
+    dimensions: [md2]
+  });
+  fileDb2.activate();  
+  
+  await md2.isUpdated.toPromise(v => v == true);
+
+  const bucketOne2 = md2.toOptionalBucketGivenKey("one");
+  const bucketTwo2 = md2.toOptionalBucketGivenKey("two");
+
+  Test.assert(await bucketOne2.hasEntryKey(one.key) == true);
+  Test.assert(await bucketOne2.hasEntryKey(two.key) == false);
+
+  Test.assert(await bucketTwo2.hasEntryKey(one.key) == false);
+  Test.assert(await bucketTwo2.hasEntryKey(two.key) == true);
+
+  fileDb2.deactivate();
 });

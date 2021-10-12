@@ -1,9 +1,10 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
-import { Dict, TypedEvent } from "@anderjason/observable";
+import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
+import { RelativeBucketIdentifier, Dimension, DimensionProps, AbsoluteBucketIdentifier, Bucket } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
@@ -38,6 +39,7 @@ export interface ObjectDbProps<T> {
   metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
 
   cacheSize?: number;
+  dimensions?: Dimension<T, DimensionProps>[];
 }
 
 export interface EntryChange<T> {
@@ -77,10 +79,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   readonly stopwatch: Stopwatch;
 
+  protected _isLoaded = Observable.givenValue(false, Observable.isStrictEqual);
+  readonly isLoaded = ReadOnlyObservable.givenObservable(this._isLoaded);
+
   private _tagPrefixesByKey = new Map<string, TagPrefix>();
   private _tagPrefixesByNormalizedLabel = new Map<string, TagPrefix>();
   private _tagsByKey = new Map<string, Tag>();
   private _tagsByHashcode = new Map<number, Tag>();
+  private _dimensionsByKey = new Map<string, Dimension<T, DimensionProps>>();
   private _metrics = new Map<string, Metric>();
   private _properties = new Map<string, PropertyDefinition>();
   private _entryKeys = new Set<string>();
@@ -176,6 +182,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         data TEXT NOT NULL,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL
+      )
+    `);
+
+    db.runQuery(`
+      CREATE TABLE IF NOT EXISTS dimensions (
+        key text PRIMARY KEY,
+        data TEXT NOT NULL
       )
     `);
 
@@ -355,6 +368,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         tagPrefix
       );
     }
+    this.stopwatch.stop("createTagPrefixes");
 
     this.stopwatch.start("createTags");
     const tagKeyCount = tagRows.length;
@@ -398,6 +412,22 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       this._metrics.set(metricKey, metric);
     }
     this.stopwatch.stop("createMetrics");
+
+    this.stopwatch.start("addDimensions");
+    if (this.props.dimensions != null) {
+      for (const dimension of this.props.dimensions) {
+        dimension.db = this._db;
+        dimension.objectDb = this;
+
+        this.addActor(dimension);
+        await dimension.load();
+
+        this._dimensionsByKey.set(dimension.key, dimension);
+      }
+    }
+    this.stopwatch.stop("addDimensions");
+
+    this._isLoaded.setValue(true);
   }
 
   async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
@@ -748,6 +778,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       default:
         return undefined;
     }
+  }
+
+  toOptionalBucketGivenIdentifier(bucketIdentifier: AbsoluteBucketIdentifier): Bucket<T> | undefined {
+    if (bucketIdentifier == null) {
+      return undefined;
+    }
+
+    const dimension = this._dimensionsByKey.get(bucketIdentifier.dimensionKey);
+    if (dimension == null) {
+      return undefined;
+    }
+
+    return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
   }
 
   async propertyTagKeysGivenEntry(entry: Entry<T>): Promise<PortableTag[]> {
