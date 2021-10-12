@@ -226,8 +226,8 @@ export class MaterializedDimension<T> extends Dimension<
   }
 
   private async rebuildEntry(entry: Entry<T>): Promise<void> {
-    const bucketIdentifiers =
-      this.props.bucketIdentifiersGivenEntry(entry) ?? [];
+    let bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry) ?? [];
+    bucketIdentifiers = bucketIdentifiers.filter((bi) => bi != null);
 
     for (const bucketIdentifier of bucketIdentifiers) {
       if (isAbsoluteBucketIdentifier(bucketIdentifier)) {

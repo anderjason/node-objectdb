@@ -9,19 +9,15 @@ const skytree_1 = require("skytree");
 const Entry_1 = require("../Entry");
 const Metric_1 = require("../Metric");
 const SqlClient_1 = require("../SqlClient");
-const Tag_1 = require("../Tag");
-const TagPrefix_1 = require("../TagPrefix");
-const uniquePortableTags_1 = require("./uniquePortableTags");
 class ObjectDb extends skytree_1.Actor {
     constructor(props) {
         super(props);
         this.collectionDidChange = new observable_1.TypedEvent();
         this.entryWillChange = new observable_1.TypedEvent();
         this.entryDidChange = new observable_1.TypedEvent();
-        this._tagPrefixesByKey = new Map();
-        this._tagPrefixesByNormalizedLabel = new Map();
-        this._tagsByKey = new Map();
-        this._tagsByHashcode = new Map();
+        this._isLoaded = observable_1.Observable.givenValue(false, observable_1.Observable.isStrictEqual);
+        this.isLoaded = observable_1.ReadOnlyObservable.givenObservable(this._isLoaded);
+        this._dimensionsByKey = new Map();
         this._metrics = new Map();
         this._properties = new Map();
         this._entryKeys = new Set();
@@ -47,14 +43,8 @@ class ObjectDb extends skytree_1.Actor {
         }));
         this.load();
     }
-    get tags() {
-        return Array.from(this._tagsByKey.values());
-    }
     get metrics() {
         return Array.from(this._metrics.values());
-    }
-    get tagPrefixes() {
-        return Array.from(this._tagPrefixesByKey.values());
     }
     async load() {
         if (this.isActive == false) {
@@ -68,21 +58,6 @@ class ObjectDb extends skytree_1.Actor {
       )
     `);
         db.runQuery(`
-      CREATE TABLE IF NOT EXISTS tagPrefixes (
-        key TEXT PRIMARY KEY,
-        label TEXT NOT NULL,
-        normalizedLabel TEXT NOT NULL
-      )
-    `);
-        db.runQuery(`
-      CREATE TABLE IF NOT EXISTS tags (
-        key TEXT PRIMARY KEY,
-        tagPrefixKey TEXT NOT NULL,
-        label TEXT NOT NULL,
-        normalizedLabel TEXT NOT NULL
-      )
-    `);
-        db.runQuery(`
       CREATE TABLE IF NOT EXISTS metrics (
         key text PRIMARY KEY
       )
@@ -93,6 +68,12 @@ class ObjectDb extends skytree_1.Actor {
         data TEXT NOT NULL,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL
+      )
+    `);
+        db.runQuery(`
+      CREATE TABLE IF NOT EXISTS dimensions (
+        key text PRIMARY KEY,
+        data TEXT NOT NULL
       )
     `);
         db.runQuery(`
@@ -121,15 +102,6 @@ class ObjectDb extends skytree_1.Actor {
             // ignore
         }
         db.runQuery(`
-      CREATE TABLE IF NOT EXISTS tagEntries (
-        tagKey TEXT NOT NULL,
-        entryKey TEXT NOT NULL,
-        FOREIGN KEY(tagKey) REFERENCES tags(key),
-        FOREIGN KEY(entryKey) REFERENCES entries(key),
-        UNIQUE(tagKey, entryKey)
-      )
-    `);
-        db.runQuery(`
       CREATE TABLE IF NOT EXISTS metricValues (
         metricKey TEXT NOT NULL,
         entryKey TEXT NOT NULL,
@@ -138,26 +110,6 @@ class ObjectDb extends skytree_1.Actor {
         FOREIGN KEY(entryKey) REFERENCES entries(key)
         UNIQUE(metricKey, entryKey)
       )
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagPrefixNormalizedLabel
-      ON tagPrefixes(normalizedLabel);
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagPrefixKey
-      ON tags(tagPrefixKey);
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagPrefixValue
-      ON tags(tagPrefixKey, normalizedLabel);
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagEntriesTagKey 
-      ON tagEntries(tagKey);
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxTagEntriesEntryKey
-      ON tagEntries(entryKey);
     `);
         db.runQuery(`
       CREATE INDEX IF NOT EXISTS idxMetricValuesMetricKey
@@ -179,34 +131,12 @@ class ObjectDb extends skytree_1.Actor {
       CREATE INDEX IF NOT EXISTS idxPropertyValuesPropertyKey
       ON propertyValues(propertyKey);
     `);
-        this.stopwatch.start("pruneTagsAndMetrics");
-        db.runQuery(`
-      DELETE FROM tags WHERE key IN (
-        SELECT t.key FROM tags AS t
-        LEFT JOIN tagEntries AS te ON te.tagKey = t.key
-        WHERE te.entryKey IS NULL
-      );    
-    `);
-        db.runQuery(`
-      DELETE FROM metrics WHERE key IN (
-        SELECT m.key FROM metrics AS m
-        LEFT JOIN metricValues AS mv ON mv.metricKey = m.key
-        WHERE mv.entryKey IS NULL
-      );    
-    `);
-        this.stopwatch.stop("pruneTagsAndMetrics");
         db.prepareCached("INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)").run("{}");
         db.toRows("SELECT key, definition FROM properties").forEach((row) => {
             const { key, definition } = row;
             // assign property definitions
             this._properties.set(key, JSON.parse(definition));
         });
-        this.stopwatch.start("selectTagPrefixes");
-        const tagPrefixRows = db.toRows("SELECT key, label, normalizedLabel FROM tagPrefixes");
-        this.stopwatch.stop("selectTagPrefixes");
-        this.stopwatch.start("selectTagKeys");
-        const tagRows = db.toRows("SELECT key, tagPrefixKey, label, normalizedLabel FROM tags");
-        this.stopwatch.stop("selectTagKeys");
         this.stopwatch.start("selectEntryKeys");
         db.toRows("SELECT key FROM entries").forEach((row) => {
             this._entryKeys.add(row.key);
@@ -217,49 +147,6 @@ class ObjectDb extends skytree_1.Actor {
             .toRows("SELECT key FROM metrics")
             .map((row) => row.key);
         this.stopwatch.stop("selectMetricKeys");
-        this.stopwatch.start("createTagPrefixes");
-        const tagPrefixCount = tagPrefixRows.length;
-        for (let i = 0; i < tagPrefixCount; i++) {
-            const row = tagPrefixRows[i];
-            const { key, label, normalizedLabel } = row;
-            this.stopwatch.start("createTagPrefix");
-            const tagPrefix = new TagPrefix_1.TagPrefix({
-                tagPrefixKey: key,
-                label,
-                normalizedLabel,
-                db: this._db,
-                stopwatch: this.stopwatch,
-            });
-            this.stopwatch.stop("createTagPrefix");
-            this.stopwatch.start("activateTagPrefix");
-            this.addActor(tagPrefix);
-            this.stopwatch.stop("activateTagPrefix");
-            this._tagPrefixesByKey.set(tagPrefix.key, tagPrefix);
-            this._tagPrefixesByNormalizedLabel.set(tagPrefix.normalizedLabel, tagPrefix);
-        }
-        this.stopwatch.start("createTags");
-        const tagKeyCount = tagRows.length;
-        for (let i = 0; i < tagKeyCount; i++) {
-            const tagRow = tagRows[i];
-            const { key, tagPrefixKey, label, normalizedLabel } = tagRow;
-            const tagPrefix = this._tagPrefixesByKey.get(tagPrefixKey);
-            this.stopwatch.start("createTag");
-            const tag = new Tag_1.Tag({
-                tagKey: key,
-                tagPrefix,
-                label,
-                normalizedLabel,
-                db: this._db,
-                stopwatch: this.stopwatch,
-            });
-            this.stopwatch.stop("createTag");
-            this.stopwatch.start("activateTag");
-            this.addActor(tag);
-            this.stopwatch.stop("activateTag");
-            this._tagsByKey.set(key, tag);
-            this._tagsByHashcode.set(tag.toHashCode(), tag);
-        }
-        this.stopwatch.stop("createTags");
         this.stopwatch.start("createMetrics");
         const metricKeyCount = metricKeys.length;
         for (let i = 0; i < metricKeyCount; i++) {
@@ -271,6 +158,18 @@ class ObjectDb extends skytree_1.Actor {
             this._metrics.set(metricKey, metric);
         }
         this.stopwatch.stop("createMetrics");
+        this.stopwatch.start("addDimensions");
+        if (this.props.dimensions != null) {
+            for (const dimension of this.props.dimensions) {
+                dimension.db = this._db;
+                dimension.objectDb = this;
+                this.addActor(dimension);
+                await dimension.load();
+                this._dimensionsByKey.set(dimension.key, dimension);
+            }
+        }
+        this.stopwatch.stop("addDimensions");
+        this._isLoaded.setValue(true);
     }
     async toEntryKeys(options = {}) {
         var _a, _b, _c;
@@ -279,15 +178,15 @@ class ObjectDb extends skytree_1.Actor {
         let entryKeys = undefined;
         let fullCacheKey = undefined;
         if (options.cacheKey != null) {
-            const tagLookups = (_a = options.requireTags) !== null && _a !== void 0 ? _a : [];
-            const tags = [];
-            for (const lookup of tagLookups) {
-                const tag = await this.toOptionalTagGivenLookup(lookup);
-                if (tag != null) {
-                    tags.push(tag);
+            const bucketIdentifiers = (_a = options.filter) !== null && _a !== void 0 ? _a : [];
+            const buckets = [];
+            for (const bucketIdentifier of bucketIdentifiers) {
+                const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+                if (bucket != null) {
+                    buckets.push(bucket);
                 }
             }
-            const hashCodes = tags.map((tag) => tag.toHashCode());
+            const hashCodes = buckets.map((bucket) => bucket.toHashCode());
             const cacheKeyData = `${options.cacheKey}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.direction}:${(_c = options.orderByMetric) === null || _c === void 0 ? void 0 : _c.key}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
         }
@@ -299,18 +198,19 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         if (entryKeys == null) {
-            if (options.requireTags == null || options.requireTags.length === 0) {
+            if (options.filter == null || options.filter.length === 0) {
                 entryKeys = Array.from(this._entryKeys);
             }
             else {
                 const sets = [];
-                for (const tagLookup of options.requireTags) {
-                    const tag = await this.toOptionalTagGivenLookup(tagLookup);
-                    if (tag == null) {
+                for (const bucketIdentifier of options.filter) {
+                    const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+                    if (bucket == null) {
                         sets.push(new Set());
                     }
                     else {
-                        sets.push(new Set(tag.entryKeys.values()));
+                        const entryKeys = await bucket.toEntryKeys();
+                        sets.push(entryKeys);
                     }
                 }
                 entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
@@ -370,9 +270,9 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance.");
         }
     }
-    async toEntryCount(requireTags) {
+    async toEntryCount(filter) {
         const keys = await this.toEntryKeys({
-            requireTags,
+            filter,
         });
         return keys.length;
     }
@@ -419,53 +319,19 @@ class ObjectDb extends skytree_1.Actor {
         return result;
     }
     async setProperty(property) {
-        let tagPrefix = this._tagPrefixesByKey.get(property.key);
-        if (tagPrefix == null) {
-            tagPrefix = this.addActor(new TagPrefix_1.TagPrefix({
-                tagPrefixKey: property.key,
-                label: property.label,
-                stopwatch: this.stopwatch,
-                db: this._db,
-            }));
-            this._tagPrefixesByKey.set(tagPrefix.key, tagPrefix);
-            this._tagPrefixesByNormalizedLabel.set(tagPrefix.normalizedLabel, tagPrefix);
-        }
-        this._properties.set(property.key, property);
-        const definition = JSON.stringify(property);
-        this._db
-            .prepareCached(`
-      INSERT INTO properties (key, definition)
-      VALUES(?, ?)
-      ON CONFLICT(key) 
-      DO UPDATE SET definition=?;
-      `)
-            .run([property.key, definition, definition]);
     }
     async deletePropertyKey(key) {
-        this._properties.delete(key);
-        this._db
-            .prepareCached("DELETE FROM propertyValues WHERE propertyKey = ?")
-            .run(key);
-        this._db.prepareCached("DELETE FROM properties WHERE key = ?").run(key);
-        // TODO delete tagEntries, tags and tagPrefix
     }
     async toPropertyGivenKey(key) {
-        return this._properties.get(key);
+        return undefined;
     }
     async toProperties() {
-        return Array.from(this._properties.values());
+        return [];
     }
     async removeMetadataGivenEntryKey(entryKey) {
-        const tagKeys = this._db
-            .prepareCached("select distinct tagKey from tagEntries where entryKey = ?")
-            .all(entryKey)
-            .map((row) => row.tagKey);
-        tagKeys.forEach((tagKey) => {
-            const tag = this._tagsByKey.get(tagKey);
-            if (tag != null) {
-                tag.deleteEntryKey(entryKey);
-            }
-        });
+        for (const dimension of this._dimensionsByKey.values()) {
+            await dimension.deleteEntryKey(entryKey);
+        }
         const metricKeys = this._db
             .prepareCached("select distinct metricKey from metricValues where entryKey = ?")
             .all(entryKey)
@@ -484,76 +350,24 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
     }
-    async toTagPrefixGivenLabel(tagPrefixLabel, createIfMissing) {
-        const normalizedLabel = Tag_1.normalizedValueGivenString(tagPrefixLabel);
-        let tagPrefix = this._tagPrefixesByNormalizedLabel.get(normalizedLabel);
-        if (tagPrefix == null && createIfMissing) {
-            tagPrefix = this.addActor(new TagPrefix_1.TagPrefix({
-                tagPrefixKey: util_1.StringUtil.stringOfRandomCharacters(6),
-                label: tagPrefixLabel,
-                stopwatch: this.stopwatch,
-                db: this._db,
-            }));
-            this._tagPrefixesByNormalizedLabel.set(normalizedLabel, tagPrefix);
+    toOptionalBucketGivenIdentifier(bucketIdentifier) {
+        if (bucketIdentifier == null) {
+            return undefined;
         }
-        return tagPrefix;
-    }
-    async tagGivenPropertyKeyAndValue(propertyKey, value) {
-        if (propertyKey == null) {
-            return;
+        const dimension = this._dimensionsByKey.get(bucketIdentifier.dimensionKey);
+        if (dimension == null) {
+            return undefined;
         }
-        const property = await this.toPropertyGivenKey(propertyKey);
-        if (property == null) {
-            return;
-        }
-        switch (property.type) {
-            case "select":
-                const options = property.options;
-                if (value == null) {
-                    return {
-                        tagPrefixLabel: property.label,
-                        tagLabel: "Not set",
-                    };
-                }
-                const option = options.find((op) => op.key === value);
-                if (option == null) {
-                    return;
-                }
-                return {
-                    tagPrefixLabel: property.label,
-                    tagLabel: option.label,
-                };
-            default:
-                return undefined;
-        }
-    }
-    async propertyTagKeysGivenEntry(entry) {
-        const result = [];
-        const properties = await this.toProperties();
-        for (const property of properties) {
-            const value = entry.propertyValues[property.key];
-            const tag = await this.tagGivenPropertyKeyAndValue(property.key, value);
-            if (tag != null) {
-                result.push(tag);
-            }
-        }
-        return result;
+        return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
     }
     async rebuildMetadataGivenEntry(entry) {
         this.stopwatch.start("rebuildMetadataGivenEntry");
         await this.removeMetadataGivenEntryKey(entry.key);
-        const propertyTags = await this.propertyTagKeysGivenEntry(entry);
-        const tags = [
-            ...propertyTags,
-            ...this.props.tagsGivenEntry(entry),
-        ];
-        const portableTags = uniquePortableTags_1.uniquePortableTags(tags);
         const metricValues = this.props.metricsGivenEntry(entry);
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
         metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
-        for (const portableTag of portableTags) {
-            const tag = await this.toTagGivenPortableTag(portableTag, true);
-            tag.addEntryKey(entry.key);
+        for (const dimension of this._dimensionsByKey.values()) {
+            await dimension.entryDidChange(entry.key);
         }
         for (const metricKey of Object.keys(metricValues)) {
             const metric = await this.metricGivenMetricKey(metricKey);
@@ -587,43 +401,6 @@ class ObjectDb extends skytree_1.Actor {
             default:
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
-    }
-    async toOptionalTagGivenLookup(lookup) {
-        if (lookup == null) {
-            throw new Error("lookup is required");
-        }
-        if (typeof lookup === "string") {
-            return this._tagsByKey.get(lookup);
-        }
-        else {
-            return this.toTagGivenPortableTag(lookup);
-        }
-    }
-    async toTagGivenPortableTag(portableTag, createIfMissing = false) {
-        if (portableTag.tagPrefixLabel == null) {
-            throw new Error("Missing tagPrefixLabel in portableTag");
-        }
-        if (portableTag.tagLabel == null) {
-            throw new Error("Missing tagLabel in portableTag");
-        }
-        const normalizedPrefixLabel = Tag_1.normalizedValueGivenString(portableTag.tagPrefixLabel);
-        const normalizedLabel = Tag_1.normalizedValueGivenString(portableTag.tagLabel);
-        const hashCode = Tag_1.hashCodeGivenTagPrefixAndNormalizedValue(normalizedPrefixLabel, normalizedLabel);
-        let tag = this._tagsByHashcode.get(hashCode);
-        if (tag == null && createIfMissing == true) {
-            const tagKey = util_1.StringUtil.stringOfRandomCharacters(12);
-            const tagPrefix = await this.toTagPrefixGivenLabel(portableTag.tagPrefixLabel, true);
-            tag = this.addActor(new Tag_1.Tag({
-                tagKey,
-                tagPrefix,
-                label: portableTag.tagLabel,
-                db: this._db,
-                stopwatch: this.stopwatch,
-            }));
-            this._tagsByKey.set(tagKey, tag);
-            this._tagsByHashcode.set(hashCode, tag);
-        }
-        return tag;
     }
     async metricGivenMetricKey(metricKey) {
         let metric = this._metrics.get(metricKey);

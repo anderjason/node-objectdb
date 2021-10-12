@@ -22,7 +22,7 @@ class DbInstance extends skytree_1.Actor {
         this.cancelOnDeactivate(new observable_1.Receipt(() => {
             this._db.pragma("optimize");
             this._db.close();
-            console.log("Closed database", this.props.localFile.toAbsolutePath());
+            // console.log("Closed database", this.props.localFile.toAbsolutePath());
             this._db = undefined;
         }));
         this._db.prepare;
