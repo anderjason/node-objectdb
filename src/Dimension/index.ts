@@ -25,6 +25,16 @@ function isAbsoluteBucketIdentifier(
 }
 
 export abstract class Bucket<T> extends Actor<BucketProps<T>> {
+  readonly key: string;
+  readonly label: string;
+
+  constructor(props: BucketProps<T>) {
+    super(props);
+
+    this.key = props.identifier.bucketKey;
+    this.label = props.identifier.bucketLabel;
+  }
+  
   onActivate() {}
 
   readonly didChange = new TypedEvent();
@@ -149,7 +159,7 @@ export abstract class Dimension<
   toBuckets(): IterableIterator<Bucket<T>> {
     return this._buckets.values();
   }
-  
+
   addBucket(bucket: Bucket<T>): void {
     this.addActor(bucket);
 

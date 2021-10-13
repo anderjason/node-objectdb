@@ -10,9 +10,11 @@ function isAbsoluteBucketIdentifier(identifier) {
     return "dimensionKey" in identifier;
 }
 class Bucket extends skytree_1.Actor {
-    constructor() {
-        super(...arguments);
+    constructor(props) {
+        super(props);
         this.didChange = new observable_1.TypedEvent();
+        this.key = props.identifier.bucketKey;
+        this.label = props.identifier.bucketLabel;
     }
     onActivate() { }
     toBucketIdentifier() {

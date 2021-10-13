@@ -9,6 +9,9 @@ export interface BucketProps<T> {
     storage?: any;
 }
 export declare abstract class Bucket<T> extends Actor<BucketProps<T>> {
+    readonly key: string;
+    readonly label: string;
+    constructor(props: BucketProps<T>);
     onActivate(): void;
     readonly didChange: TypedEvent<void>;
     abstract hasEntryKey(entryKey: string): Promise<boolean>;
