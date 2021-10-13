@@ -4,18 +4,11 @@ import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/ob
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
-import { RelativeBucketIdentifier, Dimension, DimensionProps, AbsoluteBucketIdentifier, Bucket } from "../Dimension";
+import { AbsoluteBucketIdentifier, Bucket, Dimension, DimensionProps } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
-import {
-  hashCodeGivenTagPrefixAndNormalizedValue,
-  normalizedValueGivenString,
-  Tag,
-} from "../Tag";
 import { PortableTag } from "../Tag/PortableTag";
-import { TagPrefix } from "../TagPrefix";
-import { uniquePortableTags } from "./uniquePortableTags";
 
 export interface Order {
   key: string;
@@ -518,7 +511,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     for (const entryKey of entryKeys) {
       const entry = await this.toOptionalEntryGivenKey(entryKey);
       if (entry != null) {
-        this.rebuildMetadataGivenEntry(entry);
+        await this.rebuildMetadataGivenEntry(entry);
       }
     }
   }

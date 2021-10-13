@@ -2,7 +2,7 @@ import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
 import { Instant, Stopwatch } from "@anderjason/time";
 import { Actor } from "skytree";
-import { Dimension, DimensionProps, AbsoluteBucketIdentifier, Bucket } from "../Dimension";
+import { AbsoluteBucketIdentifier, Bucket, Dimension, DimensionProps } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { PortableTag } from "../Tag/PortableTag";

@@ -346,7 +346,7 @@ class ObjectDb extends skytree_1.Actor {
         for (const entryKey of entryKeys) {
             const entry = await this.toOptionalEntryGivenKey(entryKey);
             if (entry != null) {
-                this.rebuildMetadataGivenEntry(entry);
+                await this.rebuildMetadataGivenEntry(entry);
             }
         }
     }
