@@ -33,6 +33,7 @@ class Dimension extends skytree_1.Actor {
         this._isUpdated = observable_1.Observable.givenValue(false, observable_1.Observable.isStrictEqual);
         this.isUpdated = observable_1.ReadOnlyObservable.givenObservable(this._isUpdated);
         this.key = props.key;
+        this.label = props.label;
         this._saveLater = new time_1.Debounce({
             duration: time_1.Duration.givenSeconds(1),
             fn: () => {

@@ -34,7 +34,7 @@ export abstract class Bucket<T> extends Actor<BucketProps<T>> {
     this.key = props.identifier.bucketKey;
     this.label = props.identifier.bucketLabel;
   }
-  
+
   onActivate() {}
 
   readonly didChange = new TypedEvent();
@@ -102,6 +102,7 @@ export abstract class Dimension<
     super(props);
 
     this.key = props.key;
+    this.label = props.label;
 
     this._saveLater = new Debounce({
       duration: Duration.givenSeconds(1),
