@@ -105,7 +105,7 @@ export abstract class Dimension<
     this.label = props.label;
 
     this._saveLater = new Debounce({
-      duration: Duration.givenSeconds(1),
+      duration: Duration.givenSeconds(15),
       fn: () => {
         this.save();
       },

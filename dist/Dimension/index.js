@@ -35,7 +35,7 @@ class Dimension extends skytree_1.Actor {
         this.key = props.key;
         this.label = props.label;
         this._saveLater = new time_1.Debounce({
-            duration: time_1.Duration.givenSeconds(1),
+            duration: time_1.Duration.givenSeconds(15),
             fn: () => {
                 this.save();
             },

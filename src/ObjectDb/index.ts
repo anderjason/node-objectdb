@@ -511,7 +511,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async rebuildMetadata(): Promise<void> {
-    console.log(`Rebuilding metadata for ${this.props.label}...'`);
+    console.log(`Rebuilding metadata for ${this.props.label}...`);
     
     const entryKeys = await this.toEntryKeys();
 
