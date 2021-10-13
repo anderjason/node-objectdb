@@ -133,7 +133,7 @@ class MaterializedDimension extends Dimension {
         for (const bucketIdentifier of bucketIdentifiers) {
             if (isAbsoluteBucketIdentifier(bucketIdentifier)) {
                 if (bucketIdentifier.dimensionKey !== this.props.key) {
-                    throw new Error("Received an absolute bucket identifier for a different dimension");
+                    throw new Error(`Received an absolute bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
                 }
             }
             // create the bucket if necessary
