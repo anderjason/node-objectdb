@@ -67,6 +67,9 @@ class Dimension extends skytree_1.Actor {
     toOptionalBucketGivenKey(key) {
         return this._buckets.get(key);
     }
+    toBuckets() {
+        return this._buckets.values();
+    }
     addBucket(bucket) {
         this.addActor(bucket);
         this._buckets.set(bucket.props.identifier.bucketKey, bucket);

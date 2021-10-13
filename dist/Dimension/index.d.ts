@@ -54,6 +54,7 @@ export declare abstract class Dimension<T, TP extends DimensionProps> extends Ac
     abstract entryDidChange(entryKey: string): Promise<void>;
     save(): Promise<void>;
     toOptionalBucketGivenKey(key: string): Bucket<T> | undefined;
+    toBuckets(): IterableIterator<Bucket<T>>;
     addBucket(bucket: Bucket<T>): void;
     toPortableObject(): PortableDimension;
 }

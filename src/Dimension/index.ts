@@ -146,6 +146,10 @@ export abstract class Dimension<
     return this._buckets.get(key);
   }
 
+  toBuckets(): IterableIterator<Bucket<T>> {
+    return this._buckets.values();
+  }
+  
   addBucket(bucket: Bucket<T>): void {
     this.addActor(bucket);
 
