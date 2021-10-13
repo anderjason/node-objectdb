@@ -18,6 +18,7 @@ interface TestEntryData {
 Test.define("ObjectDb can be created", async () => {
   await localFile.deleteFile();
   const fileDb = new ObjectDb<TestEntryData>({
+    label: "testDb",
     localFile,
     metricsGivenEntry: (entry) => ({}),
   });
@@ -30,6 +31,7 @@ Test.define("ObjectDb can write and read a row", async () => {
   await localFile.deleteFile();
 
   const fileDb = new ObjectDb<TestEntryData>({
+    label: "testDb",
     localFile,
     metricsGivenEntry: (entry) => ({}),
   });
@@ -55,6 +57,7 @@ Test.define("ObjectDb can assign metrics", async () => {
   await localFile.deleteFile();
 
   const fileDb = new ObjectDb<TestEntryData>({
+    label: "testDb",
     localFile,
     metricsGivenEntry: (entry) => {
       const result: Dict<string> = {};
@@ -248,6 +251,7 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
   await localFile.deleteFile();
 
   const fileDb = new ObjectDb<TestEntryData>({
+    label: "testDb",
     localFile,
     metricsGivenEntry: (entry) => ({}),
     dimensions: [
@@ -342,6 +346,7 @@ Test.define("ObjectDb supports materialized dimensions", async () => {
   await localFile.deleteFile();
 
   const fileDb = new ObjectDb<TestEntryData>({
+    label: "testDb",
     localFile,
     metricsGivenEntry: (entry) => ({}),
     dimensions: [md],
@@ -398,6 +403,7 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
   await localFile.deleteFile();
 
   const fileDb = new ObjectDb<TestEntryData>({
+    label: "testDb",
     localFile,
     metricsGivenEntry: (entry) => ({}),
     dimensions: [md],
@@ -434,6 +440,7 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
   });
 
   const fileDb2 = new ObjectDb<TestEntryData>({
+    label: "testDb",
     localFile,
     metricsGivenEntry: (entry) => ({}),
     dimensions: [md2],

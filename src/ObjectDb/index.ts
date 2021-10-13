@@ -26,6 +26,7 @@ export interface ObjectDbReadOptions {
 }
 
 export interface ObjectDbProps<T> {
+  label: string;
   localFile: LocalFile;
 
   metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
@@ -506,14 +507,20 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async rebuildMetadata(): Promise<void> {
+    console.log(`Rebuilding metadata for '${this.props.label}'...'`);
+    
     const entryKeys = await this.toEntryKeys();
 
+    console.log(`Found ${entryKeys.length} entries`);
+    
     for (const entryKey of entryKeys) {
       const entry = await this.toOptionalEntryGivenKey(entryKey);
       if (entry != null) {
         await this.rebuildMetadataGivenEntry(entry);
       }
     }
+
+    console.log('Done rebuilding metadata');
   }
 
   toOptionalBucketGivenIdentifier(bucketIdentifier: AbsoluteBucketIdentifier): Bucket<T> | undefined {

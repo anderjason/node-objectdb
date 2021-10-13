@@ -19,6 +19,7 @@ export interface ObjectDbReadOptions {
     cacheKey?: string;
 }
 export interface ObjectDbProps<T> {
+    label: string;
     localFile: LocalFile;
     metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
     cacheSize?: number;
