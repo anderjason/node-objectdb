@@ -474,6 +474,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
+  toDimensions(): IterableIterator<Dimension<T, DimensionProps>> {
+    return this._dimensionsByKey.values();
+  }
+
   async setProperty(property: PropertyDefinition): Promise<void> {
   }
 
@@ -507,12 +511,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async rebuildMetadata(): Promise<void> {
-    console.log(`Rebuilding metadata for '${this.props.label}'...'`);
+    console.log(`Rebuilding metadata for ${this.props.label}...'`);
     
     const entryKeys = await this.toEntryKeys();
 
     console.log(`Found ${entryKeys.length} entries`);
-    
+
     for (const entryKey of entryKeys) {
       const entry = await this.toOptionalEntryGivenKey(entryKey);
       if (entry != null) {

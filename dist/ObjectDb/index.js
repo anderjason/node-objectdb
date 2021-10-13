@@ -318,6 +318,9 @@ class ObjectDb extends skytree_1.Actor {
         }
         return result;
     }
+    toDimensions() {
+        return this._dimensionsByKey.values();
+    }
     async setProperty(property) {
     }
     async deletePropertyKey(key) {
@@ -342,7 +345,7 @@ class ObjectDb extends skytree_1.Actor {
         }
     }
     async rebuildMetadata() {
-        console.log(`Rebuilding metadata for '${this.props.label}'...'`);
+        console.log(`Rebuilding metadata for ${this.props.label}...'`);
         const entryKeys = await this.toEntryKeys();
         console.log(`Found ${entryKeys.length} entries`);
         for (const entryKey of entryKeys) {

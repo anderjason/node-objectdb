@@ -70,6 +70,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Promise<Entry<T> | undefined>;
     toEntryGivenKey(entryKey: string): Promise<Entry<T>>;
     toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined>;
+    toDimensions(): IterableIterator<Dimension<T, DimensionProps>>;
     setProperty(property: PropertyDefinition): Promise<void>;
     deletePropertyKey(key: string): Promise<void>;
     toPropertyGivenKey(key: string): Promise<PropertyDefinition>;
