@@ -173,7 +173,6 @@ class ObjectDb extends skytree_1.Actor {
     }
     async toEntryKeys(options = {}) {
         var _a, _b, _c;
-        this.stopwatch.start("toEntryKeys");
         const now = time_1.Instant.ofNow();
         let entryKeys = undefined;
         let fullCacheKey = undefined;
@@ -241,7 +240,6 @@ class ObjectDb extends skytree_1.Actor {
             end = Math.min(end, start + parseInt(options.limit, 10));
         }
         const result = entryKeys.slice(start, end);
-        this.stopwatch.stop("toEntryKeys");
         return result;
     }
     // TC: O(N)
@@ -305,14 +303,12 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        this.stopwatch.start("toOptionalEntryGivenKey");
         const result = new Entry_1.Entry({
             key: entryKey,
             db: this._db,
             objectDb: this,
         });
         const didLoad = await result.load();
-        this.stopwatch.stop("toOptionalEntryGivenKey");
         if (!didLoad) {
             return undefined;
         }
@@ -367,7 +363,6 @@ class ObjectDb extends skytree_1.Actor {
         return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
     }
     async rebuildMetadataGivenEntry(entry) {
-        this.stopwatch.start("rebuildMetadataGivenEntry");
         await this.removeMetadataGivenEntryKey(entry.key);
         const metricValues = this.props.metricsGivenEntry(entry);
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
@@ -380,7 +375,6 @@ class ObjectDb extends skytree_1.Actor {
             const metricValue = metricValues[metricKey];
             metric.setValue(entry.key, metricValue);
         }
-        this.stopwatch.stop("rebuildMetadataGivenEntry");
     }
     async writeEntry(entry) {
         if (entry == null) {
@@ -441,7 +435,6 @@ class ObjectDb extends skytree_1.Actor {
             newData: entryData,
         };
         this.entryWillChange.emit(change);
-        this.stopwatch.start("writeEntryData");
         const now = time_1.Instant.ofNow();
         let didCreateNewEntry = false;
         let entry = await this.toOptionalEntryGivenKey(entryKey);
@@ -457,16 +450,13 @@ class ObjectDb extends skytree_1.Actor {
         }
         entry.data = entryData;
         entry.propertyValues = propertyValues;
-        this.stopwatch.start("save");
         await entry.save();
-        this.stopwatch.stop("save");
         this._entryKeys.add(entryKey);
         await this.rebuildMetadataGivenEntry(entry);
         if (didCreateNewEntry) {
             this.collectionDidChange.emit();
         }
         this.entryDidChange.emit(change);
-        this.stopwatch.stop("writeEntryData");
         return entry;
     }
     async deleteEntryKey(entryKey) {

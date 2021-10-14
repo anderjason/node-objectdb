@@ -276,8 +276,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
-    this.stopwatch.start("toEntryKeys");
-
     const now = Instant.ofNow();
 
     let entryKeys: string[] = undefined;
@@ -366,8 +364,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const result = entryKeys.slice(start, end);
 
-    this.stopwatch.stop("toEntryKeys");
-
     return result;
   }
 
@@ -455,8 +451,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    this.stopwatch.start("toOptionalEntryGivenKey");
-
     const result: Entry<T> = new Entry<T>({
       key: entryKey,
       db: this._db,
@@ -464,8 +458,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
 
     const didLoad = await result.load();
-
-    this.stopwatch.stop("toOptionalEntryGivenKey");
 
     if (!didLoad) {
       return undefined;
@@ -541,7 +533,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
-    this.stopwatch.start("rebuildMetadataGivenEntry");
     await this.removeMetadataGivenEntryKey(entry.key);
 
     const metricValues = this.props.metricsGivenEntry(entry);
@@ -559,8 +550,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       const metricValue = metricValues[metricKey];
       metric.setValue(entry.key, metricValue);
     }
-
-    this.stopwatch.stop("rebuildMetadataGivenEntry");
   }
 
   async writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void> {
@@ -653,8 +642,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.entryWillChange.emit(change);
 
-    this.stopwatch.start("writeEntryData");
-
     const now = Instant.ofNow();
     let didCreateNewEntry = false;
 
@@ -673,9 +660,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry.data = entryData;
     entry.propertyValues = propertyValues;
 
-    this.stopwatch.start("save");
     await entry.save();
-    this.stopwatch.stop("save");
 
     this._entryKeys.add(entryKey);
     await this.rebuildMetadataGivenEntry(entry);
@@ -685,8 +670,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     this.entryDidChange.emit(change);
-
-    this.stopwatch.stop("writeEntryData");
 
     return entry;
   }
