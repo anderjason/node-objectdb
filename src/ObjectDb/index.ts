@@ -693,8 +693,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.entryWillChange.emit(change);
 
     await this.removeMetadataGivenEntryKey(entryKey);
-    
+
     this._db.runQuery("DELETE FROM propertyValues WHERE entryKey = ?", [entryKey]);
+
+    try {
+      this._db.runQuery("DELETE FROM tagEntries WHERE entryKey = ?", [entryKey]);
+    } catch {
+      //
+    }
     
     this._db.runQuery(
       `
