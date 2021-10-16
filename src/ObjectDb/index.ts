@@ -127,6 +127,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const db = this._db;
 
+    db.runQuery("DROP TABLE IF EXISTS tagEntries");
+    db.runQuery("DROP TABLE IF EXISTS tags");
+    db.runQuery("DROP TABLE IF EXISTS tagPrefixes");
+    
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS meta (
         id INTEGER PRIMARY KEY CHECK (id = 0),
@@ -695,12 +699,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     await this.removeMetadataGivenEntryKey(entryKey);
 
     this._db.runQuery("DELETE FROM propertyValues WHERE entryKey = ?", [entryKey]);
-
-    try {
-      this._db.runQuery("DELETE FROM tagEntries WHERE entryKey = ?", [entryKey]);
-    } catch {
-      //
-    }
     
     this._db.runQuery(
       `

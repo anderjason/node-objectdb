@@ -51,6 +51,9 @@ class ObjectDb extends skytree_1.Actor {
             return;
         }
         const db = this._db;
+        db.runQuery("DROP TABLE IF EXISTS tagEntries");
+        db.runQuery("DROP TABLE IF EXISTS tags");
+        db.runQuery("DROP TABLE IF EXISTS tagPrefixes");
         db.runQuery(`
       CREATE TABLE IF NOT EXISTS meta (
         id INTEGER PRIMARY KEY CHECK (id = 0),
@@ -474,12 +477,6 @@ class ObjectDb extends skytree_1.Actor {
         this.entryWillChange.emit(change);
         await this.removeMetadataGivenEntryKey(entryKey);
         this._db.runQuery("DELETE FROM propertyValues WHERE entryKey = ?", [entryKey]);
-        try {
-            this._db.runQuery("DELETE FROM tagEntries WHERE entryKey = ?", [entryKey]);
-        }
-        catch (_a) {
-            //
-        }
         this._db.runQuery(`
       DELETE FROM entries WHERE key = ?
     `, [entryKey]);
