@@ -489,6 +489,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       await dimension.deleteEntryKey(entryKey);
     }
 
+    
     const metricKeys = this._db
       .prepareCached(
         "select distinct metricKey from metricValues where entryKey = ?"
@@ -692,7 +693,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.entryWillChange.emit(change);
 
     await this.removeMetadataGivenEntryKey(entryKey);
-
+    
+    this._db.runQuery("DELETE FROM propertyValues WHERE entryKey = ?", [entryKey]);
+    
     this._db.runQuery(
       `
       DELETE FROM entries WHERE key = ?
