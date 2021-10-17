@@ -1,21 +1,28 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { LocalFile } from "@anderjason/node-filesystem";
-import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
+import {
+  Dict,
+  Observable,
+  ReadOnlyObservable,
+  TypedEvent
+} from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
-import { AbsoluteBucketIdentifier, Bucket, Dimension, DimensionProps } from "../Dimension";
+import {
+  AbsoluteBucketIdentifier,
+  Bucket,
+  Dimension,
+  DimensionProps
+} from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
 import { DbInstance } from "../SqlClient";
-import { PortableTag } from "../Tag/PortableTag";
 
 export interface Order {
   key: string;
   direction: "ascending" | "descending";
 }
-
-export type TagLookup = string | PortableTag;
 
 export interface ObjectDbReadOptions {
   filter?: AbsoluteBucketIdentifier[];
@@ -130,7 +137,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     db.runQuery("DROP TABLE IF EXISTS tagEntries");
     db.runQuery("DROP TABLE IF EXISTS tags");
     db.runQuery("DROP TABLE IF EXISTS tagPrefixes");
-    
+
     db.runQuery(`
       CREATE TABLE IF NOT EXISTS meta (
         id INTEGER PRIMARY KEY CHECK (id = 0),
@@ -286,9 +293,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
-      const bucketIdentifiers: AbsoluteBucketIdentifier[] = options.filter ?? [];
+      const bucketIdentifiers: AbsoluteBucketIdentifier[] =
+        options.filter ?? [];
       const buckets: Bucket<T>[] = [];
-      
+
       for (const bucketIdentifier of bucketIdentifiers) {
         const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
         if (bucket != null) {
@@ -446,7 +454,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
-  async toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined> {
+  async toOptionalEntryGivenKey(
+    entryKey: string
+  ): Promise<Entry<T> | undefined> {
     if (entryKey == null) {
       throw new Error("Entry key is required");
     }
@@ -474,11 +484,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return this._dimensionsByKey.values();
   }
 
-  async setProperty(property: PropertyDefinition): Promise<void> {
-  }
+  async setProperty(property: PropertyDefinition): Promise<void> {}
 
-  async deletePropertyKey(key: string): Promise<void> {
-  }
+  async deletePropertyKey(key: string): Promise<void> {}
 
   async toPropertyGivenKey(key: string): Promise<PropertyDefinition> {
     return undefined;
@@ -493,7 +501,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       await dimension.deleteEntryKey(entryKey);
     }
 
-    
     const metricKeys = this._db
       .prepareCached(
         "select distinct metricKey from metricValues where entryKey = ?"
@@ -509,7 +516,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   async rebuildMetadata(): Promise<void> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
-    
+
     const entryKeys = await this.toEntryKeys();
 
     console.log(`Found ${entryKeys.length} entries`);
@@ -521,10 +528,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       }
     }
 
-    console.log('Done rebuilding metadata');
+    console.log("Done rebuilding metadata");
   }
 
-  toOptionalBucketGivenIdentifier(bucketIdentifier: AbsoluteBucketIdentifier): Bucket<T> | undefined {
+  toOptionalBucketGivenIdentifier(
+    bucketIdentifier: AbsoluteBucketIdentifier
+  ): Bucket<T> | undefined {
     if (bucketIdentifier == null) {
       return undefined;
     }
@@ -548,7 +557,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     for (const dimension of this._dimensionsByKey.values()) {
       await dimension.entryDidChange(entry.key);
     }
-    
+
     for (const metricKey of Object.keys(metricValues)) {
       const metric = await this.metricGivenMetricKey(metricKey);
 
@@ -698,8 +707,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     await this.removeMetadataGivenEntryKey(entryKey);
 
-    this._db.runQuery("DELETE FROM propertyValues WHERE entryKey = ?", [entryKey]);
-    
+    this._db.runQuery("DELETE FROM propertyValues WHERE entryKey = ?", [
+      entryKey,
+    ]);
+
     this._db.runQuery(
       `
       DELETE FROM entries WHERE key = ?

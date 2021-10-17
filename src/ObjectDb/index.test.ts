@@ -1,11 +1,9 @@
 import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict } from "@anderjason/observable";
 import { Test } from "@anderjason/tests";
-import { ArrayUtil } from "@anderjason/util";
 import { ObjectDb } from ".";
-import { MaterializedDimension, RelativeBucketIdentifier } from "../Dimension";
+import { MaterializedDimension } from "../Dimension";
 import { DbInstance } from "../SqlClient";
-import { PortableTag } from "../Tag/PortableTag";
 
 const localFile = LocalFile.givenAbsolutePath(
   "/Users/jason/Desktop/node-objectdb-test.sqlite3"
