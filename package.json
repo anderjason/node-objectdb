@@ -25,6 +25,7 @@
     "@anderjason/time": "^2.1.2",
     "@anderjason/util": "^2.4.0",
     "better-sqlite3": "^7.4.3",
+    "mongodb": "^4.1.3",
     "skytree": "^10.0.0"
   },
   "devDependencies": {
