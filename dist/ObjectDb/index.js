@@ -23,7 +23,7 @@ class ObjectDb extends skytree_1.Actor {
         this._caches = new Map();
     }
     onActivate() {
-        this._db = this.props.db;
+        this._db = this.addActor(this.props.db);
         this.addActor(new skytree_1.Timer({
             duration: time_1.Duration.givenMinutes(1),
             isRepeating: true,
