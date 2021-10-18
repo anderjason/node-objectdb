@@ -22,7 +22,7 @@ async function usingTestDb(fn: (db: MongoDb) => Promise<void>): Promise<void> {
 
   try {
     await fn(db);
-    await db.dropDatabase();
+    // await db.dropDatabase();
   } catch (err) {
     console.log("DB is saved at", db.props.namespace);
     throw err;
