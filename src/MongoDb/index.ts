@@ -17,12 +17,12 @@ export class MongoDb extends Actor<MongoDbProps> {
   onActivate() {
     const client = new MongoClient(this.props.url ?? process.env.MONGODB_URL);
 
+    this._db = client.db(this.props.dbName);
+
     client.connect().then(() => {
       this._isConnected.setValue(true);
     });
     
-    this._db = client.db(this.props.dbName);
-
     this.cancelOnDeactivate(
       new Receipt(() => {
         this._isConnected.setValue(false);
@@ -38,6 +38,10 @@ export class MongoDb extends Actor<MongoDbProps> {
   }
   
   async dropDatabase(): Promise<void> {
+    if (this._db == null) {
+      throw new Error("Internal db is missing in MongoDb.dropDatabase");
+    }
+
     await this._db.dropDatabase();
   }
 

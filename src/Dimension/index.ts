@@ -40,8 +40,9 @@ export abstract class Bucket<T> extends Actor<BucketProps<T>> {
   abstract hasEntryKey(entryKey: string): Promise<boolean>;
   abstract toPortableObject(): PortableBucket;
   abstract toEntryKeys(): Promise<Set<string>>;
+  abstract save(): Promise<void>;
 
-  toBucketIdentifier(): AbsoluteBucketIdentifier {
+  toAbsoluteIdentifier(): AbsoluteBucketIdentifier {
     return {
       dimensionKey: this.props.dimension.key,
       ...this.props.identifier,
@@ -65,13 +66,12 @@ export interface AbsoluteBucketIdentifier extends RelativeBucketIdentifier {
 
 export interface PortableBucket {
   type: string;
-  identifier: RelativeBucketIdentifier;
+  identifier: AbsoluteBucketIdentifier;
   storage?: any;
 }
 
 export interface PortableDimension {
   type: string;
-  buckets: PortableBucket[];
 }
 
 export interface DimensionProps {
@@ -118,18 +118,7 @@ export abstract class Dimension<
     );
   }
 
-  async load(): Promise<void> {
-    const row = await this.db.collection<any>("dimensions").findOne({ key: this.props.key });
-
-    if (row != null) {
-      const data = JSON.parse(row.data);
-      this.onLoad(data);
-    }
-
-    this._isUpdated.setValue(true);
-  }
-
-  abstract onLoad(data: PortableDimension): void;
+  abstract load(): Promise<void>;
   abstract deleteEntryKey(entryKey: string): Promise<void>;
   abstract entryDidChange(entryKey: string): Promise<void>;
 
@@ -140,12 +129,16 @@ export abstract class Dimension<
       { key: this.props.key },
       {
         $set: {
-          data: JSON.stringify(data),
+          data,
         },
       },
       { upsert: true }
     );
 
+    for (const bucket of this._buckets.values()) {
+      await bucket.save();
+    }
+    
     this._saveLater.clear();
   }
 
@@ -172,9 +165,6 @@ export abstract class Dimension<
   toPortableObject(): PortableDimension {
     return {
       type: this.constructor.name,
-      buckets: Array.from(this._buckets.values()).map((bucket) => {
-        return bucket.toPortableObject();
-      }),
     };
   }
 }
@@ -201,16 +191,21 @@ export class MaterializedDimension<T> extends Dimension<
     );
   }
 
-  onLoad(data: PortableDimension) {
-    for (const portableBucket of data.buckets) {
+  async load(): Promise<void> {
+    // const row = await this.db.collection<any>("dimensions").findOne({ key: this.props.key });
+
+    const bucketRows = await this.db.collection<PortableBucket>("buckets").find({ identifier: { dimensionKey: this.props.key }}).toArray();
+    for (const bucketRow of bucketRows) {
       const bucket = new MaterializedBucket({
-        identifier: portableBucket.identifier,
-        storage: portableBucket.storage,
+        identifier: bucketRow.identifier,
+        storage: bucketRow.storage,
         dimension: this,
       });
 
       this.addBucket(bucket);
     }
+
+    this._isUpdated.setValue(true);
   }
 
   async entryDidChange(entryKey: string): Promise<void> {
@@ -327,10 +322,24 @@ export class MaterializedBucket<T> extends Bucket<T> {
     this.didChange.emit();
   }
 
+  async save(): Promise<void> {
+    const data = this.toPortableObject();
+    
+    await this.props.dimension.db.collection<any>("dimensions").updateOne(
+      { key: this.props.identifier.bucketKey },
+      {
+        $set: {
+          data
+        },
+      },
+      { upsert: true }
+    );
+  }
+
   toPortableObject(): PortableBucket {
     return {
       type: "MaterializedBucket",
-      identifier: this.props.identifier,
+      identifier: this.toAbsoluteIdentifier(),
       storage: {
         entryKeys: Array.from(this._entryKeys),
       },

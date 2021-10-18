@@ -88,7 +88,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _db: MongoDb;
 
   onActivate(): void {
-    this._db = this.addActor(this.props.db);
+    this._db = this.props.db;
     
     this.addActor(
       new Timer({
