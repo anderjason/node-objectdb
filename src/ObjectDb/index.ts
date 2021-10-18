@@ -170,6 +170,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._isLoaded.setValue(true);
   }
 
+  async save(): Promise<void> {
+    for (const dimension of this._dimensionsByKey.values()) {
+      await dimension.save();
+    }
+  }
+  
   async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
     const now = Instant.ofNow();
 

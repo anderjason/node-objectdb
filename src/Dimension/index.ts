@@ -104,13 +104,19 @@ export abstract class Dimension<
 
     this._saveLater = new Debounce({
       duration: Duration.givenSeconds(15),
-      fn: () => {
-        this.save();
+      fn: async () => {
+        try {
+          await this.save();
+        } catch (err) {
+          console.error(`An error occurred in Dimension.saveLater: ${err}`);
+        }
       },
     });
   }
 
   onActivate() {
+    this._isUpdated.setValue(false);
+
     this.cancelOnDeactivate(
       new Receipt(() => {
         this._saveLater.clear();
@@ -125,11 +131,16 @@ export abstract class Dimension<
   async save(): Promise<void> {
     const data = this.toPortableObject();
     
+    if (this.db.isConnected.value == false) {
+      console.error("Cannot save dimension because MongoDb is not connected");
+      return;
+    }
+
     await this.db.collection<any>("dimensions").updateOne(
       { key: this.props.key },
       {
         $set: {
-          data,
+          ...data,
         },
       },
       { upsert: true }
@@ -194,7 +205,7 @@ export class MaterializedDimension<T> extends Dimension<
   async load(): Promise<void> {
     // const row = await this.db.collection<any>("dimensions").findOne({ key: this.props.key });
 
-    const bucketRows = await this.db.collection<PortableBucket>("buckets").find({ identifier: { dimensionKey: this.props.key }}).toArray();
+    const bucketRows = await this.db.collection<PortableBucket>("buckets").find({ "identifier.dimensionKey": this.props.key }).toArray();
     for (const bucketRow of bucketRows) {
       const bucket = new MaterializedBucket({
         identifier: bucketRow.identifier,
@@ -287,6 +298,8 @@ export class MaterializedBucket<T> extends Bucket<T> {
   private _entryKeys = new Set<string>();
 
   onActivate() {
+    this._entryKeys.clear();
+
     const storage = this.props.storage as PortableMaterializedBucketStorage;
     if (storage != null && storage.entryKeys != null) {
       this._entryKeys.clear();
@@ -325,11 +338,16 @@ export class MaterializedBucket<T> extends Bucket<T> {
   async save(): Promise<void> {
     const data = this.toPortableObject();
     
-    await this.props.dimension.db.collection<any>("dimensions").updateOne(
+    if (this.props.dimension.db.isConnected.value == false) {
+      console.error("Cannot save bucket because MongoDb is not connected");
+      return;
+    }
+
+    await this.props.dimension.db.collection<any>("buckets").updateOne(
       { key: this.props.identifier.bucketKey },
       {
         $set: {
-          data
+          ...data
         },
       },
       { upsert: true }
