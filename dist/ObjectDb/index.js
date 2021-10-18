@@ -47,6 +47,7 @@ class ObjectDb extends skytree_1.Actor {
             return;
         }
         const db = this._db;
+        await this._db.isConnected.toPromise(v => v);
         // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
         //   const { key, definition } = row;
         //   // assign property definitions

@@ -89,7 +89,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   onActivate(): void {
     this._db = this.addActor(this.props.db);
-
+    
     this.addActor(
       new Timer({
         duration: Duration.givenMinutes(1),
@@ -120,6 +120,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     const db = this._db;
+    await this._db.isConnected.toPromise(v => v);
 
 
     // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
