@@ -2,8 +2,8 @@ import { ReadOnlyObservable } from "@anderjason/observable";
 import { Collection } from "mongodb";
 import { Actor } from "skytree";
 export interface MongoDbProps {
-    dbName: string;
-    namespace: string;
+    dbName?: string;
+    namespace?: string;
     url?: string;
 }
 export declare class MongoDb extends Actor<MongoDbProps> {

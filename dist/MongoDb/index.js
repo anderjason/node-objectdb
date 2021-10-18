@@ -33,7 +33,12 @@ class MongoDb extends skytree_1.Actor {
         if (this._db == null) {
             throw new Error("MongoDb is not connected");
         }
-        return this._db.collection(`${this.props.namespace}.${name}`);
+        if (this.props.namespace != null) {
+            return this._db.collection(`${this.props.namespace}.${name}`);
+        }
+        else {
+            return this._db.collection(name);
+        }
     }
 }
 exports.MongoDb = MongoDb;

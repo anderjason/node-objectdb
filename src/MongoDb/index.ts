@@ -3,9 +3,8 @@ import { Collection, Db, MongoClient } from "mongodb";
 import { Actor } from "skytree";
 
 export interface MongoDbProps {
-  dbName: string;
-  namespace: string;
-
+  dbName?: string;
+  namespace?: string;
   url?: string;
 }
 
@@ -47,6 +46,10 @@ export class MongoDb extends Actor<MongoDbProps> {
       throw new Error("MongoDb is not connected");
     }
     
-    return this._db.collection(`${this.props.namespace}.${name}`);
+    if (this.props.namespace != null) {
+     return this._db.collection(`${this.props.namespace}.${name}`);
+    } else {
+      return this._db.collection(name);
+    }
   }
 }
