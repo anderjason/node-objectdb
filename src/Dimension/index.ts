@@ -7,9 +7,7 @@ import {
 import { Debounce, Duration } from "@anderjason/time";
 import { StringUtil } from "@anderjason/util";
 import { Actor } from "skytree";
-import { Entry, ObjectDb } from "..";
-import { ReadOnlySet } from "../ReadOnlySet";
-import { DbInstance } from "../SqlClient";
+import { Entry, MongoDb, ObjectDb } from "..";
 
 export interface BucketProps<T> {
   identifier: RelativeBucketIdentifier;
@@ -94,7 +92,7 @@ export abstract class Dimension<
 
   label: string;
   objectDb: ObjectDb<T>;
-  db: DbInstance;
+  db: MongoDb;
 
   private _saveLater: Debounce;
 
@@ -121,9 +119,7 @@ export abstract class Dimension<
   }
 
   async load(): Promise<void> {
-    const row = this.db
-      .prepareCached("SELECT data FROM dimensions WHERE key = ?")
-      .get(this.props.key);
+    const row = await this.db.collection<any>("dimensions").findOne({ key: this.props.key });
 
     if (row != null) {
       const data = JSON.parse(row.data);
@@ -138,17 +134,17 @@ export abstract class Dimension<
   abstract entryDidChange(entryKey: string): Promise<void>;
 
   async save(): Promise<void> {
-    const data = JSON.stringify(this.toPortableObject());
-
-    this.db
-      .prepareCached(
-        `
-      INSERT INTO dimensions (key, data) 
-      VALUES (?, ?)
-      ON CONFLICT(key)
-      DO UPDATE SET data=?;`
-      )
-      .run(this.props.key, data, data);
+    const data = this.toPortableObject();
+    
+    await this.db.collection<any>("dimensions").updateOne(
+      { key: this.props.key },
+      {
+        $set: {
+          data: JSON.stringify(data),
+        },
+      },
+      { upsert: true }
+    );
 
     this._saveLater.clear();
   }
@@ -294,7 +290,6 @@ interface PortableMaterializedBucketStorage {
 
 export class MaterializedBucket<T> extends Bucket<T> {
   private _entryKeys = new Set<string>();
-  readonly entryKeys = new ReadOnlySet(this._entryKeys);
 
   onActivate() {
     const storage = this.props.storage as PortableMaterializedBucketStorage;
@@ -311,7 +306,7 @@ export class MaterializedBucket<T> extends Bucket<T> {
   }
 
   async hasEntryKey(entryKey: string): Promise<boolean> {
-    return this.entryKeys.has(entryKey);
+    return this._entryKeys.has(entryKey);
   }
 
   addEntryKey(entryKey: string): void {

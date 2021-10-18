@@ -3,11 +3,6 @@ import { Dict } from "@anderjason/observable";
 import { Test } from "@anderjason/tests";
 import { ObjectDb } from ".";
 import { MaterializedDimension } from "../Dimension";
-import { DbInstance } from "../SqlClient";
-
-const localFile = LocalFile.givenAbsolutePath(
-  "/Users/jason/Desktop/node-objectdb-test.sqlite3"
-);
 
 interface TestEntryData {
   message: string;

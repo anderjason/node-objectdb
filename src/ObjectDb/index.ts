@@ -1,12 +1,11 @@
 import { UniqueId } from "@anderjason/node-crypto";
-import { LocalFile } from "@anderjason/node-filesystem";
 import {
   Dict,
   Observable,
   ReadOnlyObservable,
   TypedEvent
 } from "@anderjason/observable";
-import { Duration, Instant, Stopwatch } from "@anderjason/time";
+import { Duration, Instant } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import {
@@ -17,7 +16,7 @@ import {
 } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
-import { DbInstance } from "../SqlClient";
+import { MongoDb } from "../MongoDb";
 
 export interface Order {
   key: string;
@@ -34,8 +33,9 @@ export interface ObjectDbReadOptions {
 
 export interface ObjectDbProps<T> {
   label: string;
-  localFile: LocalFile;
-
+  dbName: string;
+  dbNamespace: string;
+  
   metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
 
   cacheSize?: number;
@@ -77,8 +77,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly entryWillChange = new TypedEvent<EntryChange<T>>();
   readonly entryDidChange = new TypedEvent<EntryChange<T>>();
 
-  readonly stopwatch: Stopwatch;
-
   protected _isLoaded = Observable.givenValue(false, Observable.isStrictEqual);
   readonly isLoaded = ReadOnlyObservable.givenObservable(this._isLoaded);
 
@@ -88,18 +86,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _entryKeys = new Set<string>();
   private _caches = new Map<number, CacheData>();
 
-  private _db: DbInstance;
-
-  constructor(props: ObjectDbProps<T>) {
-    super(props);
-
-    this.stopwatch = new Stopwatch(props.localFile.toAbsolutePath());
-  }
+  private _db: MongoDb;
 
   onActivate(): void {
     this._db = this.addActor(
-      new DbInstance({
-        localFile: this.props.localFile,
+      new MongoDb({
+        dbName: this.props.dbName,
+        namespace: this.props.dbNamespace,
       })
     );
 
@@ -134,126 +127,25 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const db = this._db;
 
-    db.runQuery("DROP TABLE IF EXISTS tagEntries");
-    db.runQuery("DROP TABLE IF EXISTS tags");
-    db.runQuery("DROP TABLE IF EXISTS tagPrefixes");
 
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS meta (
-        id INTEGER PRIMARY KEY CHECK (id = 0),
-        properties TEXT NOT NULL
-      )
-    `);
+    // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
+    //   const { key, definition } = row;
 
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS metrics (
-        key text PRIMARY KEY
-      )
-    `);
+    //   // assign property definitions
+    //   this._properties.set(key, JSON.parse(definition));
+    // });
 
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS entries (
-        key text PRIMARY KEY,
-        data TEXT NOT NULL,
-        createdAt INTEGER NOT NULL,
-        updatedAt INTEGER NOT NULL
-      )
-    `);
+    const entries = await this._db.collection<PortableEntry<T>>("entries").find().toArray();
+    
+    entries.forEach((row) => {
+      const { key } = row;
 
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS dimensions (
-        key text PRIMARY KEY,
-        data TEXT NOT NULL
-      )
-    `);
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS properties (
-        key text PRIMARY KEY,
-        definition TEXT NOT NULL
-      )
-    `);
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS propertyValues (
-        entryKey TEXT NOT NULL,
-        propertyKey TEXT NOT NULL,
-        propertyValue TEXT NOT NULL,
-        FOREIGN KEY(propertyKey) REFERENCES properties(key),
-        FOREIGN KEY(entryKey) REFERENCES entries(key),
-        UNIQUE(propertyKey, entryKey)
-      )
-    `);
-
-    try {
-      db.runQuery(`
-        ALTER TABLE entries
-        ADD COLUMN propertyValues TEXT
-      `);
-    } catch (err) {
-      // ignore
-    }
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS metricValues (
-        metricKey TEXT NOT NULL,
-        entryKey TEXT NOT NULL,
-        metricValue TEXT NOT NULL,
-        FOREIGN KEY(metricKey) REFERENCES metrics(key),
-        FOREIGN KEY(entryKey) REFERENCES entries(key)
-        UNIQUE(metricKey, entryKey)
-      )
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricKey
-      ON metricValues(metricKey);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxMetricValuesEntryKey
-      ON metricValues(entryKey);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricValue
-      ON metricValues(metricValue);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idsPropertyValuesEntryKey
-      ON propertyValues(entryKey);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxPropertyValuesPropertyKey
-      ON propertyValues(propertyKey);
-    `);
-
-    db.prepareCached(
-      "INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)"
-    ).run("{}");
-
-    db.toRows("SELECT key, definition FROM properties").forEach((row) => {
-      const { key, definition } = row;
-
-      // assign property definitions
-      this._properties.set(key, JSON.parse(definition));
+      this._entryKeys.add(key);
     });
 
-    this.stopwatch.start("selectEntryKeys");
-    db.toRows("SELECT key FROM entries").forEach((row) => {
-      this._entryKeys.add(row.key);
-    });
-    this.stopwatch.stop("selectEntryKeys");
+    const metrics = await this._db.collection<unknown>("metrics").find().toArray();
+    const metricKeys = metrics.map((row: any) => row.key);
 
-    this.stopwatch.start("selectMetricKeys");
-    const metricKeys = db
-      .toRows("SELECT key FROM metrics")
-      .map((row) => row.key);
-    this.stopwatch.stop("selectMetricKeys");
-
-    this.stopwatch.start("createMetrics");
     const metricKeyCount = metricKeys.length;
     for (let i = 0; i < metricKeyCount; i++) {
       const metricKey = metricKeys[i];
@@ -267,9 +159,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
       this._metrics.set(metricKey, metric);
     }
-    this.stopwatch.stop("createMetrics");
 
-    this.stopwatch.start("addDimensions");
     if (this.props.dimensions != null) {
       for (const dimension of this.props.dimensions) {
         dimension.db = this._db;
@@ -281,7 +171,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         this._dimensionsByKey.set(dimension.key, dimension);
       }
     }
-    this.stopwatch.stop("addDimensions");
 
     this._isLoaded.setValue(true);
   }
@@ -392,25 +281,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return keys.includes(entryKey);
   }
 
-  async runTransaction(fn: () => Promise<void>): Promise<void> {
-    let failed = false;
-
-    this._db.runTransaction(async () => {
-      try {
-        await fn();
-      } catch (err) {
-        failed = true;
-        console.error(err);
-      }
-    });
-
-    if (failed) {
-      throw new Error(
-        "The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance."
-      );
-    }
-  }
-
   async toEntryCount(filter?: AbsoluteBucketIdentifier[]): Promise<number> {
     const keys = await this.toEntryKeys({
       filter,
@@ -501,13 +371,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       await dimension.deleteEntryKey(entryKey);
     }
 
-    const metricKeys = this._db
-      .prepareCached(
-        "select distinct metricKey from metricValues where entryKey = ?"
-      )
-      .all(entryKey)
-      .map((row) => row.metricKey);
-
+    const metricValues = await this._db.collection("metricValues").find({ entryKey: entryKey }).toArray();
+    const metricKeys = metricValues.map((metricValue: any) => metricValue.metricKey);
+    
     for (const metricKey of metricKeys) {
       const metric = await this.metricGivenMetricKey(metricKey);
       metric.deleteKey(entryKey);
@@ -707,17 +573,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     await this.removeMetadataGivenEntryKey(entryKey);
 
-    this._db.runQuery("DELETE FROM propertyValues WHERE entryKey = ?", [
-      entryKey,
-    ]);
-
-    this._db.runQuery(
-      `
-      DELETE FROM entries WHERE key = ?
-    `,
-      [entryKey]
-    );
-
+    await this._db.collection("entries").deleteOne({ id: entryKey });
+    
     this._entryKeys.delete(entryKey);
 
     this.entryDidChange.emit(change);

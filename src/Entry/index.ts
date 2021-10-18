@@ -3,7 +3,7 @@ import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { ObjectDb } from "..";
 import { PropsObject } from "../PropsObject";
-import { DbInstance } from "../SqlClient";
+import { MongoDb } from "../MongoDb";
 
 export type EntryStatus = "unknown" | "new" | "saved" | "updated" | "deleted";
 
@@ -28,7 +28,7 @@ export interface EntryProps<T> {
   key?: string;
   createdAt?: Instant;
   updatedAt?: Instant;
-  db: DbInstance;
+  db: MongoDb;
   objectDb: ObjectDb<T>;
 }
 
@@ -51,33 +51,22 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
   }
 
   async load(): Promise<boolean> {
-    const row = this.props.db.toFirstRow(
-      "SELECT data, createdAt, updatedAt FROM entries WHERE key = ?",
-      [this.key]
-    );
-
+    const row = await this.props.db.collection<PortableEntry<T>>("entries").findOne({ key: this.key });
+    
     if (row == null) {
       this.status = "new";
       return false;
     }
 
-    const propertyValues = this.props.db.prepareCached("SELECT propertyKey, propertyValue FROM propertyValues WHERE entryKey = ?").all(this.key);
-
-    this.data = JSON.parse(row.data);
-    this.propertyValues = {};
-    propertyValues.forEach((row) => {
-      this.propertyValues[row.propertyKey] = JSON.parse(row.propertyValue);
-    });
-    this.createdAt = Instant.givenEpochMilliseconds(row.createdAt);
-    this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAt);
+    this.data = row.data;
+    this.createdAt = Instant.givenEpochMilliseconds(row.createdAtEpochMs);
+    this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAtEpochMs);
     this.status = "saved";
 
     return true;
   }
 
   async save(): Promise<void> {
-    const data = JSON.stringify(this.data);
-
     this.updatedAt = Instant.ofNow();
 
     if (this.createdAt == null) {
@@ -87,47 +76,20 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     const createdAtMs = this.createdAt.toEpochMilliseconds();
     const updatedAtMs = this.updatedAt.toEpochMilliseconds();
 
-    this.props.db.prepareCached(
-      `
-      INSERT INTO entries (key, data, createdAt, updatedAt)
-      VALUES(?, ?, ?, ?)
-      ON CONFLICT(key) 
-      DO UPDATE SET data=?, createdAt=?, updatedAt=?;
-      `
-    ).run(
-      [
-        this.key,
-        data,
-        createdAtMs,
-        updatedAtMs,
-        data,
-        createdAtMs,
-        updatedAtMs,
-      ]
+    await this.props.db.collection<PortableEntry<T>>("entries").updateOne(
+      { key: this.key },
+      {
+        $set: {
+          key: this.key,
+          createdAtEpochMs: createdAtMs,
+          updatedAtEpochMs: updatedAtMs,
+          data: this.data,
+          propertyValues: this.propertyValues ?? {},
+          status: this.status,
+        },
+      },
+      { upsert: true }
     );
-
-    this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ?").run(this.key);
-    
-    const insertQuery = this.props.db.prepareCached(`
-      INSERT INTO propertyValues (entryKey, propertyKey, propertyValue) 
-      VALUES (?, ?, ?)
-      ON CONFLICT(entryKey, propertyKey)
-      DO UPDATE SET propertyValue=?;
-    `)
-
-    const deleteQuery = this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ? AND propertyKey = ?");
-
-    const properties = await this.props.objectDb.toProperties();
-    
-    for (const property of properties) {
-      const value = this.propertyValues[property.key];
-      if (value != null) {
-        const valueStr = JSON.stringify(value);
-        insertQuery.run(this.key, property.key, valueStr, valueStr);
-      } else {
-        deleteQuery.run(this.key, property.key);
-      }
-    }
 
     this.status = "saved";
   }
