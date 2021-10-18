@@ -1,5 +1,5 @@
 {
-  "name": "@anderjason/node-objectdb",
+  "name": "@anderjason/node-objectdb-mongo2",
   "version": "0.0.1",
   "description": "",
   "main": "./dist/index.js",
