@@ -1,16 +1,14 @@
-import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
-import { Instant, Stopwatch } from "@anderjason/time";
+import { Instant } from "@anderjason/time";
 import { Actor } from "skytree";
 import { AbsoluteBucketIdentifier, Bucket, Dimension, DimensionProps } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { Metric } from "../Metric";
-import { PortableTag } from "../Tag/PortableTag";
+import { MongoDb } from "../MongoDb";
 export interface Order {
     key: string;
     direction: "ascending" | "descending";
 }
-export declare type TagLookup = string | PortableTag;
 export interface ObjectDbReadOptions {
     filter?: AbsoluteBucketIdentifier[];
     orderByMetric?: Order;
@@ -20,7 +18,7 @@ export interface ObjectDbReadOptions {
 }
 export interface ObjectDbProps<T> {
     label: string;
-    localFile: LocalFile;
+    db: MongoDb;
     metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
     cacheSize?: number;
     dimensions?: Dimension<T, DimensionProps>[];
@@ -48,7 +46,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly collectionDidChange: TypedEvent<void>;
     readonly entryWillChange: TypedEvent<EntryChange<T>>;
     readonly entryDidChange: TypedEvent<EntryChange<T>>;
-    readonly stopwatch: Stopwatch;
     protected _isLoaded: Observable<boolean>;
     readonly isLoaded: ReadOnlyObservable<boolean>;
     private _dimensionsByKey;
@@ -57,14 +54,12 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private _entryKeys;
     private _caches;
     private _db;
-    constructor(props: ObjectDbProps<T>);
     onActivate(): void;
     get metrics(): Metric[];
     private load;
     toEntryKeys(options?: ObjectDbReadOptions): Promise<string[]>;
     forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void>;
     hasEntry(entryKey: string): Promise<boolean>;
-    runTransaction(fn: () => Promise<void>): Promise<void>;
     toEntryCount(filter?: AbsoluteBucketIdentifier[]): Promise<number>;
     toEntries(options?: ObjectDbReadOptions): Promise<Entry<T>[]>;
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Promise<Entry<T> | undefined>;

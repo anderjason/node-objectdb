@@ -33,8 +33,7 @@ export interface ObjectDbReadOptions {
 
 export interface ObjectDbProps<T> {
   label: string;
-  dbName: string;
-  dbNamespace: string;
+  db: MongoDb;
   
   metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
 
@@ -89,12 +88,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _db: MongoDb;
 
   onActivate(): void {
-    this._db = this.addActor(
-      new MongoDb({
-        dbName: this.props.dbName,
-        namespace: this.props.dbNamespace,
-      })
-    );
+    this._db = this.props.db;
 
     this.addActor(
       new Timer({

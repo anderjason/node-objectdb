@@ -1,6 +1,6 @@
 import { Entry } from "./Entry";
 import { ObjectDb } from "./ObjectDb";
+import { MongoDb } from "./MongoDb";
 import { Metric } from "./Metric";
-import { Tag } from "./Tag";
 import { Broadcast } from "./Broadcast";
-export { Broadcast, Entry, Metric, Tag, ObjectDb };
+export { Broadcast, Entry, Metric, MongoDb, ObjectDb };

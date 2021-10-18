@@ -5,7 +5,6 @@ const observable_1 = require("@anderjason/observable");
 const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
-const ReadOnlySet_1 = require("../ReadOnlySet");
 function isAbsoluteBucketIdentifier(identifier) {
     return "dimensionKey" in identifier;
 }
@@ -47,9 +46,7 @@ class Dimension extends skytree_1.Actor {
         }));
     }
     async load() {
-        const row = this.db
-            .prepareCached("SELECT data FROM dimensions WHERE key = ?")
-            .get(this.props.key);
+        const row = await this.db.collection("dimensions").findOne({ key: this.props.key });
         if (row != null) {
             const data = JSON.parse(row.data);
             this.onLoad(data);
@@ -57,14 +54,12 @@ class Dimension extends skytree_1.Actor {
         this._isUpdated.setValue(true);
     }
     async save() {
-        const data = JSON.stringify(this.toPortableObject());
-        this.db
-            .prepareCached(`
-      INSERT INTO dimensions (key, data) 
-      VALUES (?, ?)
-      ON CONFLICT(key)
-      DO UPDATE SET data=?;`)
-            .run(this.props.key, data, data);
+        const data = this.toPortableObject();
+        await this.db.collection("dimensions").updateOne({ key: this.props.key }, {
+            $set: {
+                data: JSON.stringify(data),
+            },
+        }, { upsert: true });
         this._saveLater.clear();
     }
     toOptionalBucketGivenKey(key) {
@@ -172,7 +167,6 @@ class MaterializedBucket extends Bucket {
     constructor() {
         super(...arguments);
         this._entryKeys = new Set();
-        this.entryKeys = new ReadOnlySet_1.ReadOnlySet(this._entryKeys);
     }
     onActivate() {
         const storage = this.props.storage;
@@ -187,7 +181,7 @@ class MaterializedBucket extends Bucket {
         return new Set(this._entryKeys);
     }
     async hasEntryKey(entryKey) {
-        return this.entryKeys.has(entryKey);
+        return this._entryKeys.has(entryKey);
     }
     addEntryKey(entryKey) {
         if (this._entryKeys.has(entryKey)) {

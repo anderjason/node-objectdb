@@ -1,18 +1,16 @@
 import { Statement } from "better-sqlite3";
 import { Actor } from "skytree";
-import { ReadOnlyMap } from "../ReadOnlyMap";
-import { DbInstance } from "../SqlClient";
+import { MongoDb } from "..";
 
 export interface MetricProps {
   metricKey: string;
-  db: DbInstance;
+  db: MongoDb;
 }
 
 export class Metric extends Actor<MetricProps> {
   readonly key: string;
 
   private _entryMetricValues: Map<string, string>;  // this is initialized in loadOnce
-  private _readOnlyMetricValues: ReadOnlyMap<string, string>;
 
   private _upsertEntryMetricValueQuery: Statement<[string, string, string]>;
   private _deleteEntryMetricValueQuery: Statement<[string, string]>;
@@ -29,29 +27,14 @@ export class Metric extends Actor<MetricProps> {
     }
 
     this.key = props.metricKey;
-
-    const { db } = this.props;
-
-    this._upsertEntryMetricValueQuery = db.prepareCached(`
-      INSERT INTO metricValues (metricKey, entryKey, metricValue)
-      VALUES (?, ?, ?)
-    `);
-
-    this._deleteEntryMetricValueQuery = db.prepareCached(
-      "DELETE FROM metricValues WHERE metricKey = ? AND entryKey = ?"
-    );
   }
 
   onActivate() {}
 
-  async toEntryMetricValues(): Promise<ReadOnlyMap<string, string>> {
+  async toEntryMetricValues(): Promise<Map<string, string>> {
     await this.loadOnce();
 
-    if (this._readOnlyMetricValues == null) {
-      this._readOnlyMetricValues = new ReadOnlyMap(this._entryMetricValues);
-    }
-
-    return this._readOnlyMetricValues;
+    return new Map(this._entryMetricValues);
   }
 
   private async loadOnce(): Promise<void> {
@@ -61,32 +44,30 @@ export class Metric extends Actor<MetricProps> {
 
     const { db } = this.props;
 
-    db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)").run(
-      this.key
-    );
 
-    const rows = db
-      .prepareCached(
-        "SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?"
-      )
-      .all(this.key);
+    // db.prepareCached("INSERT OR IGNORE INTO metrics (key) VALUES (?)").run(
+    //   this.key
+    // );
+
+    // const rows = db
+    //   .prepareCached(
+    //     "SELECT entryKey, metricValue FROM metricValues WHERE metricKey = ?"
+    //   )
+    //   .all(this.key);
 
     this._entryMetricValues = new Map<string, string>();
-    rows.forEach((row) => {
-      this._entryMetricValues.set(row.entryKey, row.metricValue);
-    });
+    // rows.forEach((row) => {
+    //   this._entryMetricValues.set(row.entryKey, row.metricValue);
+    // });
   }
 
   async setValue(key: string, newValue: string): Promise<void> {
     await this.loadOnce();
 
-    this._upsertEntryMetricValueQuery.run(this.key, key, newValue);
     this._entryMetricValues.set(key, newValue);
   }
 
   async deleteKey(key: string): Promise<void> {
     await this.loadOnce();
-
-    this._deleteEntryMetricValueQuery.run(this.key, key);
   }
 }

@@ -2,7 +2,7 @@ import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { ObjectDb } from "..";
 import { PropsObject } from "../PropsObject";
-import { DbInstance } from "../SqlClient";
+import { MongoDb } from "../MongoDb";
 export declare type EntryStatus = "unknown" | "new" | "saved" | "updated" | "deleted";
 export declare type JSONSerializable = string | number | boolean | null | JSONSerializable[] | {
     [key: string]: JSONSerializable;
@@ -19,7 +19,7 @@ export interface EntryProps<T> {
     key?: string;
     createdAt?: Instant;
     updatedAt?: Instant;
-    db: DbInstance;
+    db: MongoDb;
     objectDb: ObjectDb<T>;
 }
 export declare class Entry<T> extends PropsObject<EntryProps<T>> {

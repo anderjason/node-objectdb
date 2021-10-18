@@ -13,63 +13,35 @@ class Entry extends PropsObject_1.PropsObject {
         this.status = "unknown";
     }
     async load() {
-        const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
+        const row = await this.props.db.collection("entries").findOne({ key: this.key });
         if (row == null) {
             this.status = "new";
             return false;
         }
-        const propertyValues = this.props.db.prepareCached("SELECT propertyKey, propertyValue FROM propertyValues WHERE entryKey = ?").all(this.key);
-        this.data = JSON.parse(row.data);
-        this.propertyValues = {};
-        propertyValues.forEach((row) => {
-            this.propertyValues[row.propertyKey] = JSON.parse(row.propertyValue);
-        });
-        this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAt);
-        this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAt);
+        this.data = row.data;
+        this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAtEpochMs);
+        this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAtEpochMs);
         this.status = "saved";
         return true;
     }
     async save() {
-        const data = JSON.stringify(this.data);
+        var _a;
         this.updatedAt = time_1.Instant.ofNow();
         if (this.createdAt == null) {
             this.createdAt = this.updatedAt;
         }
         const createdAtMs = this.createdAt.toEpochMilliseconds();
         const updatedAtMs = this.updatedAt.toEpochMilliseconds();
-        this.props.db.prepareCached(`
-      INSERT INTO entries (key, data, createdAt, updatedAt)
-      VALUES(?, ?, ?, ?)
-      ON CONFLICT(key) 
-      DO UPDATE SET data=?, createdAt=?, updatedAt=?;
-      `).run([
-            this.key,
-            data,
-            createdAtMs,
-            updatedAtMs,
-            data,
-            createdAtMs,
-            updatedAtMs,
-        ]);
-        this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ?").run(this.key);
-        const insertQuery = this.props.db.prepareCached(`
-      INSERT INTO propertyValues (entryKey, propertyKey, propertyValue) 
-      VALUES (?, ?, ?)
-      ON CONFLICT(entryKey, propertyKey)
-      DO UPDATE SET propertyValue=?;
-    `);
-        const deleteQuery = this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ? AND propertyKey = ?");
-        const properties = await this.props.objectDb.toProperties();
-        for (const property of properties) {
-            const value = this.propertyValues[property.key];
-            if (value != null) {
-                const valueStr = JSON.stringify(value);
-                insertQuery.run(this.key, property.key, valueStr, valueStr);
-            }
-            else {
-                deleteQuery.run(this.key, property.key);
-            }
-        }
+        await this.props.db.collection("entries").updateOne({ key: this.key }, {
+            $set: {
+                key: this.key,
+                createdAtEpochMs: createdAtMs,
+                updatedAtEpochMs: updatedAtMs,
+                data: this.data,
+                propertyValues: (_a = this.propertyValues) !== null && _a !== void 0 ? _a : {},
+                status: this.status,
+            },
+        }, { upsert: true });
         this.status = "saved";
     }
     toPortableEntry() {

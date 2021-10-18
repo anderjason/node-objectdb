@@ -8,10 +8,9 @@ const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
 const Entry_1 = require("../Entry");
 const Metric_1 = require("../Metric");
-const SqlClient_1 = require("../SqlClient");
 class ObjectDb extends skytree_1.Actor {
-    constructor(props) {
-        super(props);
+    constructor() {
+        super(...arguments);
         this.collectionDidChange = new observable_1.TypedEvent();
         this.entryWillChange = new observable_1.TypedEvent();
         this.entryDidChange = new observable_1.TypedEvent();
@@ -22,12 +21,9 @@ class ObjectDb extends skytree_1.Actor {
         this._properties = new Map();
         this._entryKeys = new Set();
         this._caches = new Map();
-        this.stopwatch = new time_1.Stopwatch(props.localFile.toAbsolutePath());
     }
     onActivate() {
-        this._db = this.addActor(new SqlClient_1.DbInstance({
-            localFile: this.props.localFile,
-        }));
+        this._db = this.props.db;
         this.addActor(new skytree_1.Timer({
             duration: time_1.Duration.givenMinutes(1),
             isRepeating: true,
@@ -51,106 +47,18 @@ class ObjectDb extends skytree_1.Actor {
             return;
         }
         const db = this._db;
-        db.runQuery("DROP TABLE IF EXISTS tagEntries");
-        db.runQuery("DROP TABLE IF EXISTS tags");
-        db.runQuery("DROP TABLE IF EXISTS tagPrefixes");
-        db.runQuery(`
-      CREATE TABLE IF NOT EXISTS meta (
-        id INTEGER PRIMARY KEY CHECK (id = 0),
-        properties TEXT NOT NULL
-      )
-    `);
-        db.runQuery(`
-      CREATE TABLE IF NOT EXISTS metrics (
-        key text PRIMARY KEY
-      )
-    `);
-        db.runQuery(`
-      CREATE TABLE IF NOT EXISTS entries (
-        key text PRIMARY KEY,
-        data TEXT NOT NULL,
-        createdAt INTEGER NOT NULL,
-        updatedAt INTEGER NOT NULL
-      )
-    `);
-        db.runQuery(`
-      CREATE TABLE IF NOT EXISTS dimensions (
-        key text PRIMARY KEY,
-        data TEXT NOT NULL
-      )
-    `);
-        db.runQuery(`
-      CREATE TABLE IF NOT EXISTS properties (
-        key text PRIMARY KEY,
-        definition TEXT NOT NULL
-      )
-    `);
-        db.runQuery(`
-      CREATE TABLE IF NOT EXISTS propertyValues (
-        entryKey TEXT NOT NULL,
-        propertyKey TEXT NOT NULL,
-        propertyValue TEXT NOT NULL,
-        FOREIGN KEY(propertyKey) REFERENCES properties(key),
-        FOREIGN KEY(entryKey) REFERENCES entries(key),
-        UNIQUE(propertyKey, entryKey)
-      )
-    `);
-        try {
-            db.runQuery(`
-        ALTER TABLE entries
-        ADD COLUMN propertyValues TEXT
-      `);
-        }
-        catch (err) {
-            // ignore
-        }
-        db.runQuery(`
-      CREATE TABLE IF NOT EXISTS metricValues (
-        metricKey TEXT NOT NULL,
-        entryKey TEXT NOT NULL,
-        metricValue TEXT NOT NULL,
-        FOREIGN KEY(metricKey) REFERENCES metrics(key),
-        FOREIGN KEY(entryKey) REFERENCES entries(key)
-        UNIQUE(metricKey, entryKey)
-      )
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricKey
-      ON metricValues(metricKey);
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxMetricValuesEntryKey
-      ON metricValues(entryKey);
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricValue
-      ON metricValues(metricValue);
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idsPropertyValuesEntryKey
-      ON propertyValues(entryKey);
-    `);
-        db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxPropertyValuesPropertyKey
-      ON propertyValues(propertyKey);
-    `);
-        db.prepareCached("INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)").run("{}");
-        db.toRows("SELECT key, definition FROM properties").forEach((row) => {
-            const { key, definition } = row;
-            // assign property definitions
-            this._properties.set(key, JSON.parse(definition));
+        // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
+        //   const { key, definition } = row;
+        //   // assign property definitions
+        //   this._properties.set(key, JSON.parse(definition));
+        // });
+        const entries = await this._db.collection("entries").find().toArray();
+        entries.forEach((row) => {
+            const { key } = row;
+            this._entryKeys.add(key);
         });
-        this.stopwatch.start("selectEntryKeys");
-        db.toRows("SELECT key FROM entries").forEach((row) => {
-            this._entryKeys.add(row.key);
-        });
-        this.stopwatch.stop("selectEntryKeys");
-        this.stopwatch.start("selectMetricKeys");
-        const metricKeys = db
-            .toRows("SELECT key FROM metrics")
-            .map((row) => row.key);
-        this.stopwatch.stop("selectMetricKeys");
-        this.stopwatch.start("createMetrics");
+        const metrics = await this._db.collection("metrics").find().toArray();
+        const metricKeys = metrics.map((row) => row.key);
         const metricKeyCount = metricKeys.length;
         for (let i = 0; i < metricKeyCount; i++) {
             const metricKey = metricKeys[i];
@@ -160,8 +68,6 @@ class ObjectDb extends skytree_1.Actor {
             }));
             this._metrics.set(metricKey, metric);
         }
-        this.stopwatch.stop("createMetrics");
-        this.stopwatch.start("addDimensions");
         if (this.props.dimensions != null) {
             for (const dimension of this.props.dimensions) {
                 dimension.db = this._db;
@@ -171,7 +77,6 @@ class ObjectDb extends skytree_1.Actor {
                 this._dimensionsByKey.set(dimension.key, dimension);
             }
         }
-        this.stopwatch.stop("addDimensions");
         this._isLoaded.setValue(true);
     }
     async toEntryKeys(options = {}) {
@@ -256,21 +161,6 @@ class ObjectDb extends skytree_1.Actor {
         const keys = await this.toEntryKeys();
         return keys.includes(entryKey);
     }
-    async runTransaction(fn) {
-        let failed = false;
-        this._db.runTransaction(async () => {
-            try {
-                await fn();
-            }
-            catch (err) {
-                failed = true;
-                console.error(err);
-            }
-        });
-        if (failed) {
-            throw new Error("The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance.");
-        }
-    }
     async toEntryCount(filter) {
         const keys = await this.toEntryKeys({
             filter,
@@ -320,10 +210,8 @@ class ObjectDb extends skytree_1.Actor {
     toDimensions() {
         return this._dimensionsByKey.values();
     }
-    async setProperty(property) {
-    }
-    async deletePropertyKey(key) {
-    }
+    async setProperty(property) { }
+    async deletePropertyKey(key) { }
     async toPropertyGivenKey(key) {
         return undefined;
     }
@@ -334,10 +222,8 @@ class ObjectDb extends skytree_1.Actor {
         for (const dimension of this._dimensionsByKey.values()) {
             await dimension.deleteEntryKey(entryKey);
         }
-        const metricKeys = this._db
-            .prepareCached("select distinct metricKey from metricValues where entryKey = ?")
-            .all(entryKey)
-            .map((row) => row.metricKey);
+        const metricValues = await this._db.collection("metricValues").find({ entryKey: entryKey }).toArray();
+        const metricKeys = metricValues.map((metricValue) => metricValue.metricKey);
         for (const metricKey of metricKeys) {
             const metric = await this.metricGivenMetricKey(metricKey);
             metric.deleteKey(entryKey);
@@ -353,7 +239,7 @@ class ObjectDb extends skytree_1.Actor {
                 await this.rebuildMetadataGivenEntry(entry);
             }
         }
-        console.log('Done rebuilding metadata');
+        console.log("Done rebuilding metadata");
     }
     toOptionalBucketGivenIdentifier(bucketIdentifier) {
         if (bucketIdentifier == null) {
@@ -476,10 +362,7 @@ class ObjectDb extends skytree_1.Actor {
         };
         this.entryWillChange.emit(change);
         await this.removeMetadataGivenEntryKey(entryKey);
-        this._db.runQuery("DELETE FROM propertyValues WHERE entryKey = ?", [entryKey]);
-        this._db.runQuery(`
-      DELETE FROM entries WHERE key = ?
-    `, [entryKey]);
+        await this._db.collection("entries").deleteOne({ id: entryKey });
         this._entryKeys.delete(entryKey);
         this.entryDidChange.emit(change);
         this.collectionDidChange.emit();

@@ -1,8 +1,6 @@
 import { Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
 import { Actor } from "skytree";
-import { Entry, ObjectDb } from "..";
-import { ReadOnlySet } from "../ReadOnlySet";
-import { DbInstance } from "../SqlClient";
+import { Entry, MongoDb, ObjectDb } from "..";
 export interface BucketProps<T> {
     identifier: RelativeBucketIdentifier;
     dimension: Dimension<T, DimensionProps>;
@@ -47,7 +45,7 @@ export declare abstract class Dimension<T, TP extends DimensionProps> extends Ac
     readonly isUpdated: ReadOnlyObservable<boolean>;
     label: string;
     objectDb: ObjectDb<T>;
-    db: DbInstance;
+    db: MongoDb;
     private _saveLater;
     constructor(props: TP);
     onActivate(): void;
@@ -76,7 +74,6 @@ export declare class MaterializedDimension<T> extends Dimension<T, MaterializedD
 }
 export declare class MaterializedBucket<T> extends Bucket<T> {
     private _entryKeys;
-    readonly entryKeys: ReadOnlySet<string>;
     onActivate(): void;
     toEntryKeys(): Promise<Set<string>>;
     hasEntryKey(entryKey: string): Promise<boolean>;
