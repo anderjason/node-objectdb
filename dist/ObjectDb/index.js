@@ -262,7 +262,6 @@ class ObjectDb extends skytree_1.Actor {
         return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
     }
     async rebuildMetadataGivenEntry(entry) {
-        console.log("rebuildMetadataGivenEntry", entry.key);
         await this.removeMetadataGivenEntryKey(entry.key);
         const metricValues = this.props.metricsGivenEntry(entry);
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();

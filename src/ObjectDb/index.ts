@@ -417,9 +417,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
   }
 
-  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
-    console.log("rebuildMetadataGivenEntry", entry.key);
-    
+  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {    
     await this.removeMetadataGivenEntryKey(entry.key);
 
     const metricValues = this.props.metricsGivenEntry(entry);
