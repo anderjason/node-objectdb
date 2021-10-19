@@ -134,15 +134,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       projection: { key: 1 }
     }).toArray();
     
-    console.log(entries);
-    
     entries.forEach((row) => {
       const { key } = row;
 
       this._entryKeys.add(key);
     });
 
-    const metrics = await this._db.collection<unknown>("metrics").find().toArray();
+    const metrics = await this._db.collection<unknown>("metrics").find(undefined, {
+      projection: { key: 1 }
+    }).toArray();
     const metricKeys = metrics.map((row: any) => row.key);
 
     const metricKeyCount = metricKeys.length;
