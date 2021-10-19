@@ -3,7 +3,6 @@ import { Instant } from "@anderjason/time";
 import { Actor } from "skytree";
 import { AbsoluteBucketIdentifier, Bucket, Dimension, DimensionProps } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
-import { Metric } from "../Metric";
 import { MongoDb } from "../MongoDb";
 export interface Order {
     key: string;
@@ -11,7 +10,6 @@ export interface Order {
 }
 export interface ObjectDbReadOptions {
     filter?: AbsoluteBucketIdentifier[];
-    orderByMetric?: Order;
     limit?: number;
     offset?: number;
     cacheKey?: string;
@@ -19,12 +17,12 @@ export interface ObjectDbReadOptions {
 export interface ObjectDbProps<T> {
     label: string;
     db: MongoDb;
-    metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
     cacheSize?: number;
     dimensions?: Dimension<T, DimensionProps>[];
 }
 export interface EntryChange<T> {
     key: string;
+    entry: Entry<T>;
     oldData?: T;
     newData?: T;
 }
@@ -49,13 +47,11 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     protected _isLoaded: Observable<boolean>;
     readonly isLoaded: ReadOnlyObservable<boolean>;
     private _dimensionsByKey;
-    private _metrics;
     private _properties;
     private _entryKeys;
     private _caches;
     private _db;
     onActivate(): void;
-    get metrics(): Metric[];
     private load;
     save(): Promise<void>;
     toEntryKeys(options?: ObjectDbReadOptions): Promise<string[]>;
@@ -72,11 +68,10 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toPropertyGivenKey(key: string): Promise<PropertyDefinition>;
     toProperties(): Promise<PropertyDefinition[]>;
     removeMetadataGivenEntryKey(entryKey: string): Promise<void>;
+    rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
     rebuildMetadata(): Promise<void>;
     toOptionalBucketGivenIdentifier(bucketIdentifier: AbsoluteBucketIdentifier): Bucket<T> | undefined;
-    rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
     writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void>;
-    metricGivenMetricKey(metricKey: string): Promise<Metric>;
     writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Promise<Entry<T>>;
     deleteEntryKey(entryKey: string): Promise<void>;
 }

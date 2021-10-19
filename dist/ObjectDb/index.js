@@ -7,7 +7,6 @@ const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
 const Entry_1 = require("../Entry");
-const Metric_1 = require("../Metric");
 class ObjectDb extends skytree_1.Actor {
     constructor() {
         super(...arguments);
@@ -17,7 +16,6 @@ class ObjectDb extends skytree_1.Actor {
         this._isLoaded = observable_1.Observable.givenValue(false, observable_1.Observable.isStrictEqual);
         this.isLoaded = observable_1.ReadOnlyObservable.givenObservable(this._isLoaded);
         this._dimensionsByKey = new Map();
-        this._metrics = new Map();
         this._properties = new Map();
         this._entryKeys = new Set();
         this._caches = new Map();
@@ -39,9 +37,6 @@ class ObjectDb extends skytree_1.Actor {
         }));
         this.load();
     }
-    get metrics() {
-        return Array.from(this._metrics.values());
-    }
     async load() {
         if (this.isActive == false) {
             return;
@@ -60,19 +55,6 @@ class ObjectDb extends skytree_1.Actor {
             const { key } = row;
             this._entryKeys.add(key);
         });
-        const metrics = await this._db.collection("metrics").find(undefined, {
-            projection: { key: 1 }
-        }).toArray();
-        const metricKeys = metrics.map((row) => row.key);
-        const metricKeyCount = metricKeys.length;
-        for (let i = 0; i < metricKeyCount; i++) {
-            const metricKey = metricKeys[i];
-            const metric = this.addActor(new Metric_1.Metric({
-                metricKey,
-                db: this._db,
-            }));
-            this._metrics.set(metricKey, metric);
-        }
         if (this.props.dimensions != null) {
             for (const dimension of this.props.dimensions) {
                 dimension.db = this._db;
@@ -90,7 +72,7 @@ class ObjectDb extends skytree_1.Actor {
         }
     }
     async toEntryKeys(options = {}) {
-        var _a, _b, _c;
+        var _a;
         const now = time_1.Instant.ofNow();
         let entryKeys = undefined;
         let fullCacheKey = undefined;
@@ -104,7 +86,7 @@ class ObjectDb extends skytree_1.Actor {
                 }
             }
             const hashCodes = buckets.map((bucket) => bucket.toHashCode());
-            const cacheKeyData = `${options.cacheKey}:${(_b = options.orderByMetric) === null || _b === void 0 ? void 0 : _b.direction}:${(_c = options.orderByMetric) === null || _c === void 0 ? void 0 : _c.key}:${hashCodes.join(",")}`;
+            const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
         }
         if (fullCacheKey != null) {
@@ -131,16 +113,6 @@ class ObjectDb extends skytree_1.Actor {
                     }
                 }
                 entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
-            }
-            const order = options.orderByMetric;
-            if (order != null) {
-                const metric = this._metrics.get(order.key);
-                if (metric != null) {
-                    const entryMetricValues = await metric.toEntryMetricValues();
-                    entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (entryKey) => {
-                        return entryMetricValues.get(entryKey);
-                    }, order.direction);
-                }
             }
         }
         if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
@@ -232,23 +204,18 @@ class ObjectDb extends skytree_1.Actor {
         for (const dimension of this._dimensionsByKey.values()) {
             await dimension.deleteEntryKey(entryKey);
         }
-        const metricValues = await this._db.collection("metricValues").find({ entryKey: entryKey }).toArray();
-        const metricKeys = metricValues.map((metricValue) => metricValue.metricKey);
-        for (const metricKey of metricKeys) {
-            const metric = await this.metricGivenMetricKey(metricKey);
-            metric.deleteKey(entryKey);
+    }
+    async rebuildMetadataGivenEntry(entry) {
+        await this.removeMetadataGivenEntryKey(entry.key);
+        for (const dimension of this._dimensionsByKey.values()) {
+            await dimension.entryDidChange(entry);
         }
     }
     async rebuildMetadata() {
         console.log(`Rebuilding metadata for ${this.props.label}...`);
-        const entryKeys = await this.toEntryKeys();
-        console.log(`Found ${entryKeys.length} entries`);
-        for (const entryKey of entryKeys) {
-            const entry = await this.toOptionalEntryGivenKey(entryKey);
-            if (entry != null) {
-                await this.rebuildMetadataGivenEntry(entry);
-            }
-        }
+        await this.forEach(async (entry) => {
+            await this.rebuildMetadataGivenEntry(entry);
+        });
         console.log("Done rebuilding metadata");
     }
     toOptionalBucketGivenIdentifier(bucketIdentifier) {
@@ -260,20 +227,6 @@ class ObjectDb extends skytree_1.Actor {
             return undefined;
         }
         return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
-    }
-    async rebuildMetadataGivenEntry(entry) {
-        await this.removeMetadataGivenEntryKey(entry.key);
-        const metricValues = this.props.metricsGivenEntry(entry);
-        metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
-        metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
-        for (const dimension of this._dimensionsByKey.values()) {
-            await dimension.entryDidChange(entry.key);
-        }
-        for (const metricKey of Object.keys(metricValues)) {
-            const metric = await this.metricGivenMetricKey(metricKey);
-            const metricValue = metricValues[metricKey];
-            metric.setValue(entry.key, metricValue);
-        }
     }
     async writeEntry(entry) {
         if (entry == null) {
@@ -301,17 +254,6 @@ class ObjectDb extends skytree_1.Actor {
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
     }
-    async metricGivenMetricKey(metricKey) {
-        let metric = this._metrics.get(metricKey);
-        if (metric == null) {
-            metric = this.addActor(new Metric_1.Metric({
-                metricKey,
-                db: this._db,
-            }));
-            this._metrics.set(metricKey, metric);
-        }
-        return metric;
-    }
     async writeEntryData(entryData, propertyValues = {}, entryKey, createdAt) {
         if (entryKey == null) {
             entryKey = node_crypto_1.UniqueId.ofRandom().toUUIDString();
@@ -328,12 +270,6 @@ class ObjectDb extends skytree_1.Actor {
             // nothing changed
             return;
         }
-        const change = {
-            key: entryKey,
-            oldData,
-            newData: entryData,
-        };
-        this.entryWillChange.emit(change);
         const now = time_1.Instant.ofNow();
         let didCreateNewEntry = false;
         let entry = await this.toOptionalEntryGivenKey(entryKey);
@@ -349,9 +285,15 @@ class ObjectDb extends skytree_1.Actor {
         }
         entry.data = entryData;
         entry.propertyValues = propertyValues;
+        const change = {
+            key: entryKey,
+            entry,
+            oldData,
+            newData: entryData,
+        };
+        this.entryWillChange.emit(change);
         await entry.save();
         this._entryKeys.add(entryKey);
-        await this.rebuildMetadataGivenEntry(entry);
         if (didCreateNewEntry) {
             this.collectionDidChange.emit();
         }
@@ -368,6 +310,7 @@ class ObjectDb extends skytree_1.Actor {
         }
         const change = {
             key: entryKey,
+            entry: existingRecord,
             oldData: existingRecord.data,
         };
         this.entryWillChange.emit(change);

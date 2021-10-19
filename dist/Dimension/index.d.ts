@@ -51,7 +51,7 @@ export declare abstract class Dimension<T, TP extends DimensionProps> extends Ac
     onActivate(): void;
     abstract load(): Promise<void>;
     abstract deleteEntryKey(entryKey: string): Promise<void>;
-    abstract entryDidChange(entryKey: string): Promise<void>;
+    abstract entryDidChange(entry: Entry<T>): Promise<void>;
     save(): Promise<void>;
     toOptionalBucketGivenKey(key: string): Bucket<T> | undefined;
     toBuckets(): IterableIterator<Bucket<T>>;
@@ -66,7 +66,7 @@ export declare class MaterializedDimension<T> extends Dimension<T, MaterializedD
     private _waitingForEntryKeys;
     onActivate(): void;
     load(): Promise<void>;
-    entryDidChange(entryKey: string): Promise<void>;
+    entryDidChange(entry: Entry<T>): Promise<void>;
     deleteEntryKey(entryKey: string): Promise<void>;
     private rebuildEntry;
     rebuild(): Promise<void>;

@@ -37,7 +37,6 @@ Test.define("ObjectDb can be created", async () => {
     const fileDb = new ObjectDb<TestEntryData>({
       db,
       label: "TestDb",
-      metricsGivenEntry: () => ({}),
     });
     fileDb.activate();
 
@@ -52,7 +51,6 @@ Test.define("ObjectDb can write and read a row", async () => {
     const fileDb = new ObjectDb<TestEntryData>({
       db,
       label: "TestDb",
-      metricsGivenEntry: () => ({}),
     });
     fileDb.activate();
     await fileDb.isLoaded.toPromise(v => v);
@@ -362,7 +360,6 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
     const fileDb = new ObjectDb<TestEntryData>({
       label: "testDb",
       db,
-      metricsGivenEntry: (entry) => ({}),
       dimensions: [
         new MaterializedDimension({
           key: "message",
@@ -458,7 +455,6 @@ Test.define("ObjectDb supports materialized dimensions", async () => {
     const fileDb = new ObjectDb<TestEntryData>({
       label: "testDb",
       db,
-      metricsGivenEntry: (entry) => ({}),
       dimensions: [md],
     });
     fileDb.activate();
@@ -516,7 +512,6 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
     const fileDb = new ObjectDb<TestEntryData>({
       label: "testDb",
       db,
-      metricsGivenEntry: (entry) => ({}),
       dimensions: [md],
     });
     fileDb.activate();
@@ -554,7 +549,6 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
     const fileDb2 = new ObjectDb<TestEntryData>({
       label: "testDb",
       db,
-      metricsGivenEntry: (entry) => ({}),
       dimensions: [md2],
     });
     fileDb2.activate();

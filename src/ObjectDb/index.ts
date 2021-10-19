@@ -15,7 +15,6 @@ import {
   DimensionProps
 } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
-import { Metric } from "../Metric";
 import { MongoDb } from "../MongoDb";
 
 export interface Order {
@@ -25,7 +24,6 @@ export interface Order {
 
 export interface ObjectDbReadOptions {
   filter?: AbsoluteBucketIdentifier[];
-  orderByMetric?: Order;
   limit?: number;
   offset?: number;
   cacheKey?: string;
@@ -35,14 +33,13 @@ export interface ObjectDbProps<T> {
   label: string;
   db: MongoDb;
   
-  metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
-
   cacheSize?: number;
   dimensions?: Dimension<T, DimensionProps>[];
 }
 
 export interface EntryChange<T> {
   key: string;
+  entry: Entry<T>;
 
   oldData?: T;
   newData?: T;
@@ -80,7 +77,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly isLoaded = ReadOnlyObservable.givenObservable(this._isLoaded);
 
   private _dimensionsByKey = new Map<string, Dimension<T, DimensionProps>>();
-  private _metrics = new Map<string, Metric>();
   private _properties = new Map<string, PropertyDefinition>();
   private _entryKeys = new Set<string>();
   private _caches = new Map<number, CacheData>();
@@ -110,10 +106,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.load();
   }
 
-  get metrics(): Metric[] {
-    return Array.from(this._metrics.values());
-  }
-
   private async load(): Promise<void> {
     if (this.isActive == false) {
       return;
@@ -139,25 +131,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
       this._entryKeys.add(key);
     });
-
-    const metrics = await this._db.collection<unknown>("metrics").find(undefined, {
-      projection: { key: 1 }
-    }).toArray();
-    const metricKeys = metrics.map((row: any) => row.key);
-
-    const metricKeyCount = metricKeys.length;
-    for (let i = 0; i < metricKeyCount; i++) {
-      const metricKey = metricKeys[i];
-
-      const metric = this.addActor(
-        new Metric({
-          metricKey,
-          db: this._db,
-        })
-      );
-
-      this._metrics.set(metricKey, metric);
-    }
 
     if (this.props.dimensions != null) {
       for (const dimension of this.props.dimensions) {
@@ -200,9 +173,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
       const hashCodes = buckets.map((bucket) => bucket.toHashCode());
 
-      const cacheKeyData = `${options.cacheKey}:${
-        options.orderByMetric?.direction
-      }:${options.orderByMetric?.key}:${hashCodes.join(",")}`;
+      const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
       fullCacheKey = StringUtil.hashCodeGivenString(cacheKeyData);
     }
 
@@ -231,22 +202,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         }
 
         entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
-      }
-
-      const order = options.orderByMetric;
-      if (order != null) {
-        const metric = this._metrics.get(order.key);
-        if (metric != null) {
-          const entryMetricValues = await metric.toEntryMetricValues();
-
-          entryKeys = ArrayUtil.arrayWithOrderFromValue(
-            entryKeys,
-            (entryKey) => {
-              return entryMetricValues.get(entryKey);
-            },
-            order.direction
-          );
-        }
       }
     }
 
@@ -375,30 +330,23 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     for (const dimension of this._dimensionsByKey.values()) {
       await dimension.deleteEntryKey(entryKey);
     }
+  }
 
-    const metricValues = await this._db.collection("metricValues").find({ entryKey: entryKey }).toArray();
-    const metricKeys = metricValues.map((metricValue: any) => metricValue.metricKey);
-    
-    for (const metricKey of metricKeys) {
-      const metric = await this.metricGivenMetricKey(metricKey);
-      metric.deleteKey(entryKey);
+  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {    
+    await this.removeMetadataGivenEntryKey(entry.key);
+
+    for (const dimension of this._dimensionsByKey.values()) {
+      await dimension.entryDidChange(entry);
     }
   }
 
   async rebuildMetadata(): Promise<void> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
-    const entryKeys = await this.toEntryKeys();
-
-    console.log(`Found ${entryKeys.length} entries`);
-
-    for (const entryKey of entryKeys) {
-      const entry = await this.toOptionalEntryGivenKey(entryKey);
-      if (entry != null) {
-        await this.rebuildMetadataGivenEntry(entry);
-      }
-    }
-
+    await this.forEach(async entry => {
+      await this.rebuildMetadataGivenEntry(entry);
+    });
+    
     console.log("Done rebuilding metadata");
   }
 
@@ -415,26 +363,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
-  }
-
-  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {    
-    await this.removeMetadataGivenEntryKey(entry.key);
-
-    const metricValues = this.props.metricsGivenEntry(entry);
-
-    metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
-    metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
-
-    for (const dimension of this._dimensionsByKey.values()) {
-      await dimension.entryDidChange(entry.key);
-    }
-
-    for (const metricKey of Object.keys(metricValues)) {
-      const metric = await this.metricGivenMetricKey(metricKey);
-
-      const metricValue = metricValues[metricKey];
-      metric.setValue(entry.key, metricValue);
-    }
   }
 
   async writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void> {
@@ -477,21 +405,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  async metricGivenMetricKey(metricKey: string): Promise<Metric> {
-    let metric = this._metrics.get(metricKey);
-    if (metric == null) {
-      metric = this.addActor(
-        new Metric({
-          metricKey,
-          db: this._db,
-        })
-      );
-      this._metrics.set(metricKey, metric);
-    }
-
-    return metric;
-  }
-
   async writeEntryData(
     entryData: T,
     propertyValues: Dict<JSONSerializable> = {},
@@ -519,13 +432,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-    const change: EntryChange<T> = {
-      key: entryKey,
-      oldData,
-      newData: entryData,
-    };
-
-    this.entryWillChange.emit(change);
 
     const now = Instant.ofNow();
     let didCreateNewEntry = false;
@@ -545,10 +451,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry.data = entryData;
     entry.propertyValues = propertyValues;
 
+    const change: EntryChange<T> = {
+      key: entryKey,
+      entry,
+      oldData,
+      newData: entryData,
+    };
+
+    this.entryWillChange.emit(change);
+
     await entry.save();
 
     this._entryKeys.add(entryKey);
-    await this.rebuildMetadataGivenEntry(entry);
 
     if (didCreateNewEntry) {
       this.collectionDidChange.emit();
@@ -571,6 +485,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const change: EntryChange<T> = {
       key: entryKey,
+      entry: existingRecord,
       oldData: existingRecord.data,
     };
 

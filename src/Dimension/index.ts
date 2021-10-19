@@ -126,7 +126,7 @@ export abstract class Dimension<
 
   abstract load(): Promise<void>;
   abstract deleteEntryKey(entryKey: string): Promise<void>;
-  abstract entryDidChange(entryKey: string): Promise<void>;
+  abstract entryDidChange(entry: Entry<T>): Promise<void>;
 
   async save(): Promise<void> {
     const data = this.toPortableObject();
@@ -196,8 +196,12 @@ export class MaterializedDimension<T> extends Dimension<
     super.onActivate();
 
     this.cancelOnDeactivate(
-      this.objectDb.entryDidChange.subscribe(async (change) => {
-        this.entryDidChange(change.key);
+      this.objectDb.entryDidChange.subscribe(async (change) => {        
+        if (change.newData != null) {
+          this.entryDidChange(change.entry);
+        } else {
+          this.deleteEntryKey(change.key);
+        }
       })
     );
   }
@@ -219,18 +223,17 @@ export class MaterializedDimension<T> extends Dimension<
     this._isUpdated.setValue(true);
   }
 
-  async entryDidChange(entryKey: string): Promise<void> {
+  async entryDidChange(entry: Entry<T>): Promise<void> {
     this._isUpdated.setValue(false);
-    this._waitingForEntryKeys.add(entryKey);
+    this._waitingForEntryKeys.add(entry.key);
 
-    const entry = await this.objectDb.toOptionalEntryGivenKey(entryKey);
     if (entry == null) {
-      await this.deleteEntryKey(entryKey);
+      await this.deleteEntryKey(entry.key);
     } else {
       await this.rebuildEntry(entry);
     }
 
-    this._waitingForEntryKeys.delete(entryKey);
+    this._waitingForEntryKeys.delete(entry.key);
     if (this._waitingForEntryKeys.size === 0) {
       this._isUpdated.setValue(true);
     }

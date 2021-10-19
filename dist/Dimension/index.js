@@ -94,7 +94,12 @@ class MaterializedDimension extends Dimension {
     onActivate() {
         super.onActivate();
         this.cancelOnDeactivate(this.objectDb.entryDidChange.subscribe(async (change) => {
-            this.entryDidChange(change.key);
+            if (change.newData != null) {
+                this.entryDidChange(change.entry);
+            }
+            else {
+                this.deleteEntryKey(change.key);
+            }
         }));
     }
     async load() {
@@ -110,17 +115,16 @@ class MaterializedDimension extends Dimension {
         }
         this._isUpdated.setValue(true);
     }
-    async entryDidChange(entryKey) {
+    async entryDidChange(entry) {
         this._isUpdated.setValue(false);
-        this._waitingForEntryKeys.add(entryKey);
-        const entry = await this.objectDb.toOptionalEntryGivenKey(entryKey);
+        this._waitingForEntryKeys.add(entry.key);
         if (entry == null) {
-            await this.deleteEntryKey(entryKey);
+            await this.deleteEntryKey(entry.key);
         }
         else {
             await this.rebuildEntry(entry);
         }
-        this._waitingForEntryKeys.delete(entryKey);
+        this._waitingForEntryKeys.delete(entry.key);
         if (this._waitingForEntryKeys.size === 0) {
             this._isUpdated.setValue(true);
         }
