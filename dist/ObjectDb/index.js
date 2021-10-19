@@ -206,7 +206,6 @@ class ObjectDb extends skytree_1.Actor {
         }
     }
     async rebuildMetadataGivenEntry(entry) {
-        await this.removeMetadataGivenEntryKey(entry.key);
         for (const dimension of this._dimensionsByKey.values()) {
             await dimension.entryDidChange(entry);
         }

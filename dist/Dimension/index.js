@@ -104,7 +104,10 @@ class MaterializedDimension extends Dimension {
     }
     async load() {
         // const row = await this.db.collection<any>("dimensions").findOne({ key: this.props.key });
-        const bucketRows = await this.db.collection("buckets").find({ "identifier.dimensionKey": this.props.key }).toArray();
+        const bucketRows = await this.db
+            .collection("buckets")
+            .find({ "identifier.dimensionKey": this.props.key })
+            .toArray();
         for (const bucketRow of bucketRows) {
             const bucket = new MaterializedBucket({
                 identifier: bucketRow.identifier,
@@ -118,12 +121,7 @@ class MaterializedDimension extends Dimension {
     async entryDidChange(entry) {
         this._isUpdated.setValue(false);
         this._waitingForEntryKeys.add(entry.key);
-        if (entry == null) {
-            await this.deleteEntryKey(entry.key);
-        }
-        else {
-            await this.rebuildEntry(entry);
-        }
+        await this.rebuildEntry(entry);
         this._waitingForEntryKeys.delete(entry.key);
         if (this._waitingForEntryKeys.size === 0) {
             this._isUpdated.setValue(true);
@@ -134,30 +132,51 @@ class MaterializedDimension extends Dimension {
             bucket.deleteEntryKey(entryKey);
         }
     }
+    rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier) {
+        if (isAbsoluteBucketIdentifier(bucketIdentifier)) {
+            if (bucketIdentifier.dimensionKey !== this.props.key) {
+                throw new Error(`Received an absolute bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
+            }
+        }
+        // create the bucket if necessary
+        if (!this._buckets.has(bucketIdentifier.bucketKey)) {
+            const bucket = new MaterializedBucket({
+                identifier: bucketIdentifier,
+                dimension: this,
+            });
+            this.addBucket(bucket);
+        }
+        const bucket = this._buckets.get(bucketIdentifier.bucketKey);
+        bucket.addEntryKey(entry.key);
+    }
     async rebuildEntry(entry) {
-        var _a;
-        let bucketIdentifiers = (_a = this.props.bucketIdentifiersGivenEntry(entry)) !== null && _a !== void 0 ? _a : [];
-        bucketIdentifiers = bucketIdentifiers.filter((bi) => bi != null);
-        for (const bucketIdentifier of bucketIdentifiers) {
-            if (isAbsoluteBucketIdentifier(bucketIdentifier)) {
-                if (bucketIdentifier.dimensionKey !== this.props.key) {
-                    throw new Error(`Received an absolute bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
+        const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);
+        if (Array.isArray(bucketIdentifiers)) {
+            for (const bucketIdentifier of bucketIdentifiers) {
+                if (bucketIdentifier != null) {
+                    this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier);
                 }
             }
-            // create the bucket if necessary
-            if (!this._buckets.has(bucketIdentifier.bucketKey)) {
-                const bucket = new MaterializedBucket({
-                    identifier: bucketIdentifier,
-                    dimension: this,
-                });
-                this.addBucket(bucket);
+            const bucketKeys = new Set(bucketIdentifiers.map((bi) => bi.bucketKey));
+            for (const bucket of this._buckets.values()) {
+                if (!bucketKeys.has(bucket.props.identifier.bucketKey)) {
+                    bucket.deleteEntryKey(entry.key);
+                }
             }
-            const bucket = this._buckets.get(bucketIdentifier.bucketKey);
-            bucket.addEntryKey(entry.key);
         }
-        const bucketKeys = new Set(bucketIdentifiers.map((bi) => bi.bucketKey));
-        for (const bucket of this._buckets.values()) {
-            if (!bucketKeys.has(bucket.props.identifier.bucketKey)) {
+        else if (bucketIdentifiers != null) {
+            // not an array, just a single object
+            this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifiers);
+            const bucketKey = bucketIdentifiers.bucketKey;
+            for (const bucket of this._buckets.values()) {
+                if (bucket.props.identifier.bucketKey != bucketKey) {
+                    bucket.deleteEntryKey(entry.key);
+                }
+            }
+        }
+        else {
+            // undefined, delete all buckets
+            for (const bucket of this._buckets.values()) {
                 bucket.deleteEntryKey(entry.key);
             }
         }

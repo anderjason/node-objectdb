@@ -130,7 +130,7 @@ export abstract class Dimension<
 
   async save(): Promise<void> {
     const data = this.toPortableObject();
-    
+
     if (this.db.isConnected.value == false) {
       console.error("Cannot save dimension because MongoDb is not connected");
       return;
@@ -149,7 +149,7 @@ export abstract class Dimension<
     for (const bucket of this._buckets.values()) {
       await bucket.save();
     }
-    
+
     this._saveLater.clear();
   }
 
@@ -181,7 +181,9 @@ export abstract class Dimension<
 }
 
 export interface MaterializedDimensionProps<T> extends DimensionProps {
-  bucketIdentifiersGivenEntry: (entry: Entry<T>) => RelativeBucketIdentifier[];
+  bucketIdentifiersGivenEntry: (
+    entry: Entry<T>
+  ) => undefined | RelativeBucketIdentifier | RelativeBucketIdentifier[];
 }
 
 export class MaterializedDimension<T> extends Dimension<
@@ -196,7 +198,7 @@ export class MaterializedDimension<T> extends Dimension<
     super.onActivate();
 
     this.cancelOnDeactivate(
-      this.objectDb.entryDidChange.subscribe(async (change) => {        
+      this.objectDb.entryDidChange.subscribe(async (change) => {
         if (change.newData != null) {
           this.entryDidChange(change.entry);
         } else {
@@ -209,7 +211,10 @@ export class MaterializedDimension<T> extends Dimension<
   async load(): Promise<void> {
     // const row = await this.db.collection<any>("dimensions").findOne({ key: this.props.key });
 
-    const bucketRows = await this.db.collection<PortableBucket>("buckets").find({ "identifier.dimensionKey": this.props.key }).toArray();
+    const bucketRows = await this.db
+      .collection<PortableBucket>("buckets")
+      .find({ "identifier.dimensionKey": this.props.key })
+      .toArray();
     for (const bucketRow of bucketRows) {
       const bucket = new MaterializedBucket({
         identifier: bucketRow.identifier,
@@ -227,11 +232,7 @@ export class MaterializedDimension<T> extends Dimension<
     this._isUpdated.setValue(false);
     this._waitingForEntryKeys.add(entry.key);
 
-    if (entry == null) {
-      await this.deleteEntryKey(entry.key);
-    } else {
-      await this.rebuildEntry(entry);
-    }
+    await this.rebuildEntry(entry);
 
     this._waitingForEntryKeys.delete(entry.key);
     if (this._waitingForEntryKeys.size === 0) {
@@ -245,40 +246,66 @@ export class MaterializedDimension<T> extends Dimension<
     }
   }
 
-  private async rebuildEntry(entry: Entry<T>): Promise<void> {
-    let bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry) ?? [];
-    bucketIdentifiers = bucketIdentifiers.filter((bi) => bi != null);
+  private rebuildEntryGivenBucketIdentifier(
+    entry: Entry<T>,
+    bucketIdentifier: RelativeBucketIdentifier
+  ): void {
+    if (isAbsoluteBucketIdentifier(bucketIdentifier)) {
+      if (bucketIdentifier.dimensionKey !== this.props.key) {
+        throw new Error(
+          `Received an absolute bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`
+        );
+      }
+    }
 
-    for (const bucketIdentifier of bucketIdentifiers) {
-      if (isAbsoluteBucketIdentifier(bucketIdentifier)) {
-        if (bucketIdentifier.dimensionKey !== this.props.key) {
-          throw new Error(
-            `Received an absolute bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`
-          );
+    // create the bucket if necessary
+    if (!this._buckets.has(bucketIdentifier.bucketKey)) {
+      const bucket = new MaterializedBucket({
+        identifier: bucketIdentifier,
+        dimension: this,
+      });
+
+      this.addBucket(bucket);
+    }
+
+    const bucket = this._buckets.get(
+      bucketIdentifier.bucketKey
+    ) as MaterializedBucket<T>;
+
+    bucket.addEntryKey(entry.key);
+  }
+
+  private async rebuildEntry(entry: Entry<T>): Promise<void> {
+    const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);
+
+    if (Array.isArray(bucketIdentifiers)) {
+      for (const bucketIdentifier of bucketIdentifiers) {
+        if (bucketIdentifier != null) {
+          this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier);
         }
       }
 
-      // create the bucket if necessary
-      if (!this._buckets.has(bucketIdentifier.bucketKey)) {
-        const bucket = new MaterializedBucket({
-          identifier: bucketIdentifier,
-          dimension: this,
-        });
+      const bucketKeys = new Set(bucketIdentifiers.map((bi) => bi.bucketKey));
 
-        this.addBucket(bucket);
+      for (const bucket of this._buckets.values()) {
+        if (!bucketKeys.has(bucket.props.identifier.bucketKey)) {
+          (bucket as MaterializedBucket<T>).deleteEntryKey(entry.key);
+        }
       }
+    } else if (bucketIdentifiers != null) {
+      // not an array, just a single object
+      this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifiers);
 
-      const bucket = this._buckets.get(
-        bucketIdentifier.bucketKey
-      ) as MaterializedBucket<T>;
-
-      bucket.addEntryKey(entry.key);
-    }
-
-    const bucketKeys = new Set(bucketIdentifiers.map((bi) => bi.bucketKey));
-
-    for (const bucket of this._buckets.values()) {
-      if (!bucketKeys.has(bucket.props.identifier.bucketKey)) {
+      const bucketKey = bucketIdentifiers.bucketKey;
+      
+      for (const bucket of this._buckets.values()) {
+        if (bucket.props.identifier.bucketKey != bucketKey) {
+          (bucket as MaterializedBucket<T>).deleteEntryKey(entry.key);
+        }
+      }
+    } else {
+      // undefined, delete all buckets
+      for (const bucket of this._buckets.values()) {
         (bucket as MaterializedBucket<T>).deleteEntryKey(entry.key);
       }
     }
@@ -340,7 +367,7 @@ export class MaterializedBucket<T> extends Bucket<T> {
 
   async save(): Promise<void> {
     const data = this.toPortableObject();
-    
+
     if (this.props.dimension.db.isConnected.value == false) {
       console.error("Cannot save bucket because MongoDb is not connected");
       return;
@@ -350,7 +377,7 @@ export class MaterializedBucket<T> extends Bucket<T> {
       { key: this.props.identifier.bucketKey },
       {
         $set: {
-          ...data
+          ...data,
         },
       },
       { upsert: true }

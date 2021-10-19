@@ -333,8 +333,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {    
-    await this.removeMetadataGivenEntryKey(entry.key);
-
     for (const dimension of this._dimensionsByKey.values()) {
       await dimension.entryDidChange(entry);
     }

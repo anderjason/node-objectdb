@@ -59,7 +59,7 @@ export declare abstract class Dimension<T, TP extends DimensionProps> extends Ac
     toPortableObject(): PortableDimension;
 }
 export interface MaterializedDimensionProps<T> extends DimensionProps {
-    bucketIdentifiersGivenEntry: (entry: Entry<T>) => RelativeBucketIdentifier[];
+    bucketIdentifiersGivenEntry: (entry: Entry<T>) => undefined | RelativeBucketIdentifier | RelativeBucketIdentifier[];
 }
 export declare class MaterializedDimension<T> extends Dimension<T, MaterializedDimensionProps<T>> {
     protected _bucketsByEntryKey: Map<string, Bucket<T>[]>;
@@ -68,6 +68,7 @@ export declare class MaterializedDimension<T> extends Dimension<T, MaterializedD
     load(): Promise<void>;
     entryDidChange(entry: Entry<T>): Promise<void>;
     deleteEntryKey(entryKey: string): Promise<void>;
+    private rebuildEntryGivenBucketIdentifier;
     private rebuildEntry;
     rebuild(): Promise<void>;
 }
