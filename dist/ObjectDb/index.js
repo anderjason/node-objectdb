@@ -23,7 +23,7 @@ class ObjectDb extends skytree_1.Actor {
         this._caches = new Map();
     }
     onActivate() {
-        this._db = this.addActor(this.props.db);
+        this._db = this.props.db;
         this.addActor(new skytree_1.Timer({
             duration: time_1.Duration.givenMinutes(1),
             isRepeating: true,
@@ -53,7 +53,10 @@ class ObjectDb extends skytree_1.Actor {
         //   // assign property definitions
         //   this._properties.set(key, JSON.parse(definition));
         // });
-        const entries = await this._db.collection("entries").find().toArray();
+        const entries = await this._db.collection("entries").find(undefined, {
+            projection: { key: 1 }
+        }).toArray();
+        console.log(entries);
         entries.forEach((row) => {
             const { key } = row;
             this._entryKeys.add(key);
@@ -79,6 +82,11 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         this._isLoaded.setValue(true);
+    }
+    async save() {
+        for (const dimension of this._dimensionsByKey.values()) {
+            await dimension.save();
+        }
     }
     async toEntryKeys(options = {}) {
         var _a, _b, _c;
@@ -253,6 +261,7 @@ class ObjectDb extends skytree_1.Actor {
         return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
     }
     async rebuildMetadataGivenEntry(entry) {
+        console.log("rebuildMetadataGivenEntry", entry.key);
         await this.removeMetadataGivenEntryKey(entry.key);
         const metricValues = this.props.metricsGivenEntry(entry);
         metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();

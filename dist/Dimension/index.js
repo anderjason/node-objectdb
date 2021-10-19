@@ -16,7 +16,7 @@ class Bucket extends skytree_1.Actor {
         this.label = props.identifier.bucketLabel;
     }
     onActivate() { }
-    toBucketIdentifier() {
+    toAbsoluteIdentifier() {
         return Object.assign({ dimensionKey: this.props.dimension.key }, this.props.identifier);
     }
     toHashCode() {
@@ -35,31 +35,34 @@ class Dimension extends skytree_1.Actor {
         this.label = props.label;
         this._saveLater = new time_1.Debounce({
             duration: time_1.Duration.givenSeconds(15),
-            fn: () => {
-                this.save();
+            fn: async () => {
+                try {
+                    await this.save();
+                }
+                catch (err) {
+                    console.error(`An error occurred in Dimension.saveLater: ${err}`);
+                }
             },
         });
     }
     onActivate() {
+        this._isUpdated.setValue(false);
         this.cancelOnDeactivate(new observable_1.Receipt(() => {
             this._saveLater.clear();
         }));
     }
-    async load() {
-        const row = await this.db.collection("dimensions").findOne({ key: this.props.key });
-        if (row != null) {
-            const data = JSON.parse(row.data);
-            this.onLoad(data);
-        }
-        this._isUpdated.setValue(true);
-    }
     async save() {
         const data = this.toPortableObject();
+        if (this.db.isConnected.value == false) {
+            console.error("Cannot save dimension because MongoDb is not connected");
+            return;
+        }
         await this.db.collection("dimensions").updateOne({ key: this.props.key }, {
-            $set: {
-                data: JSON.stringify(data),
-            },
+            $set: Object.assign({}, data),
         }, { upsert: true });
+        for (const bucket of this._buckets.values()) {
+            await bucket.save();
+        }
         this._saveLater.clear();
     }
     toOptionalBucketGivenKey(key) {
@@ -78,9 +81,6 @@ class Dimension extends skytree_1.Actor {
     toPortableObject() {
         return {
             type: this.constructor.name,
-            buckets: Array.from(this._buckets.values()).map((bucket) => {
-                return bucket.toPortableObject();
-            }),
         };
     }
 }
@@ -97,15 +97,18 @@ class MaterializedDimension extends Dimension {
             this.entryDidChange(change.key);
         }));
     }
-    onLoad(data) {
-        for (const portableBucket of data.buckets) {
+    async load() {
+        // const row = await this.db.collection<any>("dimensions").findOne({ key: this.props.key });
+        const bucketRows = await this.db.collection("buckets").find({ "identifier.dimensionKey": this.props.key }).toArray();
+        for (const bucketRow of bucketRows) {
             const bucket = new MaterializedBucket({
-                identifier: portableBucket.identifier,
-                storage: portableBucket.storage,
+                identifier: bucketRow.identifier,
+                storage: bucketRow.storage,
                 dimension: this,
             });
             this.addBucket(bucket);
         }
+        this._isUpdated.setValue(true);
     }
     async entryDidChange(entryKey) {
         this._isUpdated.setValue(false);
@@ -169,6 +172,7 @@ class MaterializedBucket extends Bucket {
         this._entryKeys = new Set();
     }
     onActivate() {
+        this._entryKeys.clear();
         const storage = this.props.storage;
         if (storage != null && storage.entryKeys != null) {
             this._entryKeys.clear();
@@ -197,10 +201,20 @@ class MaterializedBucket extends Bucket {
         this._entryKeys.delete(entryKey);
         this.didChange.emit();
     }
+    async save() {
+        const data = this.toPortableObject();
+        if (this.props.dimension.db.isConnected.value == false) {
+            console.error("Cannot save bucket because MongoDb is not connected");
+            return;
+        }
+        await this.props.dimension.db.collection("buckets").updateOne({ key: this.props.identifier.bucketKey }, {
+            $set: Object.assign({}, data),
+        }, { upsert: true });
+    }
     toPortableObject() {
         return {
             type: "MaterializedBucket",
-            identifier: this.props.identifier,
+            identifier: this.toAbsoluteIdentifier(),
             storage: {
                 entryKeys: Array.from(this._entryKeys),
             },

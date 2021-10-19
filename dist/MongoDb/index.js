@@ -12,12 +12,15 @@ class MongoDb extends skytree_1.Actor {
     }
     onActivate() {
         var _a;
+        this._isConnected.setValue(false);
         const client = new mongodb_1.MongoClient((_a = this.props.url) !== null && _a !== void 0 ? _a : process.env.MONGODB_URL);
+        this._db = client.db(this.props.dbName);
         client.connect().then(() => {
+            console.log("Connected to MongoDB");
             this._isConnected.setValue(true);
         });
-        this._db = client.db(this.props.dbName);
         this.cancelOnDeactivate(new observable_1.Receipt(() => {
+            console.log("Disconnected from MongoDB");
             this._isConnected.setValue(false);
             client.close();
             this._db = undefined;
@@ -27,6 +30,9 @@ class MongoDb extends skytree_1.Actor {
         await this._isConnected.toPromise(v => v == true);
     }
     async dropDatabase() {
+        if (this._db == null) {
+            throw new Error("Internal db is missing in MongoDb.dropDatabase");
+        }
         await this._db.dropDatabase();
     }
     collection(name) {

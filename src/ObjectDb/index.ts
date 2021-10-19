@@ -130,7 +130,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     //   this._properties.set(key, JSON.parse(definition));
     // });
 
-    const entries = await this._db.collection<PortableEntry<T>>("entries").find().toArray();
+    const entries = await this._db.collection<PortableEntry<T>>("entries").find(undefined, {
+      projection: { key: 1 }
+    }).toArray();
+    
+    console.log(entries);
     
     entries.forEach((row) => {
       const { key } = row;
@@ -175,7 +179,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       await dimension.save();
     }
   }
-  
+
   async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
     const now = Instant.ofNow();
 
@@ -414,6 +418,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
+    console.log("rebuildMetadataGivenEntry", entry.key);
+    
     await this.removeMetadataGivenEntryKey(entry.key);
 
     const metricValues = this.props.metricsGivenEntry(entry);

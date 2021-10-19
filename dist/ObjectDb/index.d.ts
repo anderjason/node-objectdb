@@ -57,6 +57,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     onActivate(): void;
     get metrics(): Metric[];
     private load;
+    save(): Promise<void>;
     toEntryKeys(options?: ObjectDbReadOptions): Promise<string[]>;
     forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void>;
     hasEntry(entryKey: string): Promise<boolean>;

@@ -15,7 +15,8 @@ export declare abstract class Bucket<T> extends Actor<BucketProps<T>> {
     abstract hasEntryKey(entryKey: string): Promise<boolean>;
     abstract toPortableObject(): PortableBucket;
     abstract toEntryKeys(): Promise<Set<string>>;
-    toBucketIdentifier(): AbsoluteBucketIdentifier;
+    abstract save(): Promise<void>;
+    toAbsoluteIdentifier(): AbsoluteBucketIdentifier;
     toHashCode(): number;
 }
 export interface RelativeBucketIdentifier {
@@ -27,12 +28,11 @@ export interface AbsoluteBucketIdentifier extends RelativeBucketIdentifier {
 }
 export interface PortableBucket {
     type: string;
-    identifier: RelativeBucketIdentifier;
+    identifier: AbsoluteBucketIdentifier;
     storage?: any;
 }
 export interface PortableDimension {
     type: string;
-    buckets: PortableBucket[];
 }
 export interface DimensionProps {
     key: string;
@@ -49,8 +49,7 @@ export declare abstract class Dimension<T, TP extends DimensionProps> extends Ac
     private _saveLater;
     constructor(props: TP);
     onActivate(): void;
-    load(): Promise<void>;
-    abstract onLoad(data: PortableDimension): void;
+    abstract load(): Promise<void>;
     abstract deleteEntryKey(entryKey: string): Promise<void>;
     abstract entryDidChange(entryKey: string): Promise<void>;
     save(): Promise<void>;
@@ -66,7 +65,7 @@ export declare class MaterializedDimension<T> extends Dimension<T, MaterializedD
     protected _bucketsByEntryKey: Map<string, Bucket<T>[]>;
     private _waitingForEntryKeys;
     onActivate(): void;
-    onLoad(data: PortableDimension): void;
+    load(): Promise<void>;
     entryDidChange(entryKey: string): Promise<void>;
     deleteEntryKey(entryKey: string): Promise<void>;
     private rebuildEntry;
@@ -79,5 +78,6 @@ export declare class MaterializedBucket<T> extends Bucket<T> {
     hasEntryKey(entryKey: string): Promise<boolean>;
     addEntryKey(entryKey: string): void;
     deleteEntryKey(entryKey: string): void;
+    save(): Promise<void>;
     toPortableObject(): PortableBucket;
 }
