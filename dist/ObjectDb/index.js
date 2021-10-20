@@ -319,7 +319,7 @@ class ObjectDb extends skytree_1.Actor {
         };
         this.entryWillChange.emit(change);
         await this.removeMetadataGivenEntryKey(entryKey);
-        await this._db.collection("entries").deleteOne({ id: entryKey });
+        await this._db.collection("entries").deleteOne({ key: entryKey });
         this._entryKeys.delete(entryKey);
         this.entryDidChange.emit(change);
         this.collectionDidChange.emit();

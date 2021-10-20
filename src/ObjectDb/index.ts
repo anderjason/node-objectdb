@@ -497,7 +497,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     await this.removeMetadataGivenEntryKey(entryKey);
 
-    await this._db.collection("entries").deleteOne({ id: entryKey });
+    await this._db.collection("entries").deleteOne({ key: entryKey });
     
     this._entryKeys.delete(entryKey);
 
