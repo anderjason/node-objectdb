@@ -51,6 +51,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private _entryKeys;
     private _caches;
     private _db;
+    get mongoDb(): MongoDb;
     onActivate(): void;
     private load;
     save(): Promise<void>;

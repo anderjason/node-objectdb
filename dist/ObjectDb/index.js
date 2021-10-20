@@ -21,6 +21,9 @@ class ObjectDb extends skytree_1.Actor {
         this._entryKeys = new Set();
         this._caches = new Map();
     }
+    get mongoDb() {
+        return this._db;
+    }
     onActivate() {
         this._db = this.props.db;
         this.addActor(new skytree_1.Timer({

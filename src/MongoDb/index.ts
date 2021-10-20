@@ -14,6 +14,10 @@ export class MongoDb extends Actor<MongoDbProps> {
 
   private _db: Db;
 
+  get client(): Db {
+    return this._db;
+  }
+
   onActivate() {
     this._isConnected.setValue(false);
     

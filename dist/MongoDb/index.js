@@ -10,6 +10,9 @@ class MongoDb extends skytree_1.Actor {
         this._isConnected = observable_1.Observable.givenValue(false);
         this.isConnected = observable_1.ReadOnlyObservable.givenObservable(this._isConnected);
     }
+    get client() {
+        return this._db;
+    }
     onActivate() {
         var _a;
         this._isConnected.setValue(false);
