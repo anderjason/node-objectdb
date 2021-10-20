@@ -4,6 +4,7 @@ exports.Benchmark = void 0;
 class Benchmark {
     constructor(totalCount) {
         this.remainingCount = 0;
+        this.durationPerBucket = 0;
         this.remainingCount = totalCount;
         this.bucketSize = Math.ceil(totalCount / 10);
         this.startTime = new Date().getTime();

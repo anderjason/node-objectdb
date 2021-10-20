@@ -4,7 +4,7 @@ export class Benchmark {
   private remainingCount: number = 0;
   private bucketSize: number;
   private startTime: number;
-  private durationPerBucket: number;
+  private durationPerBucket: number = 0;
 
   constructor(totalCount: number) {
     this.remainingCount = totalCount;
