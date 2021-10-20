@@ -8,6 +8,7 @@ import {
 import { Duration, Instant } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
+import { Benchmark } from "../Benchmark";
 import {
   AbsoluteBucketIdentifier,
   Bucket,
@@ -342,8 +343,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
     let remaining = this._entryKeys.size;
+    const benchmark = new Benchmark(remaining);
     await this.forEach(async entry => {
-      console.log(`Rebuilding ${entry.key} (${remaining} left)`);
+      benchmark.log(`Rebuilding ${entry.key}`);
       await this.rebuildMetadataGivenEntry(entry);
 
       remaining -= 1;

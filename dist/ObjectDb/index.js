@@ -6,6 +6,7 @@ const observable_1 = require("@anderjason/observable");
 const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
+const Benchmark_1 = require("../Benchmark");
 const Entry_1 = require("../Entry");
 class ObjectDb extends skytree_1.Actor {
     constructor() {
@@ -213,8 +214,9 @@ class ObjectDb extends skytree_1.Actor {
     async rebuildMetadata() {
         console.log(`Rebuilding metadata for ${this.props.label}...`);
         let remaining = this._entryKeys.size;
+        const benchmark = new Benchmark_1.Benchmark(remaining);
         await this.forEach(async (entry) => {
-            console.log(`Rebuilding ${entry.key} (${remaining} left)`);
+            benchmark.log(`Rebuilding ${entry.key}`);
             await this.rebuildMetadataGivenEntry(entry);
             remaining -= 1;
         });
