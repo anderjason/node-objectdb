@@ -3,17 +3,17 @@ import {
   Dict,
   Observable,
   ReadOnlyObservable,
-  TypedEvent
+  TypedEvent,
 } from "@anderjason/observable";
 import { Duration, Instant } from "@anderjason/time";
-import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
+import { ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Benchmark } from "../Benchmark";
 import {
   AbsoluteBucketIdentifier,
   Bucket,
   Dimension,
-  DimensionProps
+  DimensionProps,
 } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
@@ -33,7 +33,7 @@ export interface ObjectDbReadOptions {
 export interface ObjectDbProps<T> {
   label: string;
   db: MongoDb;
-  
+
   cacheSize?: number;
   dimensions?: Dimension<T, DimensionProps>[];
 }
@@ -78,8 +78,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly isLoaded = ReadOnlyObservable.givenObservable(this._isLoaded);
 
   private _dimensionsByKey = new Map<string, Dimension<T, DimensionProps>>();
-  private _properties = new Map<string, PropertyDefinition>();
-  private _entryKeys = new Set<string>();
   private _caches = new Map<number, CacheData>();
 
   private _db: MongoDb;
@@ -87,10 +85,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   get mongoDb(): MongoDb {
     return this._db;
   }
-  
+
   onActivate(): void {
     this._db = this.props.db;
-    
+
     this.addActor(
       new Timer({
         duration: Duration.givenMinutes(1),
@@ -117,8 +115,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     const db = this._db;
-    await this._db.isConnected.toPromise(v => v);
-
+    await this._db.isConnected.toPromise((v) => v);
 
     // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
     //   const { key, definition } = row;
@@ -126,16 +123,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     //   // assign property definitions
     //   this._properties.set(key, JSON.parse(definition));
     // });
-
-    const entries = await this._db.collection<PortableEntry<T>>("entries").find(undefined, {
-      projection: { key: 1 }
-    }).toArray();
-    
-    entries.forEach((row) => {
-      const { key } = row;
-
-      this._entryKeys.add(key);
-    });
 
     if (this.props.dimensions != null) {
       for (const dimension of this.props.dimensions) {
@@ -156,6 +143,20 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     for (const dimension of this._dimensionsByKey.values()) {
       await dimension.save();
     }
+  }
+
+  private async allEntryKeys(): Promise<string[]> {
+    const entries = await this._db
+      .collection<PortableEntry<T>>("entries")
+      .find(
+        {},
+        {
+          projection: { key: 1 },
+        }
+      )
+      .toArray();
+
+    return entries.map((row) => row.key);
   }
 
   async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
@@ -192,7 +193,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (entryKeys == null) {
       if (options.filter == null || options.filter.length === 0) {
-        entryKeys = Array.from(this._entryKeys);
+        entryKeys = await this.allEntryKeys();
       } else {
         const sets: Set<string>[] = [];
 
@@ -235,7 +236,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   // TC: O(N)
   async forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void> {
-    for (const entryKey of this._entryKeys) {
+    const entryKeys = await this.allEntryKeys();
+    for (const entryKey of entryKeys) {
       const entry = await this.toOptionalEntryGivenKey(entryKey);
       await fn(entry);
     }
@@ -337,7 +339,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {    
+  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
     for (const dimension of this._dimensionsByKey.values()) {
       await dimension.entryDidChange(entry);
     }
@@ -346,15 +348,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   async rebuildMetadata(): Promise<void> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
-    let remaining = this._entryKeys.size;
-    const benchmark = new Benchmark(remaining);
-    await this.forEach(async entry => {
+    let remainingCount: number = await this._db
+      .collection<PortableEntry<T>>("entries")
+      .countDocuments();
+
+    const benchmark = new Benchmark(remainingCount);
+    await this.forEach(async (entry) => {
       benchmark.log(`Rebuilding ${entry.key}`);
       await this.rebuildMetadataGivenEntry(entry);
 
-      remaining -= 1;
+      remainingCount -= 1;
     });
-    
+
     console.log("Done rebuilding metadata");
   }
 
@@ -440,7 +445,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-
     const now = Instant.ofNow();
     let didCreateNewEntry = false;
 
@@ -469,8 +473,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.entryWillChange.emit(change);
 
     await entry.save();
-
-    this._entryKeys.add(entryKey);
 
     if (didCreateNewEntry) {
       this.collectionDidChange.emit();
@@ -502,8 +504,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     await this.removeMetadataGivenEntryKey(entryKey);
 
     await this._db.collection("entries").deleteOne({ key: entryKey });
-    
-    this._entryKeys.delete(entryKey);
 
     this.entryDidChange.emit(change);
     this.collectionDidChange.emit();

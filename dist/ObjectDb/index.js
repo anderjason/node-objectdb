@@ -17,8 +17,6 @@ class ObjectDb extends skytree_1.Actor {
         this._isLoaded = observable_1.Observable.givenValue(false, observable_1.Observable.isStrictEqual);
         this.isLoaded = observable_1.ReadOnlyObservable.givenObservable(this._isLoaded);
         this._dimensionsByKey = new Map();
-        this._properties = new Map();
-        this._entryKeys = new Set();
         this._caches = new Map();
     }
     get mongoDb() {
@@ -46,19 +44,12 @@ class ObjectDb extends skytree_1.Actor {
             return;
         }
         const db = this._db;
-        await this._db.isConnected.toPromise(v => v);
+        await this._db.isConnected.toPromise((v) => v);
         // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
         //   const { key, definition } = row;
         //   // assign property definitions
         //   this._properties.set(key, JSON.parse(definition));
         // });
-        const entries = await this._db.collection("entries").find(undefined, {
-            projection: { key: 1 }
-        }).toArray();
-        entries.forEach((row) => {
-            const { key } = row;
-            this._entryKeys.add(key);
-        });
         if (this.props.dimensions != null) {
             for (const dimension of this.props.dimensions) {
                 dimension.db = this._db;
@@ -74,6 +65,15 @@ class ObjectDb extends skytree_1.Actor {
         for (const dimension of this._dimensionsByKey.values()) {
             await dimension.save();
         }
+    }
+    async allEntryKeys() {
+        const entries = await this._db
+            .collection("entries")
+            .find({}, {
+            projection: { key: 1 },
+        })
+            .toArray();
+        return entries.map((row) => row.key);
     }
     async toEntryKeys(options = {}) {
         var _a;
@@ -102,7 +102,7 @@ class ObjectDb extends skytree_1.Actor {
         }
         if (entryKeys == null) {
             if (options.filter == null || options.filter.length === 0) {
-                entryKeys = Array.from(this._entryKeys);
+                entryKeys = await this.allEntryKeys();
             }
             else {
                 const sets = [];
@@ -138,7 +138,8 @@ class ObjectDb extends skytree_1.Actor {
     }
     // TC: O(N)
     async forEach(fn) {
-        for (const entryKey of this._entryKeys) {
+        const entryKeys = await this.allEntryKeys();
+        for (const entryKey of entryKeys) {
             const entry = await this.toOptionalEntryGivenKey(entryKey);
             await fn(entry);
         }
@@ -216,12 +217,14 @@ class ObjectDb extends skytree_1.Actor {
     }
     async rebuildMetadata() {
         console.log(`Rebuilding metadata for ${this.props.label}...`);
-        let remaining = this._entryKeys.size;
-        const benchmark = new Benchmark_1.Benchmark(remaining);
+        let remainingCount = await this._db
+            .collection("entries")
+            .countDocuments();
+        const benchmark = new Benchmark_1.Benchmark(remainingCount);
         await this.forEach(async (entry) => {
             benchmark.log(`Rebuilding ${entry.key}`);
             await this.rebuildMetadataGivenEntry(entry);
-            remaining -= 1;
+            remainingCount -= 1;
         });
         console.log("Done rebuilding metadata");
     }
@@ -300,7 +303,6 @@ class ObjectDb extends skytree_1.Actor {
         };
         this.entryWillChange.emit(change);
         await entry.save();
-        this._entryKeys.add(entryKey);
         if (didCreateNewEntry) {
             this.collectionDidChange.emit();
         }
@@ -323,7 +325,6 @@ class ObjectDb extends skytree_1.Actor {
         this.entryWillChange.emit(change);
         await this.removeMetadataGivenEntryKey(entryKey);
         await this._db.collection("entries").deleteOne({ key: entryKey });
-        this._entryKeys.delete(entryKey);
         this.entryDidChange.emit(change);
         this.collectionDidChange.emit();
     }
