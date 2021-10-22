@@ -53,6 +53,8 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     get mongoDb(): MongoDb;
     onActivate(): void;
     private load;
+    ensureDimensionsIdle(): Promise<void>;
+    ensureIdle(): Promise<void>;
     save(): Promise<void>;
     private allEntryKeys;
     toEntryKeys(options?: ObjectDbReadOptions): Promise<string[]>;

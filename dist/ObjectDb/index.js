@@ -61,6 +61,17 @@ class ObjectDb extends skytree_1.Actor {
         }
         this._isLoaded.setValue(true);
     }
+    async ensureDimensionsIdle() {
+        // wait for all dimensions to be updated
+        const dimensions = Array.from(this._dimensionsByKey.values());
+        await Promise.all(dimensions.map(d => d.isUpdated.toPromise(v => v)));
+    }
+    async ensureIdle() {
+        await Promise.all([
+            this._isLoaded.toPromise(v => v),
+            this.ensureDimensionsIdle()
+        ]);
+    }
     async save() {
         for (const dimension of this._dimensionsByKey.values()) {
             await dimension.save();
@@ -79,6 +90,7 @@ class ObjectDb extends skytree_1.Actor {
         var _a;
         const now = time_1.Instant.ofNow();
         let entryKeys = undefined;
+        await this.ensureIdle();
         let fullCacheKey = undefined;
         if (options.cacheKey != null) {
             const bucketIdentifiers = (_a = options.filter) !== null && _a !== void 0 ? _a : [];
@@ -212,7 +224,7 @@ class ObjectDb extends skytree_1.Actor {
     }
     async rebuildMetadataGivenEntry(entry) {
         for (const dimension of this._dimensionsByKey.values()) {
-            await dimension.entryDidChange(entry);
+            await dimension.rebuildEntry(entry);
         }
     }
     async rebuildMetadata() {

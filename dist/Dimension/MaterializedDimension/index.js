@@ -8,17 +8,14 @@ class MaterializedDimension extends __1.Dimension {
     constructor() {
         super(...arguments);
         this._bucketsByEntryKey = new Map();
-        this._waitingForEntryKeys = new Set();
+        this._entryQueue = [];
+        this._processing = false;
     }
     onActivate() {
         super.onActivate();
         this.cancelOnDeactivate(this.objectDb.entryDidChange.subscribe(async (change) => {
-            if (change.newData != null) {
-                this.entryDidChange(change.entry);
-            }
-            else {
-                this.deleteEntryKey(change.key);
-            }
+            this._entryQueue.push(change);
+            this.processEntryQueue();
         }));
     }
     async load() {
@@ -37,21 +34,38 @@ class MaterializedDimension extends __1.Dimension {
         }
         this._isUpdated.setValue(true);
     }
-    async entryDidChange(entry) {
-        this._isUpdated.setValue(false);
-        this._waitingForEntryKeys.add(entry.key);
-        await this.rebuildEntry(entry);
-        this._waitingForEntryKeys.delete(entry.key);
-        if (this._waitingForEntryKeys.size === 0) {
-            this._isUpdated.setValue(true);
+    async processEntryQueue() {
+        if (this._processing) {
+            return;
         }
+        if (this._entryQueue.length === 0) {
+            this._isUpdated.setValue(true);
+            return;
+        }
+        this._isUpdated.setValue(false);
+        this._processing = true;
+        while (this._entryQueue.length > 0) {
+            const change = this._entryQueue.shift();
+            if (change.newData != null) {
+                await this.rebuildEntry(change.entry);
+            }
+            else {
+                await this.deleteEntryKey(change.entry.key);
+            }
+        }
+        this._processing = false;
+        this._isUpdated.setValue(true);
     }
     async deleteEntryKey(entryKey) {
         for (const bucket of this._buckets.values()) {
             bucket.deleteEntryKey(entryKey);
         }
     }
-    rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier) {
+    async save() {
+        await super.save();
+        await this.isUpdated.toPromise(v => v);
+    }
+    async rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier) {
         if ((0, Bucket_1.isAbsoluteBucketIdentifier)(bucketIdentifier)) {
             if (bucketIdentifier.dimensionKey !== this.props.key) {
                 throw new Error(`Received an absolute bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
@@ -66,20 +80,20 @@ class MaterializedDimension extends __1.Dimension {
             this.addBucket(bucket);
         }
         const bucket = this._buckets.get(bucketIdentifier.bucketKey);
-        bucket.addEntryKey(entry.key);
+        await bucket.addEntryKey(entry.key);
     }
     async rebuildEntry(entry) {
         const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);
         if (Array.isArray(bucketIdentifiers)) {
             for (const bucketIdentifier of bucketIdentifiers) {
                 if (bucketIdentifier != null) {
-                    this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier);
+                    await this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier);
                 }
             }
             const bucketKeys = new Set(bucketIdentifiers.map((bi) => bi.bucketKey));
             for (const bucket of this._buckets.values()) {
                 if (!bucketKeys.has(bucket.props.identifier.bucketKey)) {
-                    bucket.deleteEntryKey(entry.key);
+                    await bucket.deleteEntryKey(entry.key);
                 }
             }
         }
@@ -89,14 +103,14 @@ class MaterializedDimension extends __1.Dimension {
             const bucketKey = bucketIdentifiers.bucketKey;
             for (const bucket of this._buckets.values()) {
                 if (bucket.props.identifier.bucketKey != bucketKey) {
-                    bucket.deleteEntryKey(entry.key);
+                    await bucket.deleteEntryKey(entry.key);
                 }
             }
         }
         else {
             // undefined, delete all buckets
             for (const bucket of this._buckets.values()) {
-                bucket.deleteEntryKey(entry.key);
+                await bucket.deleteEntryKey(entry.key);
             }
         }
     }

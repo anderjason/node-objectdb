@@ -34,28 +34,28 @@ async function usingTestDb(fn: (db: MongoDb) => Promise<void>): Promise<void> {
 
 Test.define("ObjectDb can be created", async () => {
   await usingTestDb(async (db) => {
-    const fileDb = new ObjectDb<TestEntryData>({
+    const objectDb = new ObjectDb<TestEntryData>({
       db,
       label: "TestDb",
     });
-    fileDb.activate();
+    objectDb.activate();
 
-    await fileDb.isLoaded.toPromise(v => v);
+    await objectDb.isLoaded.toPromise(v => v);
 
-    fileDb.deactivate();
+    objectDb.deactivate();
   });
 });
 
 Test.define("ObjectDb can write and read a row", async () => {
   await usingTestDb(async (db) => {
-    const fileDb = new ObjectDb<TestEntryData>({
+    const objectDb = new ObjectDb<TestEntryData>({
       db,
       label: "TestDb",
     });
-    fileDb.activate();
-    await fileDb.isLoaded.toPromise(v => v);
+    objectDb.activate();
+    await objectDb.isLoaded.toPromise(v => v);
 
-    const entry = await fileDb.writeEntryData({
+    const entry = await objectDb.writeEntryData({
       message: "hello world",
     });
 
@@ -65,17 +65,16 @@ Test.define("ObjectDb can write and read a row", async () => {
     Test.assert(entry.updatedAt != null);
     Test.assert(entry.data.message === "hello world");
 
-    console.log("entryGivenKey", entry.key);
-    const result = await fileDb.toEntryGivenKey(entry.key);
+    const result = await objectDb.toEntryGivenKey(entry.key);
     Test.assertIsDeepEqual(result.data, entry.data);
 
-    fileDb.deactivate();
+    objectDb.deactivate();
   });
 });
 
 Test.define("ObjectDb can find entries by bucket identifier", async () => {
   await usingTestDb(async (db) => {
-    const fileDb = new ObjectDb<TestEntryData>({
+    const objectDb = new ObjectDb<TestEntryData>({
       label: "testDb",
       db,
       dimensions: [
@@ -93,20 +92,20 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
         }),
       ],
     });
-    fileDb.activate();
-    await fileDb.isLoaded.toPromise(v => v);
+    objectDb.activate();
+    await objectDb.isLoaded.toPromise(v => v);
 
-    const one = await fileDb.writeEntryData({
+    const one = await objectDb.writeEntryData({
       message: "one",
     });
 
-    const two = await fileDb.writeEntryData({
+    const two = await objectDb.writeEntryData({
       message: "two",
     });
 
     Test.assert(one.key !== two.key);
 
-    const resultOne = await fileDb.toOptionalFirstEntry({
+    const resultOne = await objectDb.toOptionalFirstEntry({
       filter: [
         {
           dimensionKey: "message",
@@ -116,7 +115,7 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
       ],
     });
 
-    const resultTwo = await fileDb.toOptionalFirstEntry({
+    const resultTwo = await objectDb.toOptionalFirstEntry({
       filter: [
         {
           dimensionKey: "message",
@@ -126,7 +125,7 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
       ],
     });
 
-    const resultThree = await fileDb.toOptionalFirstEntry({
+    const resultThree = await objectDb.toOptionalFirstEntry({
       filter: [
         {
           dimensionKey: "message",
@@ -142,7 +141,7 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
     Test.assert(resultOne.key === one.key);
     Test.assert(resultTwo.key === two.key);
 
-    const count = await fileDb.toEntryCount([
+    const count = await objectDb.toEntryCount([
       {
         dimensionKey: "message",
         bucketKey: "two",
@@ -151,13 +150,13 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
     ]);
     Test.assert(count === 1);
 
-    fileDb.deactivate();
+    objectDb.deactivate();
   });
 });
 
 Test.define("ObjectDb can find entry count by bucket identifier", async () => {
   await usingTestDb(async (db) => {
-    const fileDb = new ObjectDb<TestEntryData>({
+    const objectDb = new ObjectDb<TestEntryData>({
       label: "testDb",
       db,
       dimensions: [
@@ -175,18 +174,18 @@ Test.define("ObjectDb can find entry count by bucket identifier", async () => {
         }),
       ],
     });
-    fileDb.activate();
-    await fileDb.isLoaded.toPromise(v => v);
+    objectDb.activate();
+    await objectDb.isLoaded.toPromise(v => v);
 
-    await fileDb.writeEntryData({
+    await objectDb.writeEntryData({
       message: "one",
     });
 
-    await fileDb.writeEntryData({
+    await objectDb.writeEntryData({
       message: "one",
     });
 
-    const count = await fileDb.toEntryCount([
+    const count = await objectDb.toEntryCount([
         {
           dimensionKey: "message",
           bucketKey: "one",
@@ -196,7 +195,7 @@ Test.define("ObjectDb can find entry count by bucket identifier", async () => {
 
     Test.assertIsEqual(count, 2);
     
-    fileDb.deactivate();
+    objectDb.deactivate();
   });
 });
 
@@ -216,19 +215,19 @@ Test.define("ObjectDb supports materialized dimensions", async () => {
       },
     });
 
-    const fileDb = new ObjectDb<TestEntryData>({
+    const objectDb = new ObjectDb<TestEntryData>({
       label: "testDb",
       db,
       dimensions: [md],
     });
-    fileDb.activate();
-    await fileDb.isLoaded.toPromise(v => v);
+    objectDb.activate();
+    await objectDb.isLoaded.toPromise(v => v);
 
-    const one = await fileDb.writeEntryData({
+    const one = await objectDb.writeEntryData({
       message: "one",
     });
 
-    const two = await fileDb.writeEntryData({
+    const two = await objectDb.writeEntryData({
       message: "two",
     });
 
@@ -245,7 +244,7 @@ Test.define("ObjectDb supports materialized dimensions", async () => {
 
     two.data.message = "three";
     two.status = "updated";
-    await fileDb.writeEntry(two);
+    await objectDb.writeEntry(two);
 
     await md.isUpdated.toPromise((v) => v == true);
 
@@ -254,7 +253,7 @@ Test.define("ObjectDb supports materialized dimensions", async () => {
     Test.assert((await bucketTwo.hasEntryKey(two.key)) == false);
     Test.assert((await bucketThree.hasEntryKey(two.key)) == true);
 
-    fileDb.deactivate();
+    objectDb.deactivate();
   });
 });
 
@@ -273,27 +272,26 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
       },
     });
 
-    const fileDb = new ObjectDb<TestEntryData>({
+    const objectDb = new ObjectDb<TestEntryData>({
       label: "testDb",
       db,
       dimensions: [md],
     });
-    fileDb.activate();
-    await fileDb.isLoaded.toPromise(v => v);    
+    objectDb.activate();
 
-    const one = await fileDb.writeEntryData({
+    await objectDb.ensureIdle();
+
+    const one = await objectDb.writeEntryData({
       message: "one",
     });
 
-    const two = await fileDb.writeEntryData({
+    const two = await objectDb.writeEntryData({
       message: "two",
     });
 
-    await fileDb.isLoaded.toPromise((v) => v == true);
-    await md.isUpdated.toPromise((v) => v == true);
+    await objectDb.ensureIdle();
 
-    await md.save();
-    fileDb.deactivate();
+    objectDb.deactivate();
 
     // ----
 
@@ -310,18 +308,20 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
       },
     });
 
-    const fileDb2 = new ObjectDb<TestEntryData>({
+    const objectDb2 = new ObjectDb<TestEntryData>({
       label: "testDb",
       db,
       dimensions: [md2],
     });
-    fileDb2.activate();
-    await fileDb.isLoaded.toPromise(v => v);
+    objectDb2.activate();
     
-    await md2.isUpdated.toPromise((v) => v == true);
+    await objectDb2.ensureIdle();
 
     const bucketOne2 = md2.toOptionalBucketGivenKey("one");
     const bucketTwo2 = md2.toOptionalBucketGivenKey("two");
+
+    Test.assert(bucketOne2 != null, "bucketOne2 is null");
+    Test.assert(bucketTwo2 != null, "bucketTwo2 is null");
 
     Test.assert((await bucketOne2.hasEntryKey(one.key)) == true);
     Test.assert((await bucketOne2.hasEntryKey(two.key)) == false);
@@ -329,6 +329,6 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
     Test.assert((await bucketTwo2.hasEntryKey(one.key)) == false);
     Test.assert((await bucketTwo2.hasEntryKey(two.key)) == true);
 
-    fileDb2.deactivate();
+    objectDb2.deactivate();
   });
 });

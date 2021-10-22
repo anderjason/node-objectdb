@@ -64,7 +64,7 @@ export abstract class Dimension<
 
   abstract load(): Promise<void>;
   abstract deleteEntryKey(entryKey: string): Promise<void>;
-  abstract entryDidChange(entry: Entry<T>): Promise<void>;
+  abstract rebuildEntry(entry: Entry<T>): Promise<void>;
 
   async save(): Promise<void> {
     const data = this.toPortableObject();
@@ -83,10 +83,6 @@ export abstract class Dimension<
       },
       { upsert: true }
     );
-
-    for (const bucket of this._buckets.values()) {
-      await bucket.save();
-    }
 
     this._saveLater.clear();
   }

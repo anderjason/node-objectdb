@@ -47,9 +47,7 @@ export abstract class Bucket<T> extends Actor<BucketProps<T>> {
   readonly didChange = new TypedEvent();
 
   abstract hasEntryKey(entryKey: string): Promise<boolean>;
-  abstract toPortableObject(): PortableBucket;
   abstract toEntryKeys(): Promise<Set<string>>;
-  abstract save(): Promise<void>;
 
   toAbsoluteIdentifier(): AbsoluteBucketIdentifier {
     return {

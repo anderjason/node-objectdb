@@ -39,9 +39,6 @@ class Dimension extends skytree_1.Actor {
         await this.db.collection("dimensions").updateOne({ key: this.props.key }, {
             $set: Object.assign({}, data),
         }, { upsert: true });
-        for (const bucket of this._buckets.values()) {
-            await bucket.save();
-        }
         this._saveLater.clear();
     }
     toOptionalBucketGivenKey(key) {

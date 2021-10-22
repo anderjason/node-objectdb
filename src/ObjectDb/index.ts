@@ -138,6 +138,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._isLoaded.setValue(true);
   }
 
+  async ensureDimensionsIdle(): Promise<void> {
+    // wait for all dimensions to be updated
+    const dimensions = Array.from(this._dimensionsByKey.values());
+    await Promise.all(dimensions.map(d => d.isUpdated.toPromise(v => v)));
+  }
+
+  async ensureIdle(): Promise<void> {
+    await Promise.all([
+      this._isLoaded.toPromise(v => v),
+      this.ensureDimensionsIdle()
+    ]);
+  }
+
   async save(): Promise<void> {
     for (const dimension of this._dimensionsByKey.values()) {
       await dimension.save();
@@ -162,6 +175,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const now = Instant.ofNow();
 
     let entryKeys: string[] = undefined;
+
+    await this.ensureIdle();
 
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
@@ -340,7 +355,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
     for (const dimension of this._dimensionsByKey.values()) {
-      await dimension.entryDidChange(entry);
+      await dimension.rebuildEntry(entry);
     }
   }
 

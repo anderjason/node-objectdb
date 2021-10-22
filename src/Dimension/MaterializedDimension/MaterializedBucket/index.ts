@@ -1,76 +1,70 @@
-import { Bucket, PortableBucket } from "../../Bucket";
-
-interface PortableMaterializedBucketStorage {
-  entryKeys: string[];
-}
+import { Bucket } from "../../Bucket";
 
 export class MaterializedBucket<T> extends Bucket<T> {
-  private _entryKeys = new Set<string>();
-
-  onActivate() {
-    this._entryKeys.clear();
-
-    const storage = this.props.storage as PortableMaterializedBucketStorage;
-    if (storage != null && storage.entryKeys != null) {
-      this._entryKeys.clear();
-      for (const entryKey of storage.entryKeys) {
-        this._entryKeys.add(entryKey);
-      }
-    }
-  }
-
   async toEntryKeys(): Promise<Set<string>> {
-    return new Set(this._entryKeys);
+    if (this.props.dimension.db.isConnected.value == false) {
+      console.error("Cannot get entry keys in MaterializedBucket because MongoDb is not connected");
+      return new Set();
+    }
+
+    const bucket = await this.props.dimension.db
+      .collection("buckets")
+      .findOne<any>({ key: this.props.identifier.bucketKey });
+
+    if (bucket == null) {
+      return new Set();
+    }
+
+    const entryKeys = bucket.entryKeys;
+    return new Set(entryKeys);
   }
 
   async hasEntryKey(entryKey: string): Promise<boolean> {
-    return this._entryKeys.has(entryKey);
+    const entryKeys = await this.toEntryKeys();
+    return entryKeys.has(entryKey);
   }
 
-  addEntryKey(entryKey: string): void {
-    if (this._entryKeys.has(entryKey)) {
+  async addEntryKey(entryKey: string): Promise<void> {
+    const entryKeys = await this.toEntryKeys();
+    if (entryKeys.has(entryKey)) {
       return;
     }
 
-    this._entryKeys.add(entryKey);
-    this.didChange.emit();
-  }
+    entryKeys.add(entryKey);
 
-  deleteEntryKey(entryKey: string): void {
-    if (!this._entryKeys.has(entryKey)) {
-      return;
-    }
-
-    this._entryKeys.delete(entryKey);
-    this.didChange.emit();
-  }
-
-  async save(): Promise<void> {
-    const data = this.toPortableObject();
-
-    if (this.props.dimension.db.isConnected.value == false) {
-      console.error("Cannot save bucket because MongoDb is not connected");
-      return;
-    }
-
-    await this.props.dimension.db.collection<any>("buckets").updateOne(
+    await this.props.dimension.db.collection("buckets").updateOne(
       { key: this.props.identifier.bucketKey },
       {
         $set: {
-          ...data,
+          identifier: this.toAbsoluteIdentifier(),
+          entryKeys: Array.from(entryKeys),
         },
       },
       { upsert: true }
     );
+
+    this.didChange.emit();
   }
 
-  toPortableObject(): PortableBucket {
-    return {
-      type: "MaterializedBucket",
-      identifier: this.toAbsoluteIdentifier(),
-      storage: {
-        entryKeys: Array.from(this._entryKeys),
+  async deleteEntryKey(entryKey: string): Promise<void> {
+    const entryKeys = await this.toEntryKeys();
+    if (!entryKeys.has(entryKey)) {
+      return;
+    }
+
+    entryKeys.delete(entryKey);
+
+    await this.props.dimension.db.collection("buckets").updateOne(
+      { key: this.props.identifier.bucketKey },
+      {
+        $set: {
+          identifier: this.toAbsoluteIdentifier(),
+          entryKeys: Array.from(entryKeys),
+        },
       },
-    };
+      { upsert: true }
+    );
+
+    this.didChange.emit();
   }
 }

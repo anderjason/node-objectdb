@@ -26,9 +26,7 @@ export declare abstract class Bucket<T> extends Actor<BucketProps<T>> {
     onActivate(): void;
     readonly didChange: TypedEvent<void>;
     abstract hasEntryKey(entryKey: string): Promise<boolean>;
-    abstract toPortableObject(): PortableBucket;
     abstract toEntryKeys(): Promise<Set<string>>;
-    abstract save(): Promise<void>;
     toAbsoluteIdentifier(): AbsoluteBucketIdentifier;
     toHashCode(): number;
 }

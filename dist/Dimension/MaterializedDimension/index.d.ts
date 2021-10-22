@@ -6,12 +6,14 @@ export interface MaterializedDimensionProps<T> extends DimensionProps {
 }
 export declare class MaterializedDimension<T> extends Dimension<T, MaterializedDimensionProps<T>> {
     protected _bucketsByEntryKey: Map<string, Bucket<T>[]>;
-    private _waitingForEntryKeys;
+    private _entryQueue;
+    private _processing;
     onActivate(): void;
     load(): Promise<void>;
-    entryDidChange(entry: Entry<T>): Promise<void>;
+    processEntryQueue(): Promise<void>;
     deleteEntryKey(entryKey: string): Promise<void>;
+    save(): Promise<void>;
     private rebuildEntryGivenBucketIdentifier;
-    private rebuildEntry;
+    rebuildEntry(entry: Entry<T>): Promise<void>;
     rebuild(): Promise<void>;
 }

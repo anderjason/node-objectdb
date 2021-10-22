@@ -26,13 +26,11 @@ export class MongoDb extends Actor<MongoDbProps> {
     this._db = client.db(this.props.dbName);
 
     client.connect().then(() => {
-      console.log("Connected to MongoDB");
       this._isConnected.setValue(true);
     });
     
     this.cancelOnDeactivate(
       new Receipt(() => {
-        console.log("Disconnected from MongoDB");
         this._isConnected.setValue(false);
         client.close();
 
