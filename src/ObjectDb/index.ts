@@ -10,11 +10,10 @@ import { ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Benchmark } from "../Benchmark";
 import {
-  AbsoluteBucketIdentifier,
-  Bucket,
   Dimension,
   DimensionProps,
 } from "../Dimension";
+import { AbsoluteBucketIdentifier, Bucket } from "../Dimension/Bucket";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
 

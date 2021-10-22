@@ -1,7 +1,8 @@
 import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { Actor } from "skytree";
-import { AbsoluteBucketIdentifier, Bucket, Dimension, DimensionProps } from "../Dimension";
+import { Dimension, DimensionProps } from "../Dimension";
+import { AbsoluteBucketIdentifier, Bucket } from "../Dimension/Bucket";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
 export interface Order {

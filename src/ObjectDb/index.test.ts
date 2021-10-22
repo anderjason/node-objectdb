@@ -1,7 +1,7 @@
 import { Test } from "@anderjason/tests";
 import { StringUtil } from "@anderjason/util";
 import { ObjectDb } from ".";
-import { MaterializedDimension } from "../Dimension";
+import { MaterializedDimension } from "../Dimension/MaterializedDimension";
 import { MongoDb } from "../MongoDb";
 
 interface TestEntryData {
