@@ -4,6 +4,7 @@ exports.MaterializedBucket = void 0;
 const Bucket_1 = require("../../Bucket");
 class MaterializedBucket extends Bucket_1.Bucket {
     async toEntryKeys() {
+        var _a, _b;
         if (this.props.dimension.db.isConnected.value == false) {
             console.error("Cannot get entry keys in MaterializedBucket because MongoDb is not connected");
             return new Set();
@@ -14,7 +15,7 @@ class MaterializedBucket extends Bucket_1.Bucket {
         if (bucket == null) {
             return new Set();
         }
-        const entryKeys = bucket.entryKeys;
+        const entryKeys = (_a = bucket.entryKeys) !== null && _a !== void 0 ? _a : (_b = bucket.storage) === null || _b === void 0 ? void 0 : _b.entryKeys;
         return new Set(entryKeys);
     }
     async hasEntryKey(entryKey) {

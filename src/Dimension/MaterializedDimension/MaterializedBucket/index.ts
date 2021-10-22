@@ -15,7 +15,7 @@ export class MaterializedBucket<T> extends Bucket<T> {
       return new Set();
     }
 
-    const entryKeys = bucket.entryKeys;
+    const entryKeys = bucket.entryKeys ?? bucket.storage?.entryKeys;
     return new Set(entryKeys);
   }
 
