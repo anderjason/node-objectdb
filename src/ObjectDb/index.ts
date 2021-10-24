@@ -6,7 +6,7 @@ import {
   TypedEvent,
 } from "@anderjason/observable";
 import { Duration, Instant } from "@anderjason/time";
-import { ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
+import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Benchmark } from "../Benchmark";
 import {
@@ -114,8 +114,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     const db = this._db;
-    await this._db.isConnected.toPromise((v) => v);
 
+    console.log("Waiting for db connection...");
+    await this._db.isConnected.toPromise((v) => v);
+    console.log("DB is connected");
+    
     // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
     //   const { key, definition } = row;
 
@@ -141,14 +144,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   async ensureDimensionsIdle(): Promise<void> {
     // wait for all dimensions to be updated
     const dimensions = Array.from(this._dimensionsByKey.values());
+
+    console.log("Waiting for all dimensions to be updated...");
     await Promise.all(dimensions.map(d => d.isUpdated.toPromise(v => v)));
+    console.log("Dimensions are all updated");
   }
 
   async ensureIdle(): Promise<void> {
+    console.log("Waiting for idle...");
     await Promise.all([
       this._isLoaded.toPromise(v => v),
       this.ensureDimensionsIdle()
     ]);
+    console.log("ObjectDb is idle");
   }
 
   async save(): Promise<void> {
@@ -206,7 +214,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     if (entryKeys == null) {
-      if (options.filter == null || options.filter.length === 0) {
+      if (ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
         entryKeys = await this.allEntryKeys();
       } else {
         const sets: Set<string>[] = [];

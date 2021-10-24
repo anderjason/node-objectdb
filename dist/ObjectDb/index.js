@@ -44,7 +44,9 @@ class ObjectDb extends skytree_1.Actor {
             return;
         }
         const db = this._db;
+        console.log("Waiting for db connection...");
         await this._db.isConnected.toPromise((v) => v);
+        console.log("DB is connected");
         // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
         //   const { key, definition } = row;
         //   // assign property definitions
@@ -64,13 +66,17 @@ class ObjectDb extends skytree_1.Actor {
     async ensureDimensionsIdle() {
         // wait for all dimensions to be updated
         const dimensions = Array.from(this._dimensionsByKey.values());
+        console.log("Waiting for all dimensions to be updated...");
         await Promise.all(dimensions.map(d => d.isUpdated.toPromise(v => v)));
+        console.log("Dimensions are all updated");
     }
     async ensureIdle() {
+        console.log("Waiting for idle...");
         await Promise.all([
             this._isLoaded.toPromise(v => v),
             this.ensureDimensionsIdle()
         ]);
+        console.log("ObjectDb is idle");
     }
     async save() {
         for (const dimension of this._dimensionsByKey.values()) {
@@ -113,7 +119,7 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
         if (entryKeys == null) {
-            if (options.filter == null || options.filter.length === 0) {
+            if (util_1.ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
                 entryKeys = await this.allEntryKeys();
             }
             else {
