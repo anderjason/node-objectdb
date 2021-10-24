@@ -8,7 +8,7 @@ class Dimension extends skytree_1.Actor {
     constructor(props) {
         super(props);
         this._buckets = new Map();
-        this._isUpdated = observable_1.Observable.givenValue(false, observable_1.Observable.isStrictEqual);
+        this._isUpdated = observable_1.Observable.givenValue(true, observable_1.Observable.isStrictEqual);
         this.isUpdated = observable_1.ReadOnlyObservable.givenObservable(this._isUpdated);
         this.key = props.key;
         this.label = props.label;
@@ -25,7 +25,7 @@ class Dimension extends skytree_1.Actor {
         });
     }
     onActivate() {
-        this._isUpdated.setValue(false);
+        this._isUpdated.setValue(true);
         this.cancelOnDeactivate(new observable_1.Receipt(() => {
             this._saveLater.clear();
         }));

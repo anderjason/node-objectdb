@@ -25,7 +25,7 @@ export abstract class Dimension<
 
   readonly key: string;
 
-  protected _isUpdated = Observable.givenValue(false, Observable.isStrictEqual);
+  protected _isUpdated = Observable.givenValue(true, Observable.isStrictEqual);
   readonly isUpdated = ReadOnlyObservable.givenObservable(this._isUpdated);
 
   label: string;
@@ -53,7 +53,7 @@ export abstract class Dimension<
   }
 
   onActivate() {
-    this._isUpdated.setValue(false);
+    this._isUpdated.setValue(true);
 
     this.cancelOnDeactivate(
       new Receipt(() => {
