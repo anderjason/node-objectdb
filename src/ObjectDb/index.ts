@@ -115,9 +115,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const db = this._db;
 
-    console.log("Waiting for db connection...");
+    console.log(`Waiting for db connection in ${this.props.label}...`);
     await this._db.isConnected.toPromise((v) => v);
-    console.log("DB is connected");
+    console.log(`DB is connected in ${this.props.label}`);
     
     // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
     //   const { key, definition } = row;
@@ -145,18 +145,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     // wait for all dimensions to be updated
     const dimensions = Array.from(this._dimensionsByKey.values());
 
-    console.log("Waiting for all dimensions to be updated...");
+    console.log(`Waiting for all dimensions to be updated in ${this.props.label}...`);
     await Promise.all(dimensions.map(d => d.isUpdated.toPromise(v => v)));
-    console.log("Dimensions are all updated");
+    console.log(`Dimensions are all updated in ${this.props.label}`);
   }
 
   async ensureIdle(): Promise<void> {
-    console.log("Waiting for idle...");
+    console.log(`Waiting for ObjectDB idle in ${this.props.label}...`);
     await Promise.all([
       this._isLoaded.toPromise(v => v),
       this.ensureDimensionsIdle()
     ]);
-    console.log("ObjectDb is idle");
+    console.log(`ObjectDb is idle in ${this.props.label}`);
   }
 
   async save(): Promise<void> {
