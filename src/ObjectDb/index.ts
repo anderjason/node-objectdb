@@ -159,12 +159,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     console.log(`ObjectDb is idle in ${this.props.label}`);
   }
 
-  async save(): Promise<void> {
-    for (const dimension of this._dimensionsByKey.values()) {
-      await dimension.save();
-    }
-  }
-
   private async allEntryKeys(): Promise<string[]> {
     const entries = await this._db
       .collection<PortableEntry<T>>("entries")

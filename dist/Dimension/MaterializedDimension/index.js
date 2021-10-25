@@ -68,10 +68,6 @@ class MaterializedDimension extends __1.Dimension {
             bucket.deleteEntryKey(entryKey);
         }
     }
-    async save() {
-        await super.save();
-        await this.ensureUpdated();
-    }
     async rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier) {
         if ((0, Bucket_1.isAbsoluteBucketIdentifier)(bucketIdentifier)) {
             if (bucketIdentifier.dimensionKey !== this.props.key) {
@@ -125,7 +121,6 @@ class MaterializedDimension extends __1.Dimension {
         await this.objectDb.forEach(async (entry) => {
             await this.rebuildEntry(entry);
         });
-        this.save();
     }
 }
 exports.MaterializedDimension = MaterializedDimension;

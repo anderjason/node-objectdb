@@ -92,11 +92,6 @@ export class MaterializedDimension<T> extends Dimension<
     }
   }
 
-  override async save(): Promise<void> {
-    await super.save();
-    await this.ensureUpdated();
-  }
-
   private async rebuildEntryGivenBucketIdentifier(
     entry: Entry<T>,
     bucketIdentifier: RelativeBucketIdentifier
@@ -166,7 +161,5 @@ export class MaterializedDimension<T> extends Dimension<
     await this.objectDb.forEach(async (entry) => {
       await this.rebuildEntry(entry);
     });
-
-    this.save();
   }
 }

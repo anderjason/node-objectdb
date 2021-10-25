@@ -1,9 +1,7 @@
 import {
   Observable,
-  ReadOnlyObservable,
-  Receipt
+  ReadOnlyObservable
 } from "@anderjason/observable";
-import { Debounce, Duration } from "@anderjason/time";
 import { Actor } from "skytree";
 import { Entry, MongoDb, ObjectDb } from "..";
 import { Bucket } from "./Bucket";
@@ -32,34 +30,15 @@ export abstract class Dimension<
   objectDb: ObjectDb<T>;
   db: MongoDb;
 
-  private _saveLater: Debounce;
-
   constructor(props: TP) {
     super(props);
 
     this.key = props.key;
     this.label = props.label;
-
-    this._saveLater = new Debounce({
-      duration: Duration.givenSeconds(15),
-      fn: async () => {
-        try {
-          await this.save();
-        } catch (err) {
-          console.error(`An error occurred in Dimension.saveLater: ${err}`);
-        }
-      },
-    });
   }
 
   onActivate() {
     this._isUpdated.setValue(true);
-
-    this.cancelOnDeactivate(
-      new Receipt(() => {
-        this._saveLater.clear();
-      })
-    );
   }
 
   abstract load(): Promise<void>;
@@ -76,27 +55,6 @@ export abstract class Dimension<
     console.log(`Dimension ${this.props.label} is updated`);
   }
 
-  async save(): Promise<void> {
-    const data = this.toPortableObject();
-
-    if (this.db.isConnected.value == false) {
-      console.error("Cannot save dimension because MongoDb is not connected");
-      return;
-    }
-
-    await this.db.collection<any>("dimensions").updateOne(
-      { key: this.props.key },
-      {
-        $set: {
-          ...data,
-        },
-      },
-      { upsert: true }
-    );
-
-    this._saveLater.clear();
-  }
-
   toOptionalBucketGivenKey(key: string): Bucket<T> | undefined {
     return this._buckets.get(key);
   }
@@ -109,12 +67,6 @@ export abstract class Dimension<
     this.addActor(bucket);
 
     this._buckets.set(bucket.props.identifier.bucketKey, bucket);
-
-    this.cancelOnDeactivate(
-      bucket.didChange.subscribe(() => {
-        this._saveLater.invoke();
-      })
-    );
   }
 
   toPortableObject(): PortableDimension {
@@ -123,5 +75,3 @@ export abstract class Dimension<
     };
   }
 }
-
-

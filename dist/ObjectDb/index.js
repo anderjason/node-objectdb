@@ -78,11 +78,6 @@ class ObjectDb extends skytree_1.Actor {
         ]);
         console.log(`ObjectDb is idle in ${this.props.label}`);
     }
-    async save() {
-        for (const dimension of this._dimensionsByKey.values()) {
-            await dimension.save();
-        }
-    }
     async allEntryKeys() {
         const entries = await this._db
             .collection("entries")

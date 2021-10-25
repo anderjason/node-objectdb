@@ -17,14 +17,12 @@ export declare abstract class Dimension<T, TP extends DimensionProps> extends Ac
     label: string;
     objectDb: ObjectDb<T>;
     db: MongoDb;
-    private _saveLater;
     constructor(props: TP);
     onActivate(): void;
     abstract load(): Promise<void>;
     abstract deleteEntryKey(entryKey: string): Promise<void>;
     abstract rebuildEntry(entry: Entry<T>): Promise<void>;
     ensureUpdated(): Promise<void>;
-    save(): Promise<void>;
     toOptionalBucketGivenKey(key: string): Bucket<T> | undefined;
     toBuckets(): IterableIterator<Bucket<T>>;
     addBucket(bucket: Bucket<T>): void;

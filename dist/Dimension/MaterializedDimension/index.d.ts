@@ -12,7 +12,6 @@ export declare class MaterializedDimension<T> extends Dimension<T, MaterializedD
     load(): Promise<void>;
     processEntryQueue(): Promise<void>;
     deleteEntryKey(entryKey: string): Promise<void>;
-    save(): Promise<void>;
     private rebuildEntryGivenBucketIdentifier;
     rebuildEntry(entry: Entry<T>): Promise<void>;
     rebuild(): Promise<void>;
