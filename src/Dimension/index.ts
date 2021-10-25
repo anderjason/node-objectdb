@@ -21,7 +21,7 @@ export interface BucketIdentifier {
 }
 
 export function hashCodeGivenBucketIdentifier(bucketIdentifier: BucketIdentifier): number {
-  const key = this.props.dimension.key + this.props.identifier.bucketKey;
+  const key = bucketIdentifier.dimensionKey + bucketIdentifier.bucketKey;
   return StringUtil.hashCodeGivenString(key);
 }
 
