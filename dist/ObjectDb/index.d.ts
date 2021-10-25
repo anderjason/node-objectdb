@@ -71,6 +71,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     removeMetadataGivenEntryKey(entryKey: string): Promise<void>;
     rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
     rebuildMetadata(): Promise<void>;
+    toOptionalDimensionGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<Dimension<T> | undefined>;
     toOptionalBucketGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<Bucket | undefined>;
     writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void>;
     writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Promise<Entry<T>>;

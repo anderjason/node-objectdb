@@ -349,14 +349,20 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     console.log("Done rebuilding metadata");
   }
 
-  async toOptionalBucketGivenIdentifier(
+  async toOptionalDimensionGivenIdentifier(
     bucketIdentifier: BucketIdentifier
-  ): Promise<Bucket | undefined> {
+  ): Promise<Dimension<T> | undefined> {
     if (bucketIdentifier == null) {
       return undefined;
     }
 
-    const dimension = this._dimensionsByKey.get(bucketIdentifier.dimensionKey);
+    return this._dimensionsByKey.get(bucketIdentifier.dimensionKey);
+  }
+
+  async toOptionalBucketGivenIdentifier(
+    bucketIdentifier: BucketIdentifier
+  ): Promise<Bucket | undefined> {
+    const dimension = await this.toOptionalDimensionGivenIdentifier(bucketIdentifier);
     if (dimension == null) {
       return undefined;
     }
