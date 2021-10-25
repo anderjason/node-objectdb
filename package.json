@@ -21,7 +21,7 @@
   "dependencies": {
     "@anderjason/node-crypto": "^2.0.0",
     "@anderjason/node-filesystem": "^2.0.1",
-    "@anderjason/observable": "^3.3.2",
+    "@anderjason/observable": "^3.3.4",
     "@anderjason/time": "^2.1.2",
     "@anderjason/util": "^2.4.0",
     "better-sqlite3": "^7.4.3",
