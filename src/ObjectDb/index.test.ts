@@ -2,6 +2,7 @@ import { Test } from "@anderjason/tests";
 import { StringUtil } from "@anderjason/util";
 import { ObjectDb } from ".";
 import { MaterializedDimension } from "../Dimension/MaterializedDimension";
+import { MaterializedBucket } from "../Dimension/MaterializedDimension/MaterializedBucket";
 import { MongoDb } from "../MongoDb";
 
 interface TestEntryData {
@@ -9,7 +10,7 @@ interface TestEntryData {
 }
 
 let db: MongoDb;
-async function usingTestDb(fn: (db: MongoDb) => Promise<void>): Promise<void> {
+async function usingTestDb(fn: (db: MongoDb) => Promise<void>, keepDb: boolean = false): Promise<void> {
   if (db == null) {
     db = new MongoDb({
       dbName: "test",
@@ -23,7 +24,12 @@ async function usingTestDb(fn: (db: MongoDb) => Promise<void>): Promise<void> {
 
   try {
     await fn(db);
-    await db.dropDatabase();
+
+    if (keepDb == false) {
+      await db.dropDatabase();
+    } else {
+      console.log("DB is saved at", db.props.namespace);  
+    }
   } catch (err) {
     console.log("DB is saved at", db.props.namespace);
     throw err;
@@ -31,6 +37,30 @@ async function usingTestDb(fn: (db: MongoDb) => Promise<void>): Promise<void> {
     db.deactivate();
   }
 }
+
+Test.define("MaterializedBucket can insert and query entry keys", async () => {
+  await usingTestDb(async db => {
+    const bucket = new MaterializedBucket({
+      identifier: {
+        dimensionKey: "dim1",
+        bucketKey: "bucket1",
+        bucketLabel: "bucket1"
+      },
+      db
+    });
+
+    await bucket.addEntryKey("entryKey1");
+    await bucket.addEntryKey("entryKey2");
+
+    const hasOne = await bucket.hasEntryKey("entryKey1");
+    const hasTwo = await bucket.hasEntryKey("entryKey2");
+    const hasThree = await bucket.hasEntryKey("entryKey3");
+
+    Test.assert(hasOne == true, "hasOne should be true");
+    Test.assert(hasTwo == true, "hasTwo should be true");
+    Test.assert(hasThree == false, "hasThree should be false");
+  })
+});
 
 Test.define("ObjectDb can be created", async () => {
   await usingTestDb(async (db) => {
@@ -40,7 +70,7 @@ Test.define("ObjectDb can be created", async () => {
     });
     objectDb.activate();
 
-    await objectDb.isLoaded.toPromise(v => v);
+    await objectDb.isLoaded.toPromise((v) => v);
 
     objectDb.deactivate();
   });
@@ -53,7 +83,7 @@ Test.define("ObjectDb can write and read a row", async () => {
       label: "TestDb",
     });
     objectDb.activate();
-    await objectDb.isLoaded.toPromise(v => v);
+    await objectDb.isLoaded.toPromise((v) => v);
 
     const entry = await objectDb.writeEntryData({
       message: "hello world",
@@ -84,6 +114,7 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
           bucketIdentifiersGivenEntry: (entry) => {
             return [
               {
+                dimensionKey: "message",
                 bucketKey: entry.data.message,
                 bucketLabel: entry.data.message,
               },
@@ -93,7 +124,6 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
       ],
     });
     objectDb.activate();
-    await objectDb.isLoaded.toPromise(v => v);
 
     const one = await objectDb.writeEntryData({
       message: "one",
@@ -103,7 +133,9 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
       message: "two",
     });
 
-    Test.assert(one.key !== two.key);
+    Test.assert(one.key !== two.key, "Keys are not equal");
+
+    await objectDb.ensureIdle();
 
     const resultOne = await objectDb.toOptionalFirstEntry({
       filter: [
@@ -135,11 +167,11 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
       ],
     });
 
-    Test.assert(resultOne != null);
-    Test.assert(resultTwo != null);
-    Test.assert(resultThree == null);
-    Test.assert(resultOne.key === one.key);
-    Test.assert(resultTwo.key === two.key);
+    Test.assert(resultOne != null, "Result one is null");
+    Test.assert(resultTwo != null, "Result two is null");
+    Test.assert(resultThree == null, "Result three is null");
+    Test.assert(resultOne.key === one.key, "Result one key is not equal");
+    Test.assert(resultTwo.key === two.key, "Result two key is not equal");
 
     const count = await objectDb.toEntryCount([
       {
@@ -166,6 +198,7 @@ Test.define("ObjectDb can find entry count by bucket identifier", async () => {
           bucketIdentifiersGivenEntry: (entry) => {
             return [
               {
+                dimensionKey: "message",
                 bucketKey: entry.data.message,
                 bucketLabel: entry.data.message,
               },
@@ -175,7 +208,7 @@ Test.define("ObjectDb can find entry count by bucket identifier", async () => {
       ],
     });
     objectDb.activate();
-    await objectDb.isLoaded.toPromise(v => v);
+    await objectDb.isLoaded.toPromise((v) => v);
 
     await objectDb.writeEntryData({
       message: "one",
@@ -186,19 +219,18 @@ Test.define("ObjectDb can find entry count by bucket identifier", async () => {
     });
 
     const count = await objectDb.toEntryCount([
-        {
-          dimensionKey: "message",
-          bucketKey: "one",
-          bucketLabel: "one",
-        },
-      ]);
+      {
+        dimensionKey: "message",
+        bucketKey: "one",
+        bucketLabel: "one",
+      },
+    ]);
 
-    Test.assertIsEqual(count, 2);
-    
+    Test.assertIsEqual(count, 2, "Count is not equal");
+
     objectDb.deactivate();
   });
 });
-
 
 Test.define("ObjectDb supports materialized dimensions", async () => {
   await usingTestDb(async (db) => {
@@ -206,12 +238,11 @@ Test.define("ObjectDb supports materialized dimensions", async () => {
       key: "message",
       label: "Message",
       bucketIdentifiersGivenEntry: (entry) => {
-        return [
-          {
-            bucketKey: entry.data.message,
-            bucketLabel: entry.data.message,
-          },
-        ];
+        return {
+          dimensionKey: "message",
+          bucketKey: entry.data.message,
+          bucketLabel: entry.data.message,
+        };
       },
     });
 
@@ -221,37 +252,62 @@ Test.define("ObjectDb supports materialized dimensions", async () => {
       dimensions: [md],
     });
     objectDb.activate();
-    await objectDb.isLoaded.toPromise(v => v);
+    await objectDb.ensureIdle();
 
-    const one = await objectDb.writeEntryData({
-      message: "one",
+    const objA = await objectDb.writeEntryData({
+      message: "A",
     });
 
-    const two = await objectDb.writeEntryData({
-      message: "two",
+    const objB = await objectDb.writeEntryData({
+      message: "B",
     });
 
-    await md.isUpdated.toPromise((v) => v == true);
+    await objectDb.ensureIdle();
 
-    const bucketOne = md.toOptionalBucketGivenKey("one");
-    const bucketTwo = md.toOptionalBucketGivenKey("two");
+    const bucketOne = await md.toOptionalBucketGivenKey("A");
+    const bucketTwo = await md.toOptionalBucketGivenKey("B");
 
-    Test.assert((await bucketOne.hasEntryKey(one.key)) == true);
-    Test.assert((await bucketOne.hasEntryKey(two.key)) == false);
+    Test.assert(bucketOne != null, "Bucket one should not be null");
+    Test.assert(bucketTwo != null, "Bucket two should not be null");
 
-    Test.assert((await bucketTwo.hasEntryKey(one.key)) == false);
-    Test.assert((await bucketTwo.hasEntryKey(two.key)) == true);
+    Test.assert(
+      (await bucketOne.hasEntryKey(objA.key)) == true,
+      "Bucket one does not have entry A"
+    );
+    Test.assert(
+      (await bucketOne.hasEntryKey(objB.key)) == false,
+      "Bucket one should not have entry B"
+    );
 
-    two.data.message = "three";
-    two.status = "updated";
-    await objectDb.writeEntry(two);
+    Test.assert(
+      (await bucketTwo.hasEntryKey(objA.key)) == false,
+      "Bucket two should not have entry A"
+    );
+    Test.assert(
+      (await bucketTwo.hasEntryKey(objB.key)) == true,
+      "Bucket two should have entry B"
+    );
 
-    await md.isUpdated.toPromise((v) => v == true);
+    objB.data.message = "B to C";
+    objB.status = "updated";
+    await objectDb.writeEntry(objB);
 
-    const bucketThree = md.toOptionalBucketGivenKey("three");
-    Test.assert((await bucketOne.hasEntryKey(two.key)) == false);
-    Test.assert((await bucketTwo.hasEntryKey(two.key)) == false);
-    Test.assert((await bucketThree.hasEntryKey(two.key)) == true);
+    await objectDb.ensureIdle();
+
+    const bucketThree = await md.toOptionalBucketGivenKey("B to C");
+
+    Test.assert(
+      (await bucketOne.hasEntryKey(objB.key)) == false,
+      "Bucket one should not have entry B to C"
+    );
+    Test.assert(
+      (await bucketTwo.hasEntryKey(objB.key)) == false,
+      "Bucket two should not have entry B to C"
+    );
+    Test.assert(
+      (await bucketThree.hasEntryKey(objB.key)) == true,
+      "Bucket three should have entry B to C"
+    );
 
     objectDb.deactivate();
   });
@@ -265,6 +321,7 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
       bucketIdentifiersGivenEntry: (entry) => {
         return [
           {
+            dimensionKey: "message",
             bucketKey: entry.data.message,
             bucketLabel: entry.data.message,
           },
@@ -289,18 +346,17 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
       message: "two",
     });
 
-    await objectDb.ensureIdle();
-
     objectDb.deactivate();
 
     // ----
 
     const md2 = new MaterializedDimension<TestEntryData>({
-      key: "message", // key needs to match the key of the first materialized dimension
+      key: "message",
       label: "Message",
       bucketIdentifiersGivenEntry: (entry) => {
         return [
           {
+            dimensionKey: "message",
             bucketKey: entry.data.message,
             bucketLabel: entry.data.message,
           },
@@ -314,21 +370,34 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
       dimensions: [md2],
     });
     objectDb2.activate();
-    
+
     await objectDb2.ensureIdle();
 
-    const bucketOne2 = md2.toOptionalBucketGivenKey("one");
-    const bucketTwo2 = md2.toOptionalBucketGivenKey("two");
+    const bucketOne2 = await md2.toOptionalBucketGivenKey("one");
+    const bucketTwo2 = await md2.toOptionalBucketGivenKey("two");
 
     Test.assert(bucketOne2 != null, "bucketOne2 is null");
     Test.assert(bucketTwo2 != null, "bucketTwo2 is null");
 
-    Test.assert((await bucketOne2.hasEntryKey(one.key)) == true);
-    Test.assert((await bucketOne2.hasEntryKey(two.key)) == false);
+    Test.assert(
+      (await bucketOne2.hasEntryKey(one.key)) == true,
+      "Bucket one does not have entry one"
+    );
+    Test.assert(
+      (await bucketOne2.hasEntryKey(two.key)) == false,
+      "Bucket one has entry two"
+    );
 
-    Test.assert((await bucketTwo2.hasEntryKey(one.key)) == false);
-    Test.assert((await bucketTwo2.hasEntryKey(two.key)) == true);
+    Test.assert(
+      (await bucketTwo2.hasEntryKey(one.key)) == false,
+      "Bucket two has entry one"
+    );
+    Test.assert(
+      (await bucketTwo2.hasEntryKey(two.key)) == true,
+      "Bucket two does not have entry two"
+    );
 
     objectDb2.deactivate();
   });
 });
+

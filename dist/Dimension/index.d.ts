@@ -1,30 +1,21 @@
-import { Observable, ReadOnlyObservable } from "@anderjason/observable";
-import { Actor } from "skytree";
-import { Entry, MongoDb, ObjectDb } from "..";
-import { Bucket } from "./Bucket";
-export interface PortableDimension {
-    type: string;
-}
-export interface DimensionProps {
-    key: string;
-    label: string;
-}
-export declare abstract class Dimension<T, TP extends DimensionProps> extends Actor<TP> {
-    protected _buckets: Map<string, Bucket<T>>;
+import { Entry, MongoDb } from "..";
+export interface Dimension<T> {
     readonly key: string;
-    protected _isUpdated: Observable<boolean>;
-    readonly isUpdated: ReadOnlyObservable<boolean>;
-    label: string;
-    objectDb: ObjectDb<T>;
+    readonly label: string;
     db: MongoDb;
-    constructor(props: TP);
-    onActivate(): void;
-    abstract load(): Promise<void>;
-    abstract deleteEntryKey(entryKey: string): Promise<void>;
-    abstract rebuildEntry(entry: Entry<T>): Promise<void>;
-    ensureUpdated(): Promise<void>;
-    toOptionalBucketGivenKey(key: string): Bucket<T> | undefined;
-    toBuckets(): IterableIterator<Bucket<T>>;
-    addBucket(bucket: Bucket<T>): void;
-    toPortableObject(): PortableDimension;
+    deleteEntryKey(entryKey: string): Promise<void>;
+    rebuildEntry(entry: Entry<T>): Promise<void>;
+    toOptionalBucketGivenKey(key: string): Promise<Bucket | undefined>;
+    toBuckets(): Promise<Bucket[]>;
+}
+export interface BucketIdentifier {
+    dimensionKey: string;
+    bucketKey: string;
+    bucketLabel: string;
+}
+export declare function hashCodeGivenBucketIdentifier(bucketIdentifier: BucketIdentifier): number;
+export interface Bucket {
+    readonly identifier: BucketIdentifier;
+    hasEntryKey(entryKey: string): Promise<boolean>;
+    toEntryKeys(): Promise<Set<string>>;
 }

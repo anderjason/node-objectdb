@@ -7,6 +7,7 @@ const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
 const Benchmark_1 = require("../Benchmark");
+const Dimension_1 = require("../Dimension");
 const Entry_1 = require("../Entry");
 class ObjectDb extends skytree_1.Actor {
     constructor() {
@@ -43,40 +44,19 @@ class ObjectDb extends skytree_1.Actor {
         if (this.isActive == false) {
             return;
         }
-        const db = this._db;
-        console.log(`Waiting for db connection in ${this.props.label}...`);
         await this._db.isConnected.toPromise((v) => v);
-        console.log(`DB is connected in ${this.props.label}`);
-        // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
-        //   const { key, definition } = row;
-        //   // assign property definitions
-        //   this._properties.set(key, JSON.parse(definition));
-        // });
         if (this.props.dimensions != null) {
             for (const dimension of this.props.dimensions) {
                 dimension.db = this._db;
-                dimension.objectDb = this;
-                this.addActor(dimension);
-                await dimension.load();
                 this._dimensionsByKey.set(dimension.key, dimension);
             }
         }
         this._isLoaded.setValue(true);
     }
-    async ensureDimensionsIdle() {
-        // wait for all dimensions to be updated
-        const dimensions = Array.from(this._dimensionsByKey.values());
-        console.log(`Waiting for all dimensions to be updated in ${this.props.label}...`);
-        await Promise.all(dimensions.map(d => d.ensureUpdated()));
-        console.log(`Dimensions are all updated in ${this.props.label}`);
-    }
     async ensureIdle() {
-        console.log(`Waiting for ObjectDB idle in ${this.props.label}...`);
-        await Promise.all([
-            this._isLoaded.toPromise(v => v),
-            this.ensureDimensionsIdle()
-        ]);
-        console.log(`ObjectDb is idle in ${this.props.label}`);
+        // console.log(`Waiting for ObjectDB idle in ${this.props.label}...`);
+        await this._isLoaded.toPromise((v) => v);
+        // console.log(`ObjectDb is idle in ${this.props.label}`);
     }
     async allEntryKeys() {
         const entries = await this._db
@@ -97,12 +77,12 @@ class ObjectDb extends skytree_1.Actor {
             const bucketIdentifiers = (_a = options.filter) !== null && _a !== void 0 ? _a : [];
             const buckets = [];
             for (const bucketIdentifier of bucketIdentifiers) {
-                const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+                const bucket = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
                 if (bucket != null) {
                     buckets.push(bucket);
                 }
             }
-            const hashCodes = buckets.map((bucket) => bucket.toHashCode());
+            const hashCodes = buckets.map((bucket) => (0, Dimension_1.hashCodeGivenBucketIdentifier)(bucket.identifier));
             const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
             fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
         }
@@ -120,7 +100,7 @@ class ObjectDb extends skytree_1.Actor {
             else {
                 const sets = [];
                 for (const bucketIdentifier of options.filter) {
-                    const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+                    const bucket = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
                     if (bucket == null) {
                         sets.push(new Set());
                     }
@@ -241,7 +221,7 @@ class ObjectDb extends skytree_1.Actor {
         });
         console.log("Done rebuilding metadata");
     }
-    toOptionalBucketGivenIdentifier(bucketIdentifier) {
+    async toOptionalBucketGivenIdentifier(bucketIdentifier) {
         if (bucketIdentifier == null) {
             return undefined;
         }
@@ -316,10 +296,12 @@ class ObjectDb extends skytree_1.Actor {
         };
         this.entryWillChange.emit(change);
         await entry.save();
+        await this.rebuildMetadataGivenEntry(entry);
         if (didCreateNewEntry) {
             this.collectionDidChange.emit();
         }
         this.entryDidChange.emit(change);
+        await this.ensureIdle();
         return entry;
     }
     async deleteEntryKey(entryKey) {

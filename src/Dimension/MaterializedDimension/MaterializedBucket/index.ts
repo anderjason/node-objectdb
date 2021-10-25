@@ -1,13 +1,22 @@
-import { Bucket } from "../../Bucket";
+import { Bucket, BucketIdentifier } from "../..";
+import { MongoDb } from "../../..";
+import { PropsObject } from "../../../PropsObject";
 
-export class MaterializedBucket<T> extends Bucket<T> {
+export interface MaterializedBucketProps<T> {
+  identifier: BucketIdentifier;
+  db: MongoDb;
+}
+
+export class MaterializedBucket<T>
+  extends PropsObject<MaterializedBucketProps<T>>
+  implements Bucket
+{
+  get identifier(): BucketIdentifier {
+    return this.props.identifier;
+  }
+
   async toEntryKeys(): Promise<Set<string>> {
-    if (this.props.dimension.db.isConnected.value == false) {
-      console.error("Cannot get entry keys in MaterializedBucket because MongoDb is not connected");
-      return new Set();
-    }
-
-    const bucket = await this.props.dimension.db
+    const bucket = await this.props.db
       .collection("buckets")
       .findOne<any>({ key: this.props.identifier.bucketKey });
 
@@ -20,51 +29,37 @@ export class MaterializedBucket<T> extends Bucket<T> {
   }
 
   async hasEntryKey(entryKey: string): Promise<boolean> {
-    const entryKeys = await this.toEntryKeys();
-    return entryKeys.has(entryKey);
+    const bucket = await this.props.db.collection("buckets").findOne<any>({
+      key: this.props.identifier.bucketKey,
+      entryKeys: entryKey,
+    });
+
+    return bucket != null;
   }
 
   async addEntryKey(entryKey: string): Promise<void> {
-    const entryKeys = await this.toEntryKeys();
-    if (entryKeys.has(entryKey)) {
-      return;
-    }
-
-    entryKeys.add(entryKey);
-
-    await this.props.dimension.db.collection("buckets").updateOne(
+    await this.props.db.collection("buckets").updateOne(
       { key: this.props.identifier.bucketKey },
       {
         $set: {
-          identifier: this.toAbsoluteIdentifier(),
-          entryKeys: Array.from(entryKeys),
+          identifier: this.props.identifier,
         },
+        $push: { entryKeys: entryKey },
       },
       { upsert: true }
     );
 
-    this.didChange.emit();
+    const bucketRow = await this.props.db
+      .collection<any>("buckets")
+      .findOne({ key: this.props.identifier.bucketKey });
   }
 
   async deleteEntryKey(entryKey: string): Promise<void> {
-    const entryKeys = await this.toEntryKeys();
-    if (!entryKeys.has(entryKey)) {
-      return;
-    }
-
-    entryKeys.delete(entryKey);
-
-    await this.props.dimension.db.collection("buckets").updateOne(
+    await this.props.db.collection("buckets").updateOne(
       { key: this.props.identifier.bucketKey },
       {
-        $set: {
-          identifier: this.toAbsoluteIdentifier(),
-          entryKeys: Array.from(entryKeys),
-        },
-      },
-      { upsert: true }
+        $pull: { entryKeys: entryKey },
+      }
     );
-
-    this.didChange.emit();
   }
 }

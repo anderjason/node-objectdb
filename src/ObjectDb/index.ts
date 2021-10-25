@@ -9,11 +9,8 @@ import { Duration, Instant } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Benchmark } from "../Benchmark";
-import {
-  Dimension,
-  DimensionProps,
-} from "../Dimension";
-import { AbsoluteBucketIdentifier, Bucket } from "../Dimension/Bucket";
+import { Dimension, hashCodeGivenBucketIdentifier } from "../Dimension";
+import { Bucket, BucketIdentifier } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
 
@@ -23,7 +20,7 @@ export interface Order {
 }
 
 export interface ObjectDbReadOptions {
-  filter?: AbsoluteBucketIdentifier[];
+  filter?: BucketIdentifier[];
   limit?: number;
   offset?: number;
   cacheKey?: string;
@@ -34,7 +31,7 @@ export interface ObjectDbProps<T> {
   db: MongoDb;
 
   cacheSize?: number;
-  dimensions?: Dimension<T, DimensionProps>[];
+  dimensions?: Dimension<T>[];
 }
 
 export interface EntryChange<T> {
@@ -76,7 +73,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   protected _isLoaded = Observable.givenValue(false, Observable.isStrictEqual);
   readonly isLoaded = ReadOnlyObservable.givenObservable(this._isLoaded);
 
-  private _dimensionsByKey = new Map<string, Dimension<T, DimensionProps>>();
+  private _dimensionsByKey = new Map<string, Dimension<T>>();
   private _caches = new Map<number, CacheData>();
 
   private _db: MongoDb;
@@ -113,26 +110,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-    const db = this._db;
-
-    console.log(`Waiting for db connection in ${this.props.label}...`);
     await this._db.isConnected.toPromise((v) => v);
-    console.log(`DB is connected in ${this.props.label}`);
     
-    // db.toRows("SELECT key, definition FROM properties").forEach((row) => {
-    //   const { key, definition } = row;
-
-    //   // assign property definitions
-    //   this._properties.set(key, JSON.parse(definition));
-    // });
-
     if (this.props.dimensions != null) {
       for (const dimension of this.props.dimensions) {
         dimension.db = this._db;
-        dimension.objectDb = this;
-
-        this.addActor(dimension);
-        await dimension.load();
 
         this._dimensionsByKey.set(dimension.key, dimension);
       }
@@ -141,22 +123,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._isLoaded.setValue(true);
   }
 
-  async ensureDimensionsIdle(): Promise<void> {
-    // wait for all dimensions to be updated
-    const dimensions = Array.from(this._dimensionsByKey.values());
-
-    console.log(`Waiting for all dimensions to be updated in ${this.props.label}...`);
-    await Promise.all(dimensions.map(d => d.ensureUpdated()));
-    console.log(`Dimensions are all updated in ${this.props.label}`);
-  }
-
   async ensureIdle(): Promise<void> {
-    console.log(`Waiting for ObjectDB idle in ${this.props.label}...`);
-    await Promise.all([
-      this._isLoaded.toPromise(v => v),
-      this.ensureDimensionsIdle()
-    ]);
-    console.log(`ObjectDb is idle in ${this.props.label}`);
+    // console.log(`Waiting for ObjectDB idle in ${this.props.label}...`);
+    await this._isLoaded.toPromise((v) => v);
+
+    // console.log(`ObjectDb is idle in ${this.props.label}`);
   }
 
   private async allEntryKeys(): Promise<string[]> {
@@ -182,18 +153,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
-      const bucketIdentifiers: AbsoluteBucketIdentifier[] =
-        options.filter ?? [];
-      const buckets: Bucket<T>[] = [];
+      const bucketIdentifiers: BucketIdentifier[] = options.filter ?? [];
+      const buckets: Bucket[] = [];
 
       for (const bucketIdentifier of bucketIdentifiers) {
-        const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+        const bucket = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
         if (bucket != null) {
           buckets.push(bucket);
         }
       }
 
-      const hashCodes = buckets.map((bucket) => bucket.toHashCode());
+      const hashCodes = buckets.map((bucket) => hashCodeGivenBucketIdentifier(bucket.identifier));
 
       const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
       fullCacheKey = StringUtil.hashCodeGivenString(cacheKeyData);
@@ -214,7 +184,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         const sets: Set<string>[] = [];
 
         for (const bucketIdentifier of options.filter) {
-          const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+          const bucket = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
           if (bucket == null) {
             sets.push(new Set<string>());
           } else {
@@ -264,7 +234,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return keys.includes(entryKey);
   }
 
-  async toEntryCount(filter?: AbsoluteBucketIdentifier[]): Promise<number> {
+  async toEntryCount(filter?: BucketIdentifier[]): Promise<number> {
     const keys = await this.toEntryKeys({
       filter,
     });
@@ -333,7 +303,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
-  toDimensions(): IterableIterator<Dimension<T, DimensionProps>> {
+  toDimensions(): IterableIterator<Dimension<T>> {
     return this._dimensionsByKey.values();
   }
 
@@ -379,9 +349,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     console.log("Done rebuilding metadata");
   }
 
-  toOptionalBucketGivenIdentifier(
-    bucketIdentifier: AbsoluteBucketIdentifier
-  ): Bucket<T> | undefined {
+  async toOptionalBucketGivenIdentifier(
+    bucketIdentifier: BucketIdentifier
+  ): Promise<Bucket | undefined> {
     if (bucketIdentifier == null) {
       return undefined;
     }
@@ -489,6 +459,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.entryWillChange.emit(change);
 
     await entry.save();
+    await this.rebuildMetadataGivenEntry(entry);
 
     if (didCreateNewEntry) {
       this.collectionDidChange.emit();
@@ -496,6 +467,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.entryDidChange.emit(change);
 
+    await this.ensureIdle();
+    
     return entry;
   }
 
@@ -518,7 +491,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.entryWillChange.emit(change);
 
     await this.removeMetadataGivenEntryKey(entryKey);
-
+  
     await this._db.collection("entries").deleteOne({ key: entryKey });
 
     this.entryDidChange.emit(change);

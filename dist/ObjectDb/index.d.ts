@@ -1,8 +1,8 @@
 import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { Actor } from "skytree";
-import { Dimension, DimensionProps } from "../Dimension";
-import { AbsoluteBucketIdentifier, Bucket } from "../Dimension/Bucket";
+import { Dimension } from "../Dimension";
+import { Bucket, BucketIdentifier } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
 export interface Order {
@@ -10,7 +10,7 @@ export interface Order {
     direction: "ascending" | "descending";
 }
 export interface ObjectDbReadOptions {
-    filter?: AbsoluteBucketIdentifier[];
+    filter?: BucketIdentifier[];
     limit?: number;
     offset?: number;
     cacheKey?: string;
@@ -19,7 +19,7 @@ export interface ObjectDbProps<T> {
     label: string;
     db: MongoDb;
     cacheSize?: number;
-    dimensions?: Dimension<T, DimensionProps>[];
+    dimensions?: Dimension<T>[];
 }
 export interface EntryChange<T> {
     key: string;
@@ -53,18 +53,17 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     get mongoDb(): MongoDb;
     onActivate(): void;
     private load;
-    ensureDimensionsIdle(): Promise<void>;
     ensureIdle(): Promise<void>;
     private allEntryKeys;
     toEntryKeys(options?: ObjectDbReadOptions): Promise<string[]>;
     forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void>;
     hasEntry(entryKey: string): Promise<boolean>;
-    toEntryCount(filter?: AbsoluteBucketIdentifier[]): Promise<number>;
+    toEntryCount(filter?: BucketIdentifier[]): Promise<number>;
     toEntries(options?: ObjectDbReadOptions): Promise<Entry<T>[]>;
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Promise<Entry<T> | undefined>;
     toEntryGivenKey(entryKey: string): Promise<Entry<T>>;
     toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined>;
-    toDimensions(): IterableIterator<Dimension<T, DimensionProps>>;
+    toDimensions(): IterableIterator<Dimension<T>>;
     setProperty(property: PropertyDefinition): Promise<void>;
     deletePropertyKey(key: string): Promise<void>;
     toPropertyGivenKey(key: string): Promise<PropertyDefinition>;
@@ -72,7 +71,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     removeMetadataGivenEntryKey(entryKey: string): Promise<void>;
     rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
     rebuildMetadata(): Promise<void>;
-    toOptionalBucketGivenIdentifier(bucketIdentifier: AbsoluteBucketIdentifier): Bucket<T> | undefined;
+    toOptionalBucketGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<Bucket | undefined>;
     writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void>;
     writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Promise<Entry<T>>;
     deleteEntryKey(entryKey: string): Promise<void>;

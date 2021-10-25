@@ -1,92 +1,71 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MaterializedDimension = void 0;
-const __1 = require("..");
-const Bucket_1 = require("../Bucket");
+const PropsObject_1 = require("../../PropsObject");
 const MaterializedBucket_1 = require("./MaterializedBucket");
-class MaterializedDimension extends __1.Dimension {
+class MaterializedDimension extends PropsObject_1.PropsObject {
     constructor() {
         super(...arguments);
         this._bucketsByEntryKey = new Map();
-        this._entryQueue = [];
-        this._processing = false;
     }
-    onActivate() {
-        super.onActivate();
-        this.cancelOnDeactivate(this.objectDb.entryDidChange.subscribe(async (change) => {
-            this._entryQueue.push(change);
-            this.processEntryQueue();
-        }));
+    get key() {
+        return this.props.key;
     }
-    async load() {
-        // const row = await this.db.collection<any>("dimensions").findOne({ key: this.props.key });
+    get label() {
+        return this.props.label;
+    }
+    async toOptionalBucketGivenKey(bucketKey) {
+        const find = {
+            "identifier.dimensionKey": this.props.key,
+            "identifier.bucketKey": bucketKey,
+        };
+        const bucketRow = await this.db
+            .collection("buckets")
+            .findOne(find);
+        if (bucketRow == null) {
+            return undefined;
+        }
+        return new MaterializedBucket_1.MaterializedBucket({
+            identifier: bucketRow.identifier,
+            db: this.db,
+        });
+    }
+    async toBuckets() {
         const bucketRows = await this.db
             .collection("buckets")
             .find({ "identifier.dimensionKey": this.props.key })
             .toArray();
-        for (const bucketRow of bucketRows) {
-            const bucket = new MaterializedBucket_1.MaterializedBucket({
-                identifier: bucketRow.identifier,
-                storage: bucketRow.storage,
-                dimension: this,
-            });
-            this.addBucket(bucket);
+        const result = [];
+        for (const row of bucketRows) {
+            result.push(new MaterializedBucket_1.MaterializedBucket({
+                identifier: row.identifier,
+                db: this.db,
+            }));
         }
-        this._isUpdated.setValue(true);
-    }
-    async processEntryQueue() {
-        if (this._processing) {
-            return;
-        }
-        if (this._entryQueue.length === 0) {
-            this._isUpdated.setValue(true);
-            return;
-        }
-        this._isUpdated.setValue(false);
-        this._processing = true;
-        while (this._entryQueue.length > 0) {
-            console.log(`Processing queue for dimension ${this.props.label} with length ${this._entryQueue.length}...`);
-            try {
-                const change = this._entryQueue.shift();
-                if (change.newData != null) {
-                    await this.rebuildEntry(change.entry);
-                }
-                else {
-                    await this.deleteEntryKey(change.entry.key);
-                }
-            }
-            catch (e) {
-                console.error(e);
-            }
-            console.log(`Done processing queue item for dimension ${this.props.label}`);
-        }
-        this._processing = false;
-        this._isUpdated.setValue(true);
+        return result;
     }
     async deleteEntryKey(entryKey) {
-        for (const bucket of this._buckets.values()) {
-            bucket.deleteEntryKey(entryKey);
+        const buckets = await this.toBuckets();
+        for (const bucket of buckets) {
+            await bucket.deleteEntryKey(entryKey);
         }
     }
     async rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier) {
-        if ((0, Bucket_1.isAbsoluteBucketIdentifier)(bucketIdentifier)) {
-            if (bucketIdentifier.dimensionKey !== this.props.key) {
-                throw new Error(`Received an absolute bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
-            }
+        if (bucketIdentifier.dimensionKey !== this.props.key) {
+            throw new Error(`Received a bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
         }
-        // create the bucket if necessary
-        if (!this._buckets.has(bucketIdentifier.bucketKey)) {
-            const bucket = new MaterializedBucket_1.MaterializedBucket({
+        let bucket = await this.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
+        if (bucket == null) {
+            bucket = new MaterializedBucket_1.MaterializedBucket({
                 identifier: bucketIdentifier,
-                dimension: this,
+                db: this.db,
             });
-            this.addBucket(bucket);
         }
-        const bucket = this._buckets.get(bucketIdentifier.bucketKey);
         await bucket.addEntryKey(entry.key);
     }
     async rebuildEntry(entry) {
         const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);
+        const buckets = await this.toBuckets();
         if (Array.isArray(bucketIdentifiers)) {
             for (const bucketIdentifier of bucketIdentifiers) {
                 if (bucketIdentifier != null) {
@@ -94,7 +73,7 @@ class MaterializedDimension extends __1.Dimension {
                 }
             }
             const bucketKeys = new Set(bucketIdentifiers.map((bi) => bi.bucketKey));
-            for (const bucket of this._buckets.values()) {
+            for (const bucket of buckets) {
                 if (!bucketKeys.has(bucket.props.identifier.bucketKey)) {
                     await bucket.deleteEntryKey(entry.key);
                 }
@@ -102,9 +81,9 @@ class MaterializedDimension extends __1.Dimension {
         }
         else if (bucketIdentifiers != null) {
             // not an array, just a single object
-            this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifiers);
+            await this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifiers);
             const bucketKey = bucketIdentifiers.bucketKey;
-            for (const bucket of this._buckets.values()) {
+            for (const bucket of buckets) {
                 if (bucket.props.identifier.bucketKey != bucketKey) {
                     await bucket.deleteEntryKey(entry.key);
                 }
@@ -112,15 +91,10 @@ class MaterializedDimension extends __1.Dimension {
         }
         else {
             // undefined, delete all buckets
-            for (const bucket of this._buckets.values()) {
+            for (const bucket of buckets) {
                 await bucket.deleteEntryKey(entry.key);
             }
         }
-    }
-    async rebuild() {
-        await this.objectDb.forEach(async (entry) => {
-            await this.rebuildEntry(entry);
-        });
     }
 }
 exports.MaterializedDimension = MaterializedDimension;
