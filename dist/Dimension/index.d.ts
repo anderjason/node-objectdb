@@ -23,6 +23,7 @@ export declare abstract class Dimension<T, TP extends DimensionProps> extends Ac
     abstract load(): Promise<void>;
     abstract deleteEntryKey(entryKey: string): Promise<void>;
     abstract rebuildEntry(entry: Entry<T>): Promise<void>;
+    ensureUpdated(): Promise<void>;
     save(): Promise<void>;
     toOptionalBucketGivenKey(key: string): Bucket<T> | undefined;
     toBuckets(): IterableIterator<Bucket<T>>;

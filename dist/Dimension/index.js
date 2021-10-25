@@ -30,6 +30,14 @@ class Dimension extends skytree_1.Actor {
             this._saveLater.clear();
         }));
     }
+    async ensureUpdated() {
+        if (this._isUpdated.value == true) {
+            return;
+        }
+        console.log(`Waiting for dimension ${this.props.label} to be updated`);
+        await this._isUpdated.toPromise(v => v);
+        console.log(`Dimension ${this.props.label} is updated`);
+    }
     async save() {
         const data = this.toPortableObject();
         if (this.db.isConnected.value == false) {

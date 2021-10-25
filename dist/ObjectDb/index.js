@@ -67,7 +67,7 @@ class ObjectDb extends skytree_1.Actor {
         // wait for all dimensions to be updated
         const dimensions = Array.from(this._dimensionsByKey.values());
         console.log(`Waiting for all dimensions to be updated in ${this.props.label}...`);
-        await Promise.all(dimensions.map(d => d.isUpdated.toPromise(v => v)));
+        await Promise.all(dimensions.map(d => d.ensureUpdated()));
         console.log(`Dimensions are all updated in ${this.props.label}`);
     }
     async ensureIdle() {

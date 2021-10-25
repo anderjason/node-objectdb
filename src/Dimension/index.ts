@@ -66,6 +66,16 @@ export abstract class Dimension<
   abstract deleteEntryKey(entryKey: string): Promise<void>;
   abstract rebuildEntry(entry: Entry<T>): Promise<void>;
 
+  async ensureUpdated(): Promise<void> {
+    if (this._isUpdated.value == true) {
+      return;
+    }
+
+    console.log(`Waiting for dimension ${this.props.label} to be updated`);
+    await this._isUpdated.toPromise(v => v);
+    console.log(`Dimension ${this.props.label} is updated`);
+  }
+
   async save(): Promise<void> {
     const data = this.toPortableObject();
 

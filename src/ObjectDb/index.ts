@@ -146,7 +146,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const dimensions = Array.from(this._dimensionsByKey.values());
 
     console.log(`Waiting for all dimensions to be updated in ${this.props.label}...`);
-    await Promise.all(dimensions.map(d => d.isUpdated.toPromise(v => v)));
+    await Promise.all(dimensions.map(d => d.ensureUpdated()));
     console.log(`Dimensions are all updated in ${this.props.label}`);
   }
 
