@@ -221,14 +221,14 @@ class ObjectDb extends skytree_1.Actor {
         });
         console.log("Done rebuilding metadata");
     }
-    async toOptionalDimensionGivenIdentifier(bucketIdentifier) {
-        if (bucketIdentifier == null) {
+    async toOptionalDimensionGivenKey(dimensionKey) {
+        if (dimensionKey == null) {
             return undefined;
         }
-        return this._dimensionsByKey.get(bucketIdentifier.dimensionKey);
+        return this._dimensionsByKey.get(dimensionKey);
     }
     async toOptionalBucketGivenIdentifier(bucketIdentifier) {
-        const dimension = await this.toOptionalDimensionGivenIdentifier(bucketIdentifier);
+        const dimension = await this.toOptionalDimensionGivenKey(bucketIdentifier.dimensionKey);
         if (dimension == null) {
             return undefined;
         }
