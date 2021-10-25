@@ -19,9 +19,7 @@ class MaterializedDimension extends PropsObject_1.PropsObject {
             "identifier.dimensionKey": this.props.key,
             "identifier.bucketKey": bucketKey,
         };
-        const bucketRow = await this.db
-            .collection("buckets")
-            .findOne(find);
+        const bucketRow = await this.db.collection("buckets").findOne(find);
         if (bucketRow == null) {
             return undefined;
         }
@@ -45,16 +43,15 @@ class MaterializedDimension extends PropsObject_1.PropsObject {
         return result;
     }
     async deleteEntryKey(entryKey) {
-        const buckets = await this.toBuckets();
-        for (const bucket of buckets) {
-            await bucket.deleteEntryKey(entryKey);
-        }
+        await this.db.collection("buckets").updateMany({ "identifier.dimensionKey": this.props.key, entryKeys: entryKey }, {
+            $pull: { entryKeys: entryKey },
+        });
     }
-    async rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier) {
+    async addEntryToBucket(entry, bucketIdentifier) {
         if (bucketIdentifier.dimensionKey !== this.props.key) {
             throw new Error(`Received a bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
         }
-        let bucket = await this.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
+        let bucket = (await this.toOptionalBucketGivenKey(bucketIdentifier.bucketKey));
         if (bucket == null) {
             bucket = new MaterializedBucket_1.MaterializedBucket({
                 identifier: bucketIdentifier,
@@ -64,36 +61,18 @@ class MaterializedDimension extends PropsObject_1.PropsObject {
         await bucket.addEntryKey(entry.key);
     }
     async rebuildEntry(entry) {
+        await this.deleteEntryKey(entry.key);
         const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);
-        const buckets = await this.toBuckets();
         if (Array.isArray(bucketIdentifiers)) {
             for (const bucketIdentifier of bucketIdentifiers) {
                 if (bucketIdentifier != null) {
-                    await this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier);
-                }
-            }
-            const bucketKeys = new Set(bucketIdentifiers.map((bi) => bi.bucketKey));
-            for (const bucket of buckets) {
-                if (!bucketKeys.has(bucket.props.identifier.bucketKey)) {
-                    await bucket.deleteEntryKey(entry.key);
+                    await this.addEntryToBucket(entry, bucketIdentifier);
                 }
             }
         }
         else if (bucketIdentifiers != null) {
             // not an array, just a single object
-            await this.rebuildEntryGivenBucketIdentifier(entry, bucketIdentifiers);
-            const bucketKey = bucketIdentifiers.bucketKey;
-            for (const bucket of buckets) {
-                if (bucket.props.identifier.bucketKey != bucketKey) {
-                    await bucket.deleteEntryKey(entry.key);
-                }
-            }
-        }
-        else {
-            // undefined, delete all buckets
-            for (const bucket of buckets) {
-                await bucket.deleteEntryKey(entry.key);
-            }
+            await this.addEntryToBucket(entry, bucketIdentifiers);
         }
     }
 }

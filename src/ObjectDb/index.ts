@@ -424,8 +424,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const oldEntry = await this.toOptionalEntryGivenKey(entryKey);
-    const oldPortableEntry = oldEntry?.toPortableEntry();
+    let entry = await this.toOptionalEntryGivenKey(entryKey);
+    const oldPortableEntry = entry?.toPortableEntry();
     const oldData = oldPortableEntry?.data;
     const oldPropertyValues = oldPortableEntry?.propertyValues;
 
@@ -440,7 +440,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const now = Instant.ofNow();
     let didCreateNewEntry = false;
 
-    let entry = await this.toOptionalEntryGivenKey(entryKey);
     if (entry == null) {
       entry = new Entry<T>({
         key: entryKey,

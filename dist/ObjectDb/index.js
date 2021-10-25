@@ -267,8 +267,8 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        const oldEntry = await this.toOptionalEntryGivenKey(entryKey);
-        const oldPortableEntry = oldEntry === null || oldEntry === void 0 ? void 0 : oldEntry.toPortableEntry();
+        let entry = await this.toOptionalEntryGivenKey(entryKey);
+        const oldPortableEntry = entry === null || entry === void 0 ? void 0 : entry.toPortableEntry();
         const oldData = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.data;
         const oldPropertyValues = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.propertyValues;
         if (util_1.ObjectUtil.objectIsDeepEqual(oldData, entryData) &&
@@ -278,7 +278,6 @@ class ObjectDb extends skytree_1.Actor {
         }
         const now = time_1.Instant.ofNow();
         let didCreateNewEntry = false;
-        let entry = await this.toOptionalEntryGivenKey(entryKey);
         if (entry == null) {
             entry = new Entry_1.Entry({
                 key: entryKey,

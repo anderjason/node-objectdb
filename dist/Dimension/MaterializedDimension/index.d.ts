@@ -15,6 +15,6 @@ export declare class MaterializedDimension<T> extends PropsObject<MaterializedDi
     toOptionalBucketGivenKey(bucketKey: string): Promise<Bucket | undefined>;
     toBuckets(): Promise<MaterializedBucket<T>[]>;
     deleteEntryKey(entryKey: string): Promise<void>;
-    private rebuildEntryGivenBucketIdentifier;
+    private addEntryToBucket;
     rebuildEntry(entry: Entry<T>): Promise<void>;
 }
