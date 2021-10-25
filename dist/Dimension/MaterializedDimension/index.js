@@ -45,13 +45,20 @@ class MaterializedDimension extends __1.Dimension {
         this._isUpdated.setValue(false);
         this._processing = true;
         while (this._entryQueue.length > 0) {
-            const change = this._entryQueue.shift();
-            if (change.newData != null) {
-                await this.rebuildEntry(change.entry);
+            console.log(`Processing queue for dimension ${this.props.label} with length ${this._entryQueue.length}...`);
+            try {
+                const change = this._entryQueue.shift();
+                if (change.newData != null) {
+                    await this.rebuildEntry(change.entry);
+                }
+                else {
+                    await this.deleteEntryKey(change.entry.key);
+                }
             }
-            else {
-                await this.deleteEntryKey(change.entry.key);
+            catch (e) {
+                console.error(e);
             }
+            console.log(`Done processing queue item for dimension ${this.props.label}`);
         }
         this._processing = false;
         this._isUpdated.setValue(true);
@@ -63,7 +70,7 @@ class MaterializedDimension extends __1.Dimension {
     }
     async save() {
         await super.save();
-        await this.isUpdated.toPromise(v => v);
+        await this.ensureUpdated();
     }
     async rebuildEntryGivenBucketIdentifier(entry, bucketIdentifier) {
         if ((0, Bucket_1.isAbsoluteBucketIdentifier)(bucketIdentifier)) {

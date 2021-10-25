@@ -65,13 +65,21 @@ export class MaterializedDimension<T> extends Dimension<
     this._processing = true;
 
     while (this._entryQueue.length > 0) {
-      const change = this._entryQueue.shift()!;
+      console.log(`Processing queue for dimension ${this.props.label} with length ${this._entryQueue.length}...`);
 
-      if (change.newData != null) {
-        await this.rebuildEntry(change.entry);
-      } else {
-        await this.deleteEntryKey(change.entry.key);
+      try {
+        const change = this._entryQueue.shift()!;
+
+        if (change.newData != null) {
+          await this.rebuildEntry(change.entry);
+        } else {
+          await this.deleteEntryKey(change.entry.key);
+        }
+      } catch (e) {
+        console.error(e);
       }
+
+      console.log(`Done processing queue item for dimension ${this.props.label}`);
     }
 
     this._processing = false;
@@ -86,8 +94,7 @@ export class MaterializedDimension<T> extends Dimension<
 
   override async save(): Promise<void> {
     await super.save();
-
-    await this.isUpdated.toPromise(v => v);
+    await this.ensureUpdated();
   }
 
   private async rebuildEntryGivenBucketIdentifier(
