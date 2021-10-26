@@ -122,17 +122,14 @@ export class LiveDimension<T>
   async toOptionalBucketGivenKey(
     bucketKey: string
   ): Promise<Bucket | undefined> {
-    const bucketIdentifiers = await this.toBucketIdentifiers();
-
-    const identifier = bucketIdentifiers.find(
-      (bi) => bi.bucketKey === bucketKey
-    );
-    if (identifier == null) {
-      return undefined;
-    }
+    const identifier = {
+      dimensionKey: this.key,
+      bucketKey,
+      bucketLabel: bucketKey,
+    };
 
     return new LiveBucket({
-      identifier: identifier,
+      identifier,
       db: this._db,
       mongoFilter: this.props.mongoFilterGivenBucketIdentifier(identifier),
     });
