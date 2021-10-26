@@ -73,6 +73,8 @@ export class LiveDimension<T>
           const allValues = row == null ? [] : Array.from(new Set(row.res));
           allValues.sort();
 
+          console.log(allValues);
+
           return allValues.map((value: any) => {
             const key = String(value);
             const label =

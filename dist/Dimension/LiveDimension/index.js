@@ -46,6 +46,7 @@ class LiveDimension extends skytree_1.PropsObject {
                     const row = aggregateResult[0];
                     const allValues = row == null ? [] : Array.from(new Set(row.res));
                     allValues.sort();
+                    console.log(allValues);
                     return allValues.map((value) => {
                         var _a;
                         const key = String(value);
