@@ -43,7 +43,7 @@ export class LiveDimension<T>
             )
             .toArray();
 
-          const values = entries.map((e) => e[fullPropertyName]);
+          const values = entries.map((e) => e.data[params.propertyName]);
           const uniqueValues = Array.from(new Set(values));
           uniqueValues.sort();
 

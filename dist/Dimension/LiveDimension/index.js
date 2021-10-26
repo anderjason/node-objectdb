@@ -18,7 +18,7 @@ class LiveDimension extends skytree_1.PropsObject {
                         [fullPropertyName]: { $exists: true },
                     }, { projection: { _id: 0, [fullPropertyName]: 1 } })
                         .toArray();
-                    const values = entries.map((e) => e[fullPropertyName]);
+                    const values = entries.map((e) => e.data[params.propertyName]);
                     const uniqueValues = Array.from(new Set(values));
                     uniqueValues.sort();
                     return uniqueValues.map((value) => {
