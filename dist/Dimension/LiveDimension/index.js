@@ -20,7 +20,7 @@ class LiveDimension extends skytree_1.PropsObject {
                         .toArray();
                     return messages.map((m) => {
                         var _a;
-                        const key = m.data[params.propertyName];
+                        const key = String(m.data[params.propertyName]);
                         const label = params.labelGivenKey != null ? params.labelGivenKey(key) : key;
                         return {
                             dimensionKey: (_a = params.dimensionKey) !== null && _a !== void 0 ? _a : params.propertyName,

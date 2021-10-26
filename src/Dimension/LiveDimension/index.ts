@@ -44,7 +44,7 @@ export class LiveDimension<T>
             .toArray();
 
           return messages.map((m) => {
-            const key = m.data[params.propertyName];
+            const key = String(m.data[params.propertyName]);
             const label =
               params.labelGivenKey != null ? params.labelGivenKey(key) : key;
 

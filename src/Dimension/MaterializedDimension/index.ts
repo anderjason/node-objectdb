@@ -83,7 +83,10 @@ export class MaterializedDimension<T>
   async deleteEntryKey(entryKey: string): Promise<void> {
     const timer = this._stopwatch.start("md-deleteEntryKey");
     await this._db.collection("buckets").updateMany(
-      { "identifier.dimensionKey": this.props.key, entryKeys: entryKey },
+      {
+        "identifier.dimensionKey": this.props.key,
+        entryKeys: entryKey,
+      },
       {
         $pull: { entryKeys: entryKey },
       }
@@ -106,7 +109,7 @@ export class MaterializedDimension<T>
     let bucket = (await this.toOptionalBucketGivenKey(
       bucketIdentifier.bucketKey
     )) as MaterializedBucket<T>;
-    
+
     if (bucket == null) {
       bucket = new MaterializedBucket({
         identifier: bucketIdentifier,

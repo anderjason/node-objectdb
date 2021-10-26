@@ -51,7 +51,10 @@ class MaterializedDimension extends skytree_1.PropsObject {
     }
     async deleteEntryKey(entryKey) {
         const timer = this._stopwatch.start("md-deleteEntryKey");
-        await this._db.collection("buckets").updateMany({ "identifier.dimensionKey": this.props.key, entryKeys: entryKey }, {
+        await this._db.collection("buckets").updateMany({
+            "identifier.dimensionKey": this.props.key,
+            entryKeys: entryKey,
+        }, {
             $pull: { entryKeys: entryKey },
         });
         timer.stop();
