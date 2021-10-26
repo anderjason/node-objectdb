@@ -33,7 +33,7 @@ export class LiveDimension<T>
       label: params.dimensionLabel,
       allBucketIdentifiers: async (db: MongoDb) => {
         if (params.propertyType === "value") {
-          const messages = await db
+          const entries = await db
             .collection("entries")
             .find<any>(
               {
@@ -43,8 +43,12 @@ export class LiveDimension<T>
             )
             .toArray();
 
-          return messages.map((m) => {
-            const key = String(m.data[params.propertyName]);
+          const values = entries.map((e) => e[fullPropertyName]);
+          const uniqueValues = Array.from(new Set(values));
+          uniqueValues.sort();
+
+          return uniqueValues.map((value) => {
+            const key = String(value);
             const label =
               params.labelGivenKey != null ? params.labelGivenKey(key) : key;
 
@@ -72,8 +76,6 @@ export class LiveDimension<T>
           const row = aggregateResult[0];
           const allValues = row == null ? [] : Array.from(new Set(row.res));
           allValues.sort();
-
-          console.log(allValues);
 
           return allValues.map((value: any) => {
             const key = String(value);

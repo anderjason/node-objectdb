@@ -12,15 +12,18 @@ class LiveDimension extends skytree_1.PropsObject {
             label: params.dimensionLabel,
             allBucketIdentifiers: async (db) => {
                 if (params.propertyType === "value") {
-                    const messages = await db
+                    const entries = await db
                         .collection("entries")
                         .find({
                         [fullPropertyName]: { $exists: true },
                     }, { projection: { _id: 0, [fullPropertyName]: 1 } })
                         .toArray();
-                    return messages.map((m) => {
+                    const values = entries.map((e) => e[fullPropertyName]);
+                    const uniqueValues = Array.from(new Set(values));
+                    uniqueValues.sort();
+                    return uniqueValues.map((value) => {
                         var _a;
-                        const key = String(m.data[params.propertyName]);
+                        const key = String(value);
                         const label = params.labelGivenKey != null ? params.labelGivenKey(key) : key;
                         return {
                             dimensionKey: (_a = params.dimensionKey) !== null && _a !== void 0 ? _a : params.propertyName,
@@ -46,7 +49,6 @@ class LiveDimension extends skytree_1.PropsObject {
                     const row = aggregateResult[0];
                     const allValues = row == null ? [] : Array.from(new Set(row.res));
                     allValues.sort();
-                    console.log(allValues);
                     return allValues.map((value) => {
                         var _a;
                         const key = String(value);
