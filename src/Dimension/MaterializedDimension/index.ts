@@ -16,7 +16,8 @@ export class MaterializedDimension<T>
   extends PropsObject<MaterializedDimensionProps<T>>
   implements Dimension<T>
 {
-  protected _bucketsByEntryKey = new Map<string, Bucket[]>();
+  private _db: MongoDb;
+  private _stopwatch: Stopwatch;
 
   get key(): string {
     return this.props.key;
@@ -26,8 +27,12 @@ export class MaterializedDimension<T>
     return this.props.label;
   }
 
-  db: MongoDb;
-  stopwatch: Stopwatch;
+  async init(db: MongoDb, stopwatch: Stopwatch): Promise<void> {
+    this._db = db;
+    this._stopwatch = stopwatch;
+
+    await this._db.collection("buckets").createIndex({ entryKeys: 1 });
+  }
 
   async toOptionalBucketGivenKey(
     bucketKey: string
@@ -37,8 +42,8 @@ export class MaterializedDimension<T>
       "identifier.bucketKey": bucketKey,
     };
 
-    const timer = this.stopwatch.start("md-toOptionalBucketGivenKey");
-    const bucketRow = await this.db.collection<any>("buckets").findOne(find);
+    const timer = this._stopwatch.start("md-toOptionalBucketGivenKey");
+    const bucketRow = await this._db.collection<any>("buckets").findOne(find);
     timer.stop();
 
     if (bucketRow == null) {
@@ -47,13 +52,13 @@ export class MaterializedDimension<T>
 
     return new MaterializedBucket({
       identifier: bucketRow.identifier,
-      db: this.db,
+      db: this._db,
     });
   }
 
   async toBuckets(): Promise<MaterializedBucket<T>[]> {
-    const timer = this.stopwatch.start("md-toBuckets");
-    const bucketRows = await this.db
+    const timer = this._stopwatch.start("md-toBuckets");
+    const bucketRows = await this._db
       .collection<any>("buckets")
       .find({ "identifier.dimensionKey": this.props.key })
       .toArray();
@@ -61,12 +66,12 @@ export class MaterializedDimension<T>
 
     const result: MaterializedBucket<T>[] = [];
 
-    const timer2 = this.stopwatch.start("md-toBuckets-loop");
+    const timer2 = this._stopwatch.start("md-toBuckets-loop");
     for (const row of bucketRows) {
       result.push(
         new MaterializedBucket({
           identifier: row.identifier,
-          db: this.db,
+          db: this._db,
         })
       );
     }
@@ -76,8 +81,8 @@ export class MaterializedDimension<T>
   }
 
   async deleteEntryKey(entryKey: string): Promise<void> {
-    const timer = this.stopwatch.start("md-deleteEntryKey");
-    await this.db.collection("buckets").updateMany(
+    const timer = this._stopwatch.start("md-deleteEntryKey");
+    await this._db.collection("buckets").updateMany(
       { "identifier.dimensionKey": this.props.key, entryKeys: entryKey },
       {
         $pull: { entryKeys: entryKey },
@@ -96,7 +101,7 @@ export class MaterializedDimension<T>
       );
     }
 
-    const timer = this.stopwatch.start("md-addEntryToBucket");
+    const timer = this._stopwatch.start("md-addEntryToBucket");
 
     let bucket = (await this.toOptionalBucketGivenKey(
       bucketIdentifier.bucketKey
@@ -105,7 +110,7 @@ export class MaterializedDimension<T>
     if (bucket == null) {
       bucket = new MaterializedBucket({
         identifier: bucketIdentifier,
-        db: this.db,
+        db: this._db,
       });
     }
 
@@ -114,7 +119,7 @@ export class MaterializedDimension<T>
   }
 
   async rebuildEntry(entry: Entry<T>): Promise<void> {
-    const timer = this.stopwatch.start("md-rebuildEntry");
+    const timer = this._stopwatch.start("md-rebuildEntry");
     await this.deleteEntryKey(entry.key);
 
     const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);

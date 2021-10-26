@@ -3,8 +3,7 @@ import { Entry, MongoDb } from "..";
 export interface Dimension<T> {
     readonly key: string;
     readonly label: string;
-    db: MongoDb;
-    stopwatch: Stopwatch;
+    init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
     deleteEntryKey(entryKey: string): Promise<void>;
     rebuildEntry(entry: Entry<T>): Promise<void>;
     toOptionalBucketGivenKey(key: string): Promise<Bucket | undefined>;

@@ -74,8 +74,7 @@ Test.define("ObjectDb can be created", async () => {
       label: "TestDb",
     });
     objectDb.activate();
-
-    await objectDb.isLoaded.toPromise((v) => v);
+    await objectDb.ensureIdle();
 
     objectDb.deactivate();
   });
@@ -88,7 +87,7 @@ Test.define("ObjectDb can write and read a row", async () => {
       label: "TestDb",
     });
     objectDb.activate();
-    await objectDb.isLoaded.toPromise((v) => v);
+    await objectDb.ensureIdle();
 
     const entry = await objectDb.writeEntryData({
       message: "hello world",
@@ -124,18 +123,17 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
           key: "message",
           label: "Message",
           bucketIdentifiersGivenEntry: (entry) => {
-            return [
-              {
-                dimensionKey: "message",
-                bucketKey: entry.data.message,
-                bucketLabel: entry.data.message,
-              },
-            ];
+            return {
+              dimensionKey: "message",
+              bucketKey: entry.data.message,
+              bucketLabel: entry.data.message,
+            };
           },
         }),
       ],
     });
     objectDb.activate();
+    await objectDb.ensureIdle();
 
     const one = await objectDb.writeEntryData({
       message: "one",
@@ -146,8 +144,6 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
     });
 
     Test.assert(one.key !== two.key, "Keys should be equal");
-
-    await objectDb.ensureIdle();
 
     const resultOne = await objectDb.toOptionalFirstEntry({
       filter: [
@@ -220,7 +216,7 @@ Test.define("ObjectDb can find entry count by bucket identifier", async () => {
       ],
     });
     objectDb.activate();
-    await objectDb.isLoaded.toPromise((v) => v);
+    await objectDb.ensureIdle();
 
     await objectDb.writeEntryData({
       message: "one",
@@ -347,7 +343,6 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
       dimensions: [md],
     });
     objectDb.activate();
-
     await objectDb.ensureIdle();
 
     const one = await objectDb.writeEntryData({
@@ -382,7 +377,6 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
       dimensions: [md2],
     });
     objectDb2.activate();
-
     await objectDb2.ensureIdle();
 
     const bucketOne2 = await md2.toOptionalBucketGivenKey("one");
@@ -420,7 +414,7 @@ Test.define(
       const dim = LiveDimension.ofEntry<TestEntryData>({
         dimensionLabel: "Message",
         propertyName: "message",
-        propertyType: "value"
+        propertyType: "value",
       });
 
       const objectDb = new ObjectDb<TestEntryData>({
@@ -429,6 +423,7 @@ Test.define(
         dimensions: [dim],
       });
       objectDb.activate();
+      await objectDb.ensureIdle();
 
       const one = await objectDb.writeEntryData({
         message: "one",
@@ -480,7 +475,7 @@ Test.define(
         dimensionLabel: "Number",
         propertyName: "numbers",
         propertyType: "array",
-        mongoValueGivenBucketKey: (bucketKey) => parseInt(bucketKey)
+        mongoValueGivenBucketKey: (bucketKey) => parseInt(bucketKey),
       });
 
       const objectDb = new ObjectDb<TestEntryData>({
@@ -489,25 +484,26 @@ Test.define(
         dimensions: [dim],
       });
       objectDb.activate();
+      await objectDb.ensureIdle();
 
       const odd = await objectDb.writeEntryData({
         message: "odd",
-        numbers: [1, 3, 5, 7, 9]
+        numbers: [1, 3, 5, 7, 9],
       });
 
       const even = await objectDb.writeEntryData({
         message: "even",
-        numbers: [2, 4, 6, 8]
+        numbers: [2, 4, 6, 8],
       });
 
-      const numbers = [1,2,3,4,5,6,7,8,9];
+      const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-      const expectedBucketIdentifiers = numbers.map(n => {
+      const expectedBucketIdentifiers = numbers.map((n) => {
         return {
           dimensionKey: "number",
           bucketKey: String(n),
           bucketLabel: String(n),
-        }
+        };
       });
 
       const bucketIdentifiers = await dim.toBucketIdentifiers();
@@ -526,12 +522,15 @@ Test.define(
           {
             dimensionKey: "number",
             bucketKey: "5",
-            bucketLabel: "5"
-          }
-        ]
+            bucketLabel: "5",
+          },
+        ],
       });
       Test.assert(entries.length == 1, "entries should have one entry");
-      Test.assert(entries.some(e => e.key == odd.key), "entries should have entry one");
+      Test.assert(
+        entries.some((e) => e.key == odd.key),
+        "entries should have entry one"
+      );
 
       objectDb.deactivate();
     });

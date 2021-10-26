@@ -48,8 +48,7 @@ class ObjectDb extends skytree_1.Actor {
         await this._db.isConnected.toPromise((v) => v);
         if (this.props.dimensions != null) {
             for (const dimension of this.props.dimensions) {
-                dimension.db = this._db;
-                dimension.stopwatch = this.stopwatch;
+                await dimension.init(this._db, this.stopwatch);
                 this._dimensionsByKey.set(dimension.key, dimension);
             }
         }

@@ -19,10 +19,11 @@ export interface LiveDimensionOfEntryParams {
 }
 export declare class LiveDimension<T> extends PropsObject<LiveDimensionProps<T>> implements Dimension<T> {
     static ofEntry<T>(params: LiveDimensionOfEntryParams): LiveDimension<T>;
+    private _db;
+    private _stopwatch;
     get key(): string;
     get label(): string;
-    db: MongoDb;
-    stopwatch: Stopwatch;
+    init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
     toOptionalBucketGivenKey(bucketKey: string): Promise<Bucket | undefined>;
     toBucketIdentifiers(): Promise<BucketIdentifier[]>;
     toBuckets(): Promise<LiveBucket<T>[]>;

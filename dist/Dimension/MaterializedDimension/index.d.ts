@@ -9,11 +9,11 @@ export interface MaterializedDimensionProps<T> {
     bucketIdentifiersGivenEntry: (entry: Entry<T>) => undefined | BucketIdentifier | BucketIdentifier[];
 }
 export declare class MaterializedDimension<T> extends PropsObject<MaterializedDimensionProps<T>> implements Dimension<T> {
-    protected _bucketsByEntryKey: Map<string, Bucket[]>;
+    private _db;
+    private _stopwatch;
     get key(): string;
     get label(): string;
-    db: MongoDb;
-    stopwatch: Stopwatch;
+    init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
     toOptionalBucketGivenKey(bucketKey: string): Promise<Bucket | undefined>;
     toBuckets(): Promise<MaterializedBucket<T>[]>;
     deleteEntryKey(entryKey: string): Promise<void>;

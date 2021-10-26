@@ -99,6 +99,9 @@ export class LiveDimension<T>
     });
   }
 
+  private _db: MongoDb;
+  private _stopwatch: Stopwatch;
+
   get key(): string {
     return this.props.key;
   }
@@ -107,8 +110,10 @@ export class LiveDimension<T>
     return this.props.label;
   }
 
-  db: MongoDb;
-  stopwatch: Stopwatch;
+  async init(db: MongoDb, stopwatch: Stopwatch): Promise<void> {
+    this._db = db;
+    this._stopwatch = stopwatch;
+  }
 
   async toOptionalBucketGivenKey(
     bucketKey: string
@@ -124,14 +129,14 @@ export class LiveDimension<T>
 
     return new LiveBucket({
       identifier: identifier,
-      db: this.db,
+      db: this._db,
       mongoFilter: this.props.mongoFilterGivenBucketIdentifier(identifier),
     });
   }
 
   async toBucketIdentifiers(): Promise<BucketIdentifier[]> {
-    const timer = this.stopwatch.start("ld-allBucketIdentifiers");
-    const bucketIdentifiers = await this.props.allBucketIdentifiers(this.db);
+    const timer = this._stopwatch.start("ld-allBucketIdentifiers");
+    const bucketIdentifiers = await this.props.allBucketIdentifiers(this._db);
     timer.stop();
     return bucketIdentifiers;
   }
@@ -141,12 +146,12 @@ export class LiveDimension<T>
 
     const result: LiveBucket<T>[] = [];
 
-    const timer2 = this.stopwatch.start("ld-toBuckets-loop");
+    const timer2 = this._stopwatch.start("ld-toBuckets-loop");
     for (const identifier of bucketIdentifiers) {
       result.push(
         new LiveBucket({
           identifier,
-          db: this.db,
+          db: this._db,
           mongoFilter: this.props.mongoFilterGivenBucketIdentifier(identifier),
         })
       );

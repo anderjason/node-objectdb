@@ -117,8 +117,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (this.props.dimensions != null) {
       for (const dimension of this.props.dimensions) {
-        dimension.db = this._db;
-        dimension.stopwatch = this.stopwatch;
+        await dimension.init(this._db, this.stopwatch);
 
         this._dimensionsByKey.set(dimension.key, dimension);
       }

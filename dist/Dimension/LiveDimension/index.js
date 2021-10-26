@@ -73,6 +73,10 @@ class LiveDimension extends skytree_1.PropsObject {
     get label() {
         return this.props.label;
     }
+    async init(db, stopwatch) {
+        this._db = db;
+        this._stopwatch = stopwatch;
+    }
     async toOptionalBucketGivenKey(bucketKey) {
         const bucketIdentifiers = await this.toBucketIdentifiers();
         const identifier = bucketIdentifiers.find((bi) => bi.bucketKey === bucketKey);
@@ -81,24 +85,24 @@ class LiveDimension extends skytree_1.PropsObject {
         }
         return new LiveBucket_1.LiveBucket({
             identifier: identifier,
-            db: this.db,
+            db: this._db,
             mongoFilter: this.props.mongoFilterGivenBucketIdentifier(identifier),
         });
     }
     async toBucketIdentifiers() {
-        const timer = this.stopwatch.start("ld-allBucketIdentifiers");
-        const bucketIdentifiers = await this.props.allBucketIdentifiers(this.db);
+        const timer = this._stopwatch.start("ld-allBucketIdentifiers");
+        const bucketIdentifiers = await this.props.allBucketIdentifiers(this._db);
         timer.stop();
         return bucketIdentifiers;
     }
     async toBuckets() {
         const bucketIdentifiers = await this.toBucketIdentifiers();
         const result = [];
-        const timer2 = this.stopwatch.start("ld-toBuckets-loop");
+        const timer2 = this._stopwatch.start("ld-toBuckets-loop");
         for (const identifier of bucketIdentifiers) {
             result.push(new LiveBucket_1.LiveBucket({
                 identifier,
-                db: this.db,
+                db: this._db,
                 mongoFilter: this.props.mongoFilterGivenBucketIdentifier(identifier),
             }));
         }
