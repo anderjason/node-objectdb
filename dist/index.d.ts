@@ -3,4 +3,7 @@ import { ObjectDb } from "./ObjectDb";
 import { MongoDb } from "./MongoDb";
 import { Broadcast } from "./Broadcast";
 import { Benchmark } from "./Benchmark";
-export { Benchmark, Broadcast, Entry, MongoDb, ObjectDb };
+import { Bucket } from "./Dimension";
+import { LiveDimension } from "./Dimension/LiveDimension";
+import { MaterializedDimension } from "./Dimension/MaterializedDimension";
+export { Benchmark, Broadcast, Entry, MongoDb, ObjectDb, LiveDimension, MaterializedDimension, Bucket };

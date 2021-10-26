@@ -1,14 +1,13 @@
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier } from "../..";
 import { MongoDb } from "../../..";
-export interface MaterializedBucketProps {
+export interface LiveBucketProps {
     identifier: BucketIdentifier;
     db: MongoDb;
+    mongoFilter: any;
 }
-export declare class MaterializedBucket<T> extends PropsObject<MaterializedBucketProps> implements Bucket {
+export declare class LiveBucket<T> extends PropsObject<LiveBucketProps> implements Bucket {
     get identifier(): BucketIdentifier;
     toEntryKeys(): Promise<Set<string>>;
     hasEntryKey(entryKey: string): Promise<boolean>;
-    addEntryKey(entryKey: string): Promise<void>;
-    deleteEntryKey(entryKey: string): Promise<void>;
 }

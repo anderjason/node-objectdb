@@ -2,15 +2,20 @@ import { Test } from "@anderjason/tests";
 import { StringUtil } from "@anderjason/util";
 import { ObjectDb } from ".";
 import { MaterializedDimension } from "../Dimension/MaterializedDimension";
+import { LiveDimension } from "../Dimension/LiveDimension";
 import { MaterializedBucket } from "../Dimension/MaterializedDimension/MaterializedBucket";
 import { MongoDb } from "../MongoDb";
 
 interface TestEntryData {
   message: string;
+  numbers?: number[];
 }
 
 let db: MongoDb;
-async function usingTestDb(fn: (db: MongoDb) => Promise<void>, keepDb: boolean = false): Promise<void> {
+async function usingTestDb(
+  fn: (db: MongoDb) => Promise<void>,
+  keepDb: boolean = false
+): Promise<void> {
   if (db == null) {
     db = new MongoDb({
       dbName: "test",
@@ -28,7 +33,7 @@ async function usingTestDb(fn: (db: MongoDb) => Promise<void>, keepDb: boolean =
     if (keepDb == false) {
       await db.dropDatabase();
     } else {
-      console.log("DB is saved at", db.props.namespace);  
+      console.log("DB is saved at", db.props.namespace);
     }
   } catch (err) {
     console.log("DB is saved at", db.props.namespace);
@@ -39,14 +44,14 @@ async function usingTestDb(fn: (db: MongoDb) => Promise<void>, keepDb: boolean =
 }
 
 Test.define("MaterializedBucket can insert and query entry keys", async () => {
-  await usingTestDb(async db => {
+  await usingTestDb(async (db) => {
     const bucket = new MaterializedBucket({
       identifier: {
         dimensionKey: "dim1",
         bucketKey: "bucket1",
-        bucketLabel: "bucket1"
+        bucketLabel: "bucket1",
       },
-      db
+      db,
     });
 
     await bucket.addEntryKey("entryKey1");
@@ -59,7 +64,7 @@ Test.define("MaterializedBucket can insert and query entry keys", async () => {
     Test.assert(hasOne == true, "hasOne should be true");
     Test.assert(hasTwo == true, "hasTwo should be true");
     Test.assert(hasThree == false, "hasThree should be false");
-  })
+  });
 });
 
 Test.define("ObjectDb can be created", async () => {
@@ -93,10 +98,17 @@ Test.define("ObjectDb can write and read a row", async () => {
     Test.assert(entry.key.length == 36, "entry.key should be 36 characters");
     Test.assert(entry.createdAt != null, "entry.createdAt should not be null");
     Test.assert(entry.updatedAt != null, "entry.updatedAt should not be null");
-    Test.assert(entry.data.message === "hello world", "entry.data.message should be 'hello world'");
+    Test.assert(
+      entry.data.message === "hello world",
+      "entry.data.message should be 'hello world'"
+    );
 
     const result = await objectDb.toEntryGivenKey(entry.key);
-    Test.assertIsDeepEqual(result.data, entry.data, "entry.data should be equal to result.data");
+    Test.assertIsDeepEqual(
+      result.data,
+      entry.data,
+      "entry.data should be equal to result.data"
+    );
 
     objectDb.deactivate();
   });
@@ -401,3 +413,127 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
   });
 });
 
+Test.define(
+  "ObjectDb supports live dimensions with string properties",
+  async () => {
+    await usingTestDb(async (db) => {
+      const dim = LiveDimension.ofEntry<TestEntryData>({
+        dimensionLabel: "Message",
+        propertyName: "message",
+        propertyType: "value"
+      });
+
+      const objectDb = new ObjectDb<TestEntryData>({
+        label: "testDb",
+        db,
+        dimensions: [dim],
+      });
+      objectDb.activate();
+
+      const one = await objectDb.writeEntryData({
+        message: "one",
+      });
+
+      const two = await objectDb.writeEntryData({
+        message: "two",
+      });
+
+      const expectedBucketIdentifiers = [
+        {
+          dimensionKey: "message",
+          bucketKey: "one",
+          bucketLabel: "one",
+        },
+        {
+          dimensionKey: "message",
+          bucketKey: "two",
+          bucketLabel: "two",
+        },
+      ];
+
+      const bucketIdentifiers = await dim.toBucketIdentifiers();
+
+      Test.assertIsDeepEqual(
+        bucketIdentifiers,
+        expectedBucketIdentifiers,
+        "bucket identifiers should equal expected"
+      );
+
+      const bucket = await dim.toOptionalBucketGivenKey("one");
+      Test.assert(bucket != null, "bucket should not be null");
+
+      const entries = await bucket.toEntryKeys();
+      Test.assert(entries.size == 1, "entries should have one entry");
+      Test.assert(entries.has(one.key), "entries should have entry one");
+
+      objectDb.deactivate();
+    });
+  }
+);
+
+Test.define(
+  "ObjectDb supports live dimensions with array properties",
+  async () => {
+    await usingTestDb(async (db) => {
+      const dim = LiveDimension.ofEntry<TestEntryData>({
+        dimensionKey: "number",
+        dimensionLabel: "Number",
+        propertyName: "numbers",
+        propertyType: "array",
+        mongoValueGivenBucketKey: (bucketKey) => parseInt(bucketKey)
+      });
+
+      const objectDb = new ObjectDb<TestEntryData>({
+        label: "testDb",
+        db,
+        dimensions: [dim],
+      });
+      objectDb.activate();
+
+      const odd = await objectDb.writeEntryData({
+        message: "odd",
+        numbers: [1, 3, 5, 7, 9]
+      });
+
+      const even = await objectDb.writeEntryData({
+        message: "even",
+        numbers: [2, 4, 6, 8]
+      });
+
+      const numbers = [1,2,3,4,5,6,7,8,9];
+
+      const expectedBucketIdentifiers = numbers.map(n => {
+        return {
+          dimensionKey: "number",
+          bucketKey: String(n),
+          bucketLabel: String(n),
+        }
+      });
+
+      const bucketIdentifiers = await dim.toBucketIdentifiers();
+
+      Test.assertIsDeepEqual(
+        bucketIdentifiers,
+        expectedBucketIdentifiers,
+        "bucket identifiers should equal expected"
+      );
+
+      const bucket = await dim.toOptionalBucketGivenKey("5");
+      Test.assert(bucket != null, "bucket should not be null");
+
+      const entries = await objectDb.toEntries({
+        filter: [
+          {
+            dimensionKey: "number",
+            bucketKey: "5",
+            bucketLabel: "5"
+          }
+        ]
+      });
+      Test.assert(entries.length == 1, "entries should have one entry");
+      Test.assert(entries.some(e => e.key == odd.key), "entries should have entry one");
+
+      objectDb.deactivate();
+    });
+  }
+);

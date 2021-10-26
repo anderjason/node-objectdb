@@ -2,13 +2,13 @@ import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier } from "../..";
 import { MongoDb } from "../../..";
 
-export interface MaterializedBucketProps<T> {
+export interface MaterializedBucketProps {
   identifier: BucketIdentifier;
   db: MongoDb;
 }
 
 export class MaterializedBucket<T>
-  extends PropsObject<MaterializedBucketProps<T>>
+  extends PropsObject<MaterializedBucketProps>
   implements Bucket
 {
   get identifier(): BucketIdentifier {
