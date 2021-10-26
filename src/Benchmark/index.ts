@@ -5,11 +5,13 @@ export class Benchmark {
   private bucketSize: number;
   private startTime: number;
   private durationPerBucket: number = 0;
+  private bucketDidFinish: () => void;
 
-  constructor(totalCount: number) {
+  constructor(totalCount: number, bucketSize?: number, bucketDidFinish?: () => void) {
     this.remainingCount = totalCount;
-    this.bucketSize = Math.ceil(totalCount / 10);
+    this.bucketSize = bucketSize ?? Math.ceil(totalCount / 10);
     this.startTime = new Date().getTime();
+    this.bucketDidFinish = bucketDidFinish;
   }
 
   log(message: string): void {
@@ -22,6 +24,10 @@ export class Benchmark {
 
       this.durationPerBucket = now - this.startTime;
       this.startTime = now;
+
+      if (this.bucketDidFinish != null) {
+        this.bucketDidFinish();
+      }
     }
   }
 }

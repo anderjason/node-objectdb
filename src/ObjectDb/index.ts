@@ -337,16 +337,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   async rebuildMetadata(): Promise<void> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
-    let remainingCount: number = await this._db
+    const totalCount: number = await this._db
       .collection<PortableEntry<T>>("entries")
       .countDocuments();
 
-    const benchmark = new Benchmark(remainingCount);
+    const benchmark = new Benchmark(totalCount, undefined, () => {
+      this.stopwatch.report();
+    });
+
     await this.forEach(async (entry) => {
       benchmark.log(`Rebuilding ${entry.key}`);
       await this.rebuildMetadataGivenEntry(entry);
-
-      remainingCount -= 1;
     });
 
     console.log("Done rebuilding metadata");

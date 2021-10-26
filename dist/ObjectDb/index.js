@@ -212,14 +212,15 @@ class ObjectDb extends skytree_1.Actor {
     }
     async rebuildMetadata() {
         console.log(`Rebuilding metadata for ${this.props.label}...`);
-        let remainingCount = await this._db
+        const totalCount = await this._db
             .collection("entries")
             .countDocuments();
-        const benchmark = new Benchmark_1.Benchmark(remainingCount);
+        const benchmark = new Benchmark_1.Benchmark(totalCount, undefined, () => {
+            this.stopwatch.report();
+        });
         await this.forEach(async (entry) => {
             benchmark.log(`Rebuilding ${entry.key}`);
             await this.rebuildMetadataGivenEntry(entry);
-            remainingCount -= 1;
         });
         console.log("Done rebuilding metadata");
     }
