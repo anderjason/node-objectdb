@@ -201,8 +201,10 @@ class ObjectDb extends skytree_1.Actor {
         return [];
     }
     async rebuildMetadataGivenEntry(entry) {
+        const timer = this.stopwatch.start("rebuildMetadataGivenEntry");
         const dimensions = Array.from(this._dimensionsByKey.values());
         await Promise.all(dimensions.map((dimension) => dimension.rebuildEntry(entry)));
+        timer.stop();
     }
     async rebuildMetadata() {
         console.log(`Rebuilding metadata for ${this.props.label}...`);

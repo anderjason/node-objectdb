@@ -330,11 +330,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
+    const timer = this.stopwatch.start("rebuildMetadataGivenEntry")
     const dimensions = Array.from(this._dimensionsByKey.values());
 
     await Promise.all(
       dimensions.map((dimension) => dimension.rebuildEntry(entry))
     );
+    timer.stop();
   }
 
   async rebuildMetadata(): Promise<void> {
