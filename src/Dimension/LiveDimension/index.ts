@@ -1,5 +1,4 @@
 import { Stopwatch } from "@anderjason/time";
-import { ArrayUtil } from "@anderjason/util";
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "..";
 import { Entry, MongoDb } from "../..";
@@ -131,7 +130,7 @@ export class LiveDimension<T>
   }
 
   async toBucketIdentifiers(): Promise<BucketIdentifier[]> {
-    const timer = this.stopwatch.start("allBucketIdentifiers");
+    const timer = this.stopwatch.start("ld-allBucketIdentifiers");
     const bucketIdentifiers = await this.props.allBucketIdentifiers(this.db);
     timer.stop();
     return bucketIdentifiers;
@@ -142,7 +141,7 @@ export class LiveDimension<T>
 
     const result: LiveBucket<T>[] = [];
 
-    const timer2 = this.stopwatch.start("toBuckets - loop");
+    const timer2 = this.stopwatch.start("ld-toBuckets-loop");
     for (const identifier of bucketIdentifiers) {
       result.push(
         new LiveBucket({

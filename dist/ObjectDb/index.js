@@ -200,22 +200,16 @@ class ObjectDb extends skytree_1.Actor {
     async toProperties() {
         return [];
     }
-    async removeMetadataGivenEntryKey(entryKey) {
-        for (const dimension of this._dimensionsByKey.values()) {
-            await dimension.deleteEntryKey(entryKey);
-        }
-    }
     async rebuildMetadataGivenEntry(entry) {
-        for (const dimension of this._dimensionsByKey.values()) {
-            await dimension.rebuildEntry(entry);
-        }
+        const dimensions = Array.from(this._dimensionsByKey.values());
+        await Promise.all(dimensions.map((dimension) => dimension.rebuildEntry(entry)));
     }
     async rebuildMetadata() {
         console.log(`Rebuilding metadata for ${this.props.label}...`);
         const totalCount = await this._db
             .collection("entries")
             .countDocuments();
-        const benchmark = new Benchmark_1.Benchmark(totalCount, undefined, () => {
+        const benchmark = new Benchmark_1.Benchmark(totalCount, this.props.rebuildBucketSize, () => {
             this.stopwatch.report();
         });
         await this.forEach(async (entry) => {
@@ -323,7 +317,9 @@ class ObjectDb extends skytree_1.Actor {
             oldData: existingRecord.data,
         };
         this.entryWillChange.emit(change);
-        await this.removeMetadataGivenEntryKey(entryKey);
+        for (const dimension of this._dimensionsByKey.values()) {
+            await dimension.deleteEntryKey(entryKey);
+        }
         await this._db.collection("entries").deleteOne({ key: entryKey });
         this.entryDidChange.emit(change);
         this.collectionDidChange.emit();

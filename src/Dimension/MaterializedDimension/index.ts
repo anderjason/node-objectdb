@@ -37,7 +37,7 @@ export class MaterializedDimension<T>
       "identifier.bucketKey": bucketKey,
     };
 
-    const timer = this.stopwatch.start("toOptionalBucketGivenKey");
+    const timer = this.stopwatch.start("md-toOptionalBucketGivenKey");
     const bucketRow = await this.db.collection<any>("buckets").findOne(find);
     timer.stop();
 
@@ -52,7 +52,7 @@ export class MaterializedDimension<T>
   }
 
   async toBuckets(): Promise<MaterializedBucket<T>[]> {
-    const timer = this.stopwatch.start("toBuckets");
+    const timer = this.stopwatch.start("md-toBuckets");
     const bucketRows = await this.db
       .collection<any>("buckets")
       .find({ "identifier.dimensionKey": this.props.key })
@@ -61,7 +61,7 @@ export class MaterializedDimension<T>
 
     const result: MaterializedBucket<T>[] = [];
 
-    const timer2 = this.stopwatch.start("toBuckets - loop");
+    const timer2 = this.stopwatch.start("md-toBuckets-loop");
     for (const row of bucketRows) {
       result.push(
         new MaterializedBucket({
@@ -76,7 +76,7 @@ export class MaterializedDimension<T>
   }
 
   async deleteEntryKey(entryKey: string): Promise<void> {
-    const timer = this.stopwatch.start("deleteEntryKey");
+    const timer = this.stopwatch.start("md-deleteEntryKey");
     await this.db.collection("buckets").updateMany(
       { "identifier.dimensionKey": this.props.key, entryKeys: entryKey },
       {
@@ -96,7 +96,7 @@ export class MaterializedDimension<T>
       );
     }
 
-    const timer = this.stopwatch.start("addEntryToBucket");
+    const timer = this.stopwatch.start("md-addEntryToBucket");
 
     let bucket = (await this.toOptionalBucketGivenKey(
       bucketIdentifier.bucketKey
@@ -114,7 +114,7 @@ export class MaterializedDimension<T>
   }
 
   async rebuildEntry(entry: Entry<T>): Promise<void> {
-    const timer = this.stopwatch.start("rebuildEntry");
+    const timer = this.stopwatch.start("md-rebuildEntry");
     await this.deleteEntryKey(entry.key);
 
     const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);

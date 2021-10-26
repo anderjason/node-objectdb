@@ -31,6 +31,7 @@ export interface ObjectDbProps<T> {
   db: MongoDb;
 
   cacheSize?: number;
+  rebuildBucketSize?: number;
   dimensions?: Dimension<T>[];
 }
 
@@ -113,7 +114,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     await this._db.isConnected.toPromise((v) => v);
-    
+
     if (this.props.dimensions != null) {
       for (const dimension of this.props.dimensions) {
         dimension.db = this._db;
@@ -160,13 +161,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       const buckets: Bucket[] = [];
 
       for (const bucketIdentifier of bucketIdentifiers) {
-        const bucket = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+        const bucket = await this.toOptionalBucketGivenIdentifier(
+          bucketIdentifier
+        );
         if (bucket != null) {
           buckets.push(bucket);
         }
       }
 
-      const hashCodes = buckets.map((bucket) => hashCodeGivenBucketIdentifier(bucket.identifier));
+      const hashCodes = buckets.map((bucket) =>
+        hashCodeGivenBucketIdentifier(bucket.identifier)
+      );
 
       const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
       fullCacheKey = StringUtil.hashCodeGivenString(cacheKeyData);
@@ -187,7 +192,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         const sets: Set<string>[] = [];
 
         for (const bucketIdentifier of options.filter) {
-          const bucket = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+          const bucket = await this.toOptionalBucketGivenIdentifier(
+            bucketIdentifier
+          );
           if (bucket == null) {
             sets.push(new Set<string>());
           } else {
@@ -322,16 +329,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return [];
   }
 
-  async removeMetadataGivenEntryKey(entryKey: string): Promise<void> {
-    for (const dimension of this._dimensionsByKey.values()) {
-      await dimension.deleteEntryKey(entryKey);
-    }
-  }
-
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
-    for (const dimension of this._dimensionsByKey.values()) {
-      await dimension.rebuildEntry(entry);
-    }
+    const dimensions = Array.from(this._dimensionsByKey.values());
+
+    await Promise.all(
+      dimensions.map((dimension) => dimension.rebuildEntry(entry))
+    );
   }
 
   async rebuildMetadata(): Promise<void> {
@@ -341,9 +344,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       .collection<PortableEntry<T>>("entries")
       .countDocuments();
 
-    const benchmark = new Benchmark(totalCount, undefined, () => {
-      this.stopwatch.report();
-    });
+    const benchmark = new Benchmark(
+      totalCount,
+      this.props.rebuildBucketSize,
+      () => {
+        this.stopwatch.report();
+      }
+    );
 
     await this.forEach(async (entry) => {
       benchmark.log(`Rebuilding ${entry.key}`);
@@ -366,7 +373,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   async toOptionalBucketGivenIdentifier(
     bucketIdentifier: BucketIdentifier
   ): Promise<Bucket | undefined> {
-    const dimension = await this.toOptionalDimensionGivenKey(bucketIdentifier.dimensionKey);
+    const dimension = await this.toOptionalDimensionGivenKey(
+      bucketIdentifier.dimensionKey
+    );
     if (dimension == null) {
       return undefined;
     }
@@ -477,7 +486,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this.entryDidChange.emit(change);
 
     await this.ensureIdle();
-    
+
     return entry;
   }
 
@@ -499,8 +508,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.entryWillChange.emit(change);
 
-    await this.removeMetadataGivenEntryKey(entryKey);
-  
+    for (const dimension of this._dimensionsByKey.values()) {
+      await dimension.deleteEntryKey(entryKey);
+    }
+
     await this._db.collection("entries").deleteOne({ key: entryKey });
 
     this.entryDidChange.emit(change);

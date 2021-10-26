@@ -19,7 +19,7 @@ class MaterializedDimension extends skytree_1.PropsObject {
             "identifier.dimensionKey": this.props.key,
             "identifier.bucketKey": bucketKey,
         };
-        const timer = this.stopwatch.start("toOptionalBucketGivenKey");
+        const timer = this.stopwatch.start("md-toOptionalBucketGivenKey");
         const bucketRow = await this.db.collection("buckets").findOne(find);
         timer.stop();
         if (bucketRow == null) {
@@ -31,14 +31,14 @@ class MaterializedDimension extends skytree_1.PropsObject {
         });
     }
     async toBuckets() {
-        const timer = this.stopwatch.start("toBuckets");
+        const timer = this.stopwatch.start("md-toBuckets");
         const bucketRows = await this.db
             .collection("buckets")
             .find({ "identifier.dimensionKey": this.props.key })
             .toArray();
         timer.stop();
         const result = [];
-        const timer2 = this.stopwatch.start("toBuckets - loop");
+        const timer2 = this.stopwatch.start("md-toBuckets-loop");
         for (const row of bucketRows) {
             result.push(new MaterializedBucket_1.MaterializedBucket({
                 identifier: row.identifier,
@@ -49,7 +49,7 @@ class MaterializedDimension extends skytree_1.PropsObject {
         return result;
     }
     async deleteEntryKey(entryKey) {
-        const timer = this.stopwatch.start("deleteEntryKey");
+        const timer = this.stopwatch.start("md-deleteEntryKey");
         await this.db.collection("buckets").updateMany({ "identifier.dimensionKey": this.props.key, entryKeys: entryKey }, {
             $pull: { entryKeys: entryKey },
         });
@@ -59,7 +59,7 @@ class MaterializedDimension extends skytree_1.PropsObject {
         if (bucketIdentifier.dimensionKey !== this.props.key) {
             throw new Error(`Received a bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
         }
-        const timer = this.stopwatch.start("addEntryToBucket");
+        const timer = this.stopwatch.start("md-addEntryToBucket");
         let bucket = (await this.toOptionalBucketGivenKey(bucketIdentifier.bucketKey));
         if (bucket == null) {
             bucket = new MaterializedBucket_1.MaterializedBucket({
@@ -71,7 +71,7 @@ class MaterializedDimension extends skytree_1.PropsObject {
         timer.stop();
     }
     async rebuildEntry(entry) {
-        const timer = this.stopwatch.start("rebuildEntry");
+        const timer = this.stopwatch.start("md-rebuildEntry");
         await this.deleteEntryKey(entry.key);
         const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);
         if (Array.isArray(bucketIdentifiers)) {

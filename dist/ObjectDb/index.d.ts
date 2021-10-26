@@ -19,6 +19,7 @@ export interface ObjectDbProps<T> {
     label: string;
     db: MongoDb;
     cacheSize?: number;
+    rebuildBucketSize?: number;
     dimensions?: Dimension<T>[];
 }
 export interface EntryChange<T> {
@@ -69,7 +70,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     deletePropertyKey(key: string): Promise<void>;
     toPropertyGivenKey(key: string): Promise<PropertyDefinition>;
     toProperties(): Promise<PropertyDefinition[]>;
-    removeMetadataGivenEntryKey(entryKey: string): Promise<void>;
     rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
     rebuildMetadata(): Promise<void>;
     toOptionalDimensionGivenKey(dimensionKey: string): Promise<Dimension<T> | undefined>;

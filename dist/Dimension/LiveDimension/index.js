@@ -86,7 +86,7 @@ class LiveDimension extends skytree_1.PropsObject {
         });
     }
     async toBucketIdentifiers() {
-        const timer = this.stopwatch.start("allBucketIdentifiers");
+        const timer = this.stopwatch.start("ld-allBucketIdentifiers");
         const bucketIdentifiers = await this.props.allBucketIdentifiers(this.db);
         timer.stop();
         return bucketIdentifiers;
@@ -94,7 +94,7 @@ class LiveDimension extends skytree_1.PropsObject {
     async toBuckets() {
         const bucketIdentifiers = await this.toBucketIdentifiers();
         const result = [];
-        const timer2 = this.stopwatch.start("toBuckets - loop");
+        const timer2 = this.stopwatch.start("ld-toBuckets-loop");
         for (const identifier of bucketIdentifiers) {
             result.push(new LiveBucket_1.LiveBucket({
                 identifier,
