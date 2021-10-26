@@ -70,7 +70,7 @@ export class LiveDimension<T>
             .toArray();
 
           const row = aggregateResult[0];
-          const allValues = row == null ? [] : row.res;
+          const allValues = row == null ? [] : Array.from(new Set(row.res));
           allValues.sort();
 
           return allValues.map((value: any) => {
