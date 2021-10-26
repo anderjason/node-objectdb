@@ -3,8 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Entry = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
 const time_1 = require("@anderjason/time");
-const PropsObject_1 = require("../PropsObject");
-class Entry extends PropsObject_1.PropsObject {
+const skytree_1 = require("skytree");
+class Entry extends skytree_1.PropsObject {
     constructor(props) {
         super(props);
         this.key = props.key || node_crypto_1.UniqueId.ofRandom().toUUIDString();

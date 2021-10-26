@@ -1,6 +1,6 @@
+import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier } from "../..";
 import { MongoDb } from "../../..";
-import { PropsObject } from "../../../PropsObject";
 export interface MaterializedBucketProps<T> {
     identifier: BucketIdentifier;
     db: MongoDb;

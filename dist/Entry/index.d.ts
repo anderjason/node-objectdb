@@ -1,7 +1,7 @@
 import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
+import { PropsObject } from "skytree";
 import { ObjectDb } from "..";
-import { PropsObject } from "../PropsObject";
 import { MongoDb } from "../MongoDb";
 export declare type EntryStatus = "unknown" | "new" | "saved" | "updated" | "deleted";
 export declare type JSONSerializable = string | number | boolean | null | JSONSerializable[] | {

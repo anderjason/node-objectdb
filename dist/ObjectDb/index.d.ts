@@ -1,5 +1,5 @@
 import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
-import { Instant } from "@anderjason/time";
+import { Instant, Stopwatch } from "@anderjason/time";
 import { Actor } from "skytree";
 import { Dimension } from "../Dimension";
 import { Bucket, BucketIdentifier } from "../Dimension";
@@ -47,6 +47,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly entryDidChange: TypedEvent<EntryChange<T>>;
     protected _isLoaded: Observable<boolean>;
     readonly isLoaded: ReadOnlyObservable<boolean>;
+    readonly stopwatch: Stopwatch;
     private _dimensionsByKey;
     private _caches;
     private _db;

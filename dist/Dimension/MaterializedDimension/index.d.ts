@@ -1,6 +1,7 @@
+import { Stopwatch } from "@anderjason/time";
+import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "..";
 import { Entry, MongoDb } from "../..";
-import { PropsObject } from "../../PropsObject";
 import { MaterializedBucket } from "./MaterializedBucket";
 export interface MaterializedDimensionProps<T> {
     key: string;
@@ -12,6 +13,7 @@ export declare class MaterializedDimension<T> extends PropsObject<MaterializedDi
     get key(): string;
     get label(): string;
     db: MongoDb;
+    stopwatch: Stopwatch;
     toOptionalBucketGivenKey(bucketKey: string): Promise<Bucket | undefined>;
     toBuckets(): Promise<MaterializedBucket<T>[]>;
     deleteEntryKey(entryKey: string): Promise<void>;

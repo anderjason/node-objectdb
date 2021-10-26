@@ -1,3 +1,4 @@
+import { Stopwatch } from "@anderjason/time";
 import { StringUtil } from "@anderjason/util";
 import { Entry, MongoDb } from "..";
 
@@ -6,6 +7,7 @@ export interface Dimension<T> {
   readonly label: string;
   
   db: MongoDb;
+  stopwatch: Stopwatch;
   
   deleteEntryKey(entryKey: string): Promise<void>;
   rebuildEntry(entry: Entry<T>): Promise<void>;

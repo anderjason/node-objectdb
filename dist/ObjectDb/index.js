@@ -17,6 +17,7 @@ class ObjectDb extends skytree_1.Actor {
         this.entryDidChange = new observable_1.TypedEvent();
         this._isLoaded = observable_1.Observable.givenValue(false, observable_1.Observable.isStrictEqual);
         this.isLoaded = observable_1.ReadOnlyObservable.givenObservable(this._isLoaded);
+        this.stopwatch = new time_1.Stopwatch(this.props.label);
         this._dimensionsByKey = new Map();
         this._caches = new Map();
     }
@@ -48,6 +49,7 @@ class ObjectDb extends skytree_1.Actor {
         if (this.props.dimensions != null) {
             for (const dimension of this.props.dimensions) {
                 dimension.db = this._db;
+                dimension.stopwatch = this.stopwatch;
                 this._dimensionsByKey.set(dimension.key, dimension);
             }
         }

@@ -1,8 +1,8 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
+import { PropsObject } from "skytree";
 import { ObjectDb } from "..";
-import { PropsObject } from "../PropsObject";
 import { MongoDb } from "../MongoDb";
 
 export type EntryStatus = "unknown" | "new" | "saved" | "updated" | "deleted";

@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MaterializedBucket = void 0;
-const PropsObject_1 = require("../../../PropsObject");
-class MaterializedBucket extends PropsObject_1.PropsObject {
+const skytree_1 = require("skytree");
+class MaterializedBucket extends skytree_1.PropsObject {
     get identifier() {
         return this.props.identifier;
     }

@@ -5,7 +5,7 @@ import {
   ReadOnlyObservable,
   TypedEvent,
 } from "@anderjason/observable";
-import { Duration, Instant } from "@anderjason/time";
+import { Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Benchmark } from "../Benchmark";
@@ -73,6 +73,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   protected _isLoaded = Observable.givenValue(false, Observable.isStrictEqual);
   readonly isLoaded = ReadOnlyObservable.givenObservable(this._isLoaded);
 
+  readonly stopwatch = new Stopwatch(this.props.label);
+
   private _dimensionsByKey = new Map<string, Dimension<T>>();
   private _caches = new Map<number, CacheData>();
 
@@ -115,6 +117,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (this.props.dimensions != null) {
       for (const dimension of this.props.dimensions) {
         dimension.db = this._db;
+        dimension.stopwatch = this.stopwatch;
 
         this._dimensionsByKey.set(dimension.key, dimension);
       }

@@ -89,14 +89,14 @@ Test.define("ObjectDb can write and read a row", async () => {
       message: "hello world",
     });
 
-    Test.assert(entry.key != null);
-    Test.assert(entry.key.length == 36);
-    Test.assert(entry.createdAt != null);
-    Test.assert(entry.updatedAt != null);
-    Test.assert(entry.data.message === "hello world");
+    Test.assert(entry.key != null, "entry.key should not be null");
+    Test.assert(entry.key.length == 36, "entry.key should be 36 characters");
+    Test.assert(entry.createdAt != null, "entry.createdAt should not be null");
+    Test.assert(entry.updatedAt != null, "entry.updatedAt should not be null");
+    Test.assert(entry.data.message === "hello world", "entry.data.message should be 'hello world'");
 
     const result = await objectDb.toEntryGivenKey(entry.key);
-    Test.assertIsDeepEqual(result.data, entry.data);
+    Test.assertIsDeepEqual(result.data, entry.data, "entry.data should be equal to result.data");
 
     objectDb.deactivate();
   });
@@ -133,7 +133,7 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
       message: "two",
     });
 
-    Test.assert(one.key !== two.key, "Keys are not equal");
+    Test.assert(one.key !== two.key, "Keys should be equal");
 
     await objectDb.ensureIdle();
 
@@ -167,11 +167,11 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
       ],
     });
 
-    Test.assert(resultOne != null, "Result one is null");
-    Test.assert(resultTwo != null, "Result two is null");
-    Test.assert(resultThree == null, "Result three is null");
-    Test.assert(resultOne.key === one.key, "Result one key is not equal");
-    Test.assert(resultTwo.key === two.key, "Result two key is not equal");
+    Test.assert(resultOne != null, "Result one should not be null");
+    Test.assert(resultTwo != null, "Result two should not be null");
+    Test.assert(resultThree == null, "Result three should be null");
+    Test.assert(resultOne.key === one.key, "Result one key should be equal");
+    Test.assert(resultTwo.key === two.key, "Result two key should be equal");
 
     const count = await objectDb.toEntryCount([
       {
@@ -180,7 +180,7 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
         bucketLabel: "two",
       },
     ]);
-    Test.assert(count === 1);
+    Test.assert(count === 1, "Count should be 1");
 
     objectDb.deactivate();
   });
@@ -226,7 +226,7 @@ Test.define("ObjectDb can find entry count by bucket identifier", async () => {
       },
     ]);
 
-    Test.assertIsEqual(count, 2, "Count is not equal");
+    Test.assertIsEqual(count, 2, "Count should be equal");
 
     objectDb.deactivate();
   });
@@ -376,8 +376,8 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
     const bucketOne2 = await md2.toOptionalBucketGivenKey("one");
     const bucketTwo2 = await md2.toOptionalBucketGivenKey("two");
 
-    Test.assert(bucketOne2 != null, "bucketOne2 is null");
-    Test.assert(bucketTwo2 != null, "bucketTwo2 is null");
+    Test.assert(bucketOne2 != null, "bucketOne2 should not be null");
+    Test.assert(bucketTwo2 != null, "bucketTwo2 should not be null");
 
     Test.assert(
       (await bucketOne2.hasEntryKey(one.key)) == true,

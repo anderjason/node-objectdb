@@ -1,7 +1,7 @@
-import { Observable } from "@anderjason/observable";
+import { Stopwatch } from "@anderjason/time";
+import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "..";
 import { Entry, MongoDb } from "../..";
-import { PropsObject } from "../../PropsObject";
 import { MaterializedBucket } from "./MaterializedBucket";
 
 export interface MaterializedDimensionProps<T> {
@@ -27,6 +27,7 @@ export class MaterializedDimension<T>
   }
 
   db: MongoDb;
+  stopwatch: Stopwatch;
 
   async toOptionalBucketGivenKey(
     bucketKey: string
@@ -36,7 +37,9 @@ export class MaterializedDimension<T>
       "identifier.bucketKey": bucketKey,
     };
 
+    const timer = this.stopwatch.start("toOptionalBucketGivenKey");
     const bucketRow = await this.db.collection<any>("buckets").findOne(find);
+    timer.stop();
 
     if (bucketRow == null) {
       return undefined;
@@ -49,13 +52,16 @@ export class MaterializedDimension<T>
   }
 
   async toBuckets(): Promise<MaterializedBucket<T>[]> {
+    const timer = this.stopwatch.start("toBuckets");
     const bucketRows = await this.db
       .collection<any>("buckets")
       .find({ "identifier.dimensionKey": this.props.key })
       .toArray();
+    timer.stop();
 
     const result: MaterializedBucket<T>[] = [];
 
+    const timer2 = this.stopwatch.start("toBuckets - loop");
     for (const row of bucketRows) {
       result.push(
         new MaterializedBucket({
@@ -64,17 +70,20 @@ export class MaterializedDimension<T>
         })
       );
     }
+    timer2.stop();
 
     return result;
   }
 
   async deleteEntryKey(entryKey: string): Promise<void> {
+    const timer = this.stopwatch.start("deleteEntryKey");
     await this.db.collection("buckets").updateMany(
       { "identifier.dimensionKey": this.props.key, entryKeys: entryKey },
       {
         $pull: { entryKeys: entryKey },
       }
     );
+    timer.stop();
   }
 
   private async addEntryToBucket(
@@ -87,9 +96,12 @@ export class MaterializedDimension<T>
       );
     }
 
+    const timer = this.stopwatch.start("addEntryToBucket");
+
     let bucket = (await this.toOptionalBucketGivenKey(
       bucketIdentifier.bucketKey
     )) as MaterializedBucket<T>;
+    
     if (bucket == null) {
       bucket = new MaterializedBucket({
         identifier: bucketIdentifier,
@@ -98,9 +110,11 @@ export class MaterializedDimension<T>
     }
 
     await bucket.addEntryKey(entry.key);
+    timer.stop();
   }
 
   async rebuildEntry(entry: Entry<T>): Promise<void> {
+    const timer = this.stopwatch.start("rebuildEntry");
     await this.deleteEntryKey(entry.key);
 
     const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);
@@ -115,5 +129,6 @@ export class MaterializedDimension<T>
       // not an array, just a single object
       await this.addEntryToBucket(entry, bucketIdentifiers);
     }
+    timer.stop();
   }
 }
