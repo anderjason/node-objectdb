@@ -22,8 +22,6 @@ export class Benchmark {
     
     console.log(`${message} (${countedStr}/${this.totalCount}, ${this.durationPerBucket}ms per ${this.bucketSize})`);
 
-    this.counted += 1;
-
     if (this.counted % this.bucketSize === 0) {
       const now = new Date().getTime();
 
@@ -34,5 +32,7 @@ export class Benchmark {
         this.bucketDidFinish();
       }
     }
+
+    this.counted += 1;
   }
 }
