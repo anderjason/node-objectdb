@@ -15,6 +15,7 @@ class LiveBucket extends skytree_1.PropsObject {
                 key: 1,
             },
         })
+            .collation({ locale: "en", strength: 2 })
             .toArray();
         const entryKeys = rows.map((row) => row.key);
         return new Set(entryKeys);

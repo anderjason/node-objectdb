@@ -536,3 +536,47 @@ Test.define(
     });
   }
 );
+
+Test.define(
+  "ObjectDb live dimensions are case insensitive",
+  async () => {
+    await usingTestDb(async (db) => {
+      const dim = LiveDimension.ofEntry<TestEntryData>({
+        dimensionKey: "message",
+        dimensionLabel: "Message",
+        propertyName: "message",
+        propertyType: "value"
+      });
+
+      const objectDb = new ObjectDb<TestEntryData>({
+        label: "testDb",
+        db,
+        dimensions: [dim],
+      });
+      objectDb.activate();
+      await objectDb.ensureIdle();
+
+      const apple = await objectDb.writeEntryData({
+        message: "Apple"
+      });
+
+      const entries = await objectDb.toEntries({
+        filter: [
+          {
+            dimensionKey: "message",
+            bucketKey: "apple",
+            bucketLabel: "Apple",
+          },
+        ],
+      });
+
+      Test.assert(entries.length == 1, "entries should have one entry");
+      Test.assert(
+        entries.some((e) => e.key == apple.key),
+        "entries should have apple"
+      );
+
+      objectDb.deactivate();
+    });
+  }
+);

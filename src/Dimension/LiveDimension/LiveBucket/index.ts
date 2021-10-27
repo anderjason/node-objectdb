@@ -25,6 +25,7 @@ export class LiveBucket<T>
           key: 1,
         },
       })
+      .collation({ locale: "en", strength: 2 })
       .toArray();
 
     const entryKeys = rows.map((row) => row.key);
