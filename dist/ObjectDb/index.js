@@ -112,6 +112,9 @@ class ObjectDb extends skytree_1.Actor {
                 }
                 entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
             }
+            if (options.shuffle == true) {
+                entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, e => Math.random(), "ascending");
+            }
         }
         if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
             this._caches.set(fullCacheKey, {

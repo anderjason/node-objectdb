@@ -14,6 +14,7 @@ export interface ObjectDbReadOptions {
     limit?: number;
     offset?: number;
     cacheKey?: string;
+    shuffle?: boolean;
 }
 export interface ObjectDbProps<T> {
     label: string;

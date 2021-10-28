@@ -6,7 +6,7 @@ import {
   TypedEvent,
 } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
-import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
+import { ArrayUtil, NumberUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Benchmark } from "../Benchmark";
 import { Dimension, hashCodeGivenBucketIdentifier } from "../Dimension";
@@ -24,6 +24,7 @@ export interface ObjectDbReadOptions {
   limit?: number;
   offset?: number;
   cacheKey?: string;
+  shuffle?: boolean;
 }
 
 export interface ObjectDbProps<T> {
@@ -203,6 +204,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         }
 
         entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
+      }
+
+      if (options.shuffle == true) {
+        entryKeys = ArrayUtil.arrayWithOrderFromValue(entryKeys, e => Math.random(), "ascending");
       }
     }
 
