@@ -1,5 +1,5 @@
 import { Test } from "@anderjason/tests";
-import { StringUtil } from "@anderjason/util";
+import { StringUtil, ValuePath } from "@anderjason/util";
 import { ObjectDb } from ".";
 import { MaterializedDimension } from "../Dimension/MaterializedDimension";
 import { LiveDimension } from "../Dimension/LiveDimension";
@@ -412,9 +412,10 @@ Test.define(
   async () => {
     await usingTestDb(async (db) => {
       const dim = LiveDimension.ofEntry<TestEntryData>({
+        dimensionKey: "message",
         dimensionLabel: "Message",
-        propertyName: "message",
-        propertyType: "value",
+        valuePath: ValuePath.givenParts(["data", "message"]),
+        valueType: "single",
       });
 
       const objectDb = new ObjectDb<TestEntryData>({
@@ -473,8 +474,8 @@ Test.define(
       const dim = LiveDimension.ofEntry<TestEntryData>({
         dimensionKey: "number",
         dimensionLabel: "Number",
-        propertyName: "numbers",
-        propertyType: "array",
+        valuePath: ValuePath.givenParts(["data", "numbers"]),
+        valueType: "array",
         mongoValueGivenBucketKey: (bucketKey) => parseInt(bucketKey),
       });
 
@@ -544,8 +545,8 @@ Test.define(
       const dim = LiveDimension.ofEntry<TestEntryData>({
         dimensionKey: "message",
         dimensionLabel: "Message",
-        propertyName: "message",
-        propertyType: "value"
+        valuePath: ValuePath.givenParts(["data", "message"]),
+        valueType: "single"
       });
 
       const objectDb = new ObjectDb<TestEntryData>({

@@ -1,4 +1,5 @@
 import { Stopwatch } from "@anderjason/time";
+import { ObjectUtil, ValuePath } from "@anderjason/util";
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "..";
 import { Entry, MongoDb } from "../..";
@@ -12,11 +13,11 @@ export interface LiveDimensionProps<T> {
 }
 
 export interface LiveDimensionOfEntryParams {
+  dimensionKey: string;
   dimensionLabel: string;
-  propertyName: string;
-  propertyType: "value" | "array";
+  valuePath: ValuePath<any>;
+  valueType: "single" | "array";
 
-  dimensionKey?: string;
   labelGivenKey?: (key: string) => string;
   mongoValueGivenBucketKey?: (bucketKey: string) => any;
 }
@@ -26,13 +27,13 @@ export class LiveDimension<T>
   implements Dimension<T>
 {
   static ofEntry<T>(params: LiveDimensionOfEntryParams): LiveDimension<T> {
-    const fullPropertyName = `data.${params.propertyName}`;
+    const fullPropertyName = params.valuePath.toParts().join(".");
 
     return new LiveDimension<T>({
-      key: params.dimensionKey ?? params.propertyName,
+      key: params.dimensionKey,
       label: params.dimensionLabel,
       allBucketIdentifiers: async (db: MongoDb) => {
-        if (params.propertyType === "value") {
+        if (params.valueType === "single") {
           const entries = await db
             .collection("entries")
             .find<any>(
@@ -43,7 +44,10 @@ export class LiveDimension<T>
             )
             .toArray();
 
-          const values = entries.map((e) => e.data[params.propertyName]);
+          const values = entries.map((e) => {
+            return ObjectUtil.optionalValueAtPathGivenObject(e, params.valuePath);
+          });
+
           const uniqueValues = Array.from(new Set(values));
           uniqueValues.sort();
 
@@ -53,12 +57,12 @@ export class LiveDimension<T>
               params.labelGivenKey != null ? params.labelGivenKey(key) : key;
 
             return {
-              dimensionKey: params.dimensionKey ?? params.propertyName,
+              dimensionKey: params.dimensionKey,
               bucketKey: key,
               bucketLabel: label,
             };
           });
-        } else if (params.propertyType === "array") {
+        } else if (params.valueType === "array") {
           const aggregateResult = await db
             .collection("entries")
             .aggregate<any>([
@@ -67,7 +71,7 @@ export class LiveDimension<T>
                   [fullPropertyName]: { $exists: true },
                 },
               },
-              { $project: { a: `$data.${params.propertyName}` } },
+              { $project: { a: fullPropertyName } },
               { $unwind: "$a" },
               { $group: { _id: "a", res: { $addToSet: "$a" } } },
             ])
@@ -83,7 +87,7 @@ export class LiveDimension<T>
               params.labelGivenKey != null ? params.labelGivenKey(key) : key;
 
             return {
-              dimensionKey: params.dimensionKey ?? params.propertyName,
+              dimensionKey: params.dimensionKey,
               bucketKey: key,
               bucketLabel: label,
             };

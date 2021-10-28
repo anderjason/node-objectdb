@@ -1,4 +1,5 @@
 import { Stopwatch } from "@anderjason/time";
+import { ValuePath } from "@anderjason/util";
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "..";
 import { Entry, MongoDb } from "../..";
@@ -10,10 +11,10 @@ export interface LiveDimensionProps<T> {
     allBucketIdentifiers: (db: MongoDb) => Promise<BucketIdentifier[]>;
 }
 export interface LiveDimensionOfEntryParams {
+    dimensionKey: string;
     dimensionLabel: string;
-    propertyName: string;
-    propertyType: "value" | "array";
-    dimensionKey?: string;
+    valuePath: ValuePath<any>;
+    valueType: "single" | "array";
     labelGivenKey?: (key: string) => string;
     mongoValueGivenBucketKey?: (bucketKey: string) => any;
 }

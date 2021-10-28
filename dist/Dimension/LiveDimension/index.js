@@ -1,38 +1,39 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LiveDimension = void 0;
+const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
 const LiveBucket_1 = require("./LiveBucket");
 class LiveDimension extends skytree_1.PropsObject {
     static ofEntry(params) {
-        var _a;
-        const fullPropertyName = `data.${params.propertyName}`;
+        const fullPropertyName = params.valuePath.toParts().join(".");
         return new LiveDimension({
-            key: (_a = params.dimensionKey) !== null && _a !== void 0 ? _a : params.propertyName,
+            key: params.dimensionKey,
             label: params.dimensionLabel,
             allBucketIdentifiers: async (db) => {
-                if (params.propertyType === "value") {
+                if (params.valueType === "single") {
                     const entries = await db
                         .collection("entries")
                         .find({
                         [fullPropertyName]: { $exists: true },
                     }, { projection: { _id: 0, [fullPropertyName]: 1 } })
                         .toArray();
-                    const values = entries.map((e) => e.data[params.propertyName]);
+                    const values = entries.map((e) => {
+                        return util_1.ObjectUtil.optionalValueAtPathGivenObject(e, params.valuePath);
+                    });
                     const uniqueValues = Array.from(new Set(values));
                     uniqueValues.sort();
                     return uniqueValues.map((value) => {
-                        var _a;
                         const key = String(value);
                         const label = params.labelGivenKey != null ? params.labelGivenKey(key) : key;
                         return {
-                            dimensionKey: (_a = params.dimensionKey) !== null && _a !== void 0 ? _a : params.propertyName,
+                            dimensionKey: params.dimensionKey,
                             bucketKey: key,
                             bucketLabel: label,
                         };
                     });
                 }
-                else if (params.propertyType === "array") {
+                else if (params.valueType === "array") {
                     const aggregateResult = await db
                         .collection("entries")
                         .aggregate([
@@ -41,7 +42,7 @@ class LiveDimension extends skytree_1.PropsObject {
                                 [fullPropertyName]: { $exists: true },
                             },
                         },
-                        { $project: { a: `$data.${params.propertyName}` } },
+                        { $project: { a: fullPropertyName } },
                         { $unwind: "$a" },
                         { $group: { _id: "a", res: { $addToSet: "$a" } } },
                     ])
@@ -50,11 +51,10 @@ class LiveDimension extends skytree_1.PropsObject {
                     const allValues = row == null ? [] : Array.from(new Set(row.res));
                     allValues.sort();
                     return allValues.map((value) => {
-                        var _a;
                         const key = String(value);
                         const label = params.labelGivenKey != null ? params.labelGivenKey(key) : key;
                         return {
-                            dimensionKey: (_a = params.dimensionKey) !== null && _a !== void 0 ? _a : params.propertyName,
+                            dimensionKey: params.dimensionKey,
                             bucketKey: key,
                             bucketLabel: label,
                         };
