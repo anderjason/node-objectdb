@@ -71,7 +71,7 @@ export class LiveDimension<T>
                   [fullPropertyName]: { $exists: true },
                 },
               },
-              { $project: { a: fullPropertyName } },
+              { $project: { a: "$" + fullPropertyName } },
               { $unwind: "$a" },
               { $group: { _id: "a", res: { $addToSet: "$a" } } },
             ])

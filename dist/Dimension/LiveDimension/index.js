@@ -42,7 +42,7 @@ class LiveDimension extends skytree_1.PropsObject {
                                 [fullPropertyName]: { $exists: true },
                             },
                         },
-                        { $project: { a: fullPropertyName } },
+                        { $project: { a: "$" + fullPropertyName } },
                         { $unwind: "$a" },
                         { $group: { _id: "a", res: { $addToSet: "$a" } } },
                     ])
