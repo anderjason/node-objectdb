@@ -76,7 +76,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   readonly stopwatch = new Stopwatch(this.props.label);
 
-  private _dimensionsByKey = new Map<string, Dimension<T>>();
+  private _dimensions: Dimension<T>[] = [];
   private _caches = new Map<number, CacheData>();
 
   private _db: MongoDb;
@@ -119,7 +119,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       for (const dimension of this.props.dimensions) {
         await dimension.init(this._db, this.stopwatch);
 
-        this._dimensionsByKey.set(dimension.key, dimension);
+        this._dimensions.push(dimension);
       }
     }
 
@@ -312,8 +312,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
-  toDimensions(): IterableIterator<Dimension<T>> {
-    return this._dimensionsByKey.values();
+  async toDimensions(): Promise<Dimension<T>[]> {
+    return [...this._dimensions];
   }
 
   async setProperty(property: PropertyDefinition): Promise<void> {}
@@ -330,7 +330,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
     const timer = this.stopwatch.start("rebuildMetadataGivenEntry")
-    const dimensions = Array.from(this._dimensionsByKey.values());
+    const dimensions = await this.toDimensions();
 
     await Promise.all(
       dimensions.map((dimension) => dimension.rebuildEntry(entry))
@@ -368,7 +368,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return undefined;
     }
 
-    return this._dimensionsByKey.get(dimensionKey);
+    const dimensions = await this.toDimensions();
+    return dimensions.find((d) => d.key === dimensionKey);
   }
 
   async toOptionalBucketGivenIdentifier(
@@ -509,7 +510,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.entryWillChange.emit(change);
 
-    for (const dimension of this._dimensionsByKey.values()) {
+    const dimensions = await this.toDimensions();
+    for (const dimension of dimensions) {
       await dimension.deleteEntryKey(entryKey);
     }
 

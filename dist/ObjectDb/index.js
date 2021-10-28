@@ -18,7 +18,7 @@ class ObjectDb extends skytree_1.Actor {
         this._isLoaded = observable_1.Observable.givenValue(false, observable_1.Observable.isStrictEqual);
         this.isLoaded = observable_1.ReadOnlyObservable.givenObservable(this._isLoaded);
         this.stopwatch = new time_1.Stopwatch(this.props.label);
-        this._dimensionsByKey = new Map();
+        this._dimensions = [];
         this._caches = new Map();
     }
     get mongoDb() {
@@ -49,7 +49,7 @@ class ObjectDb extends skytree_1.Actor {
         if (this.props.dimensions != null) {
             for (const dimension of this.props.dimensions) {
                 await dimension.init(this._db, this.stopwatch);
-                this._dimensionsByKey.set(dimension.key, dimension);
+                this._dimensions.push(dimension);
             }
         }
         this._isLoaded.setValue(true);
@@ -188,8 +188,8 @@ class ObjectDb extends skytree_1.Actor {
         }
         return result;
     }
-    toDimensions() {
-        return this._dimensionsByKey.values();
+    async toDimensions() {
+        return [...this._dimensions];
     }
     async setProperty(property) { }
     async deletePropertyKey(key) { }
@@ -201,7 +201,7 @@ class ObjectDb extends skytree_1.Actor {
     }
     async rebuildMetadataGivenEntry(entry) {
         const timer = this.stopwatch.start("rebuildMetadataGivenEntry");
-        const dimensions = Array.from(this._dimensionsByKey.values());
+        const dimensions = await this.toDimensions();
         await Promise.all(dimensions.map((dimension) => dimension.rebuildEntry(entry)));
         timer.stop();
     }
@@ -223,7 +223,8 @@ class ObjectDb extends skytree_1.Actor {
         if (dimensionKey == null) {
             return undefined;
         }
-        return this._dimensionsByKey.get(dimensionKey);
+        const dimensions = await this.toDimensions();
+        return dimensions.find((d) => d.key === dimensionKey);
     }
     async toOptionalBucketGivenIdentifier(bucketIdentifier) {
         const dimension = await this.toOptionalDimensionGivenKey(bucketIdentifier.dimensionKey);
@@ -318,7 +319,8 @@ class ObjectDb extends skytree_1.Actor {
             oldData: existingRecord.data,
         };
         this.entryWillChange.emit(change);
-        for (const dimension of this._dimensionsByKey.values()) {
+        const dimensions = await this.toDimensions();
+        for (const dimension of dimensions) {
             await dimension.deleteEntryKey(entryKey);
         }
         await this._db.collection("entries").deleteOne({ key: entryKey });
