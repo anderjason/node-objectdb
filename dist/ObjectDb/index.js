@@ -54,6 +54,11 @@ class ObjectDb extends skytree_1.Actor {
                 this._dimensions.push(dimension);
             }
         }
+        const propertyDefinitions = await this._db.collection("properties").find({}).toArray();
+        for (const propertyDefinition of propertyDefinitions) {
+            const property = (0, Property_1.propertyGivenDefinition)(propertyDefinition);
+            this._propertyByKey.set(propertyDefinition.key, property);
+        }
         this._isLoaded.setValue(true);
     }
     async ensureIdle() {
@@ -194,7 +199,14 @@ class ObjectDb extends skytree_1.Actor {
         return result;
     }
     async toDimensions() {
-        return [...this._dimensions];
+        const result = [...this._dimensions];
+        for (const property of this._propertyByKey.values()) {
+            const propertyDimensions = await property.toDimensions();
+            propertyDimensions.forEach((dimension) => {
+                result.push(dimension);
+            });
+        }
+        return result;
     }
     async writeProperty(definition) {
         await this._db.collection("properties").updateOne({ key: definition.key }, { $set: definition }, { upsert: true });

@@ -107,6 +107,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       }
     }
 
+    const propertyDefinitions = await this._db.collection<PropertyDefinition>("properties").find({}).toArray();
+    for (const propertyDefinition of propertyDefinitions) {
+      const property = propertyGivenDefinition(propertyDefinition);
+      this._propertyByKey.set(propertyDefinition.key, property);
+    }
+
     this._isLoaded.setValue(true);
   }
 
@@ -301,7 +307,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async toDimensions(): Promise<Dimension<T>[]> {
-    return [...this._dimensions];
+    const result = [...this._dimensions];
+
+    for (const property of this._propertyByKey.values()) {
+      const propertyDimensions = await property.toDimensions();
+      propertyDimensions.forEach((dimension) => {
+        result.push(dimension);
+      });
+    }
+
+    return result;
   }
 
   async writeProperty(definition: PropertyDefinition): Promise<void> {
