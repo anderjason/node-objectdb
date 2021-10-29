@@ -7,17 +7,14 @@ const __1 = require("../..");
 class SelectProperty extends skytree_1.PropsObject {
     constructor(props) {
         super(props);
-        this.key = props.definition.key;
-        this.propertyType = props.definition.propertyType;
-        this.label = props.definition.label;
-        this.options = props.definition.options;
+        this.definition = props.definition;
     }
     async toDimensions() {
         return [
             __1.LiveDimension.ofEntry({
-                dimensionKey: this.key,
-                dimensionLabel: this.label,
-                valuePath: util_1.ValuePath.givenParts(["propertyValues", this.key]),
+                dimensionKey: this.definition.key,
+                dimensionLabel: this.definition.label,
+                valuePath: util_1.ValuePath.givenParts(["propertyValues", this.definition.key]),
                 valueType: "single",
             })
         ];

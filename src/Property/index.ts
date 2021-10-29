@@ -4,6 +4,8 @@ import { SelectProperty, SelectPropertyDefinition } from "./SelectProperty";
 export type PropertyType = "select";
 
 export interface Property {
+  readonly definition: PropertyDefinition;
+  
   toDimensions: () => Promise<Dimension<any>[]>;
 }
 

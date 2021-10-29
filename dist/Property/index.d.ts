@@ -2,6 +2,7 @@ import { Dimension } from "../Dimension";
 import { SelectPropertyDefinition } from "./SelectProperty";
 export declare type PropertyType = "select";
 export interface Property {
+    readonly definition: PropertyDefinition;
     toDimensions: () => Promise<Dimension<any>[]>;
 }
 export interface BasePropertyDefinition {

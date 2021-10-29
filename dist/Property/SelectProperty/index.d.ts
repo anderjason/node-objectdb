@@ -1,5 +1,5 @@
 import { PropsObject } from "skytree";
-import { BasePropertyDefinition, Property, PropertyType } from "..";
+import { BasePropertyDefinition, Property } from "..";
 import { LiveDimension } from "../..";
 export interface SelectPropertyOption {
     key: string;
@@ -13,11 +13,7 @@ export interface SelectPropertyProps {
     definition: SelectPropertyDefinition;
 }
 export declare class SelectProperty extends PropsObject<SelectPropertyProps> implements Property {
-    readonly key: string;
-    readonly propertyType: PropertyType;
-    label: string;
-    listOrder: number;
-    options: SelectPropertyOption[];
+    readonly definition: SelectPropertyDefinition;
     constructor(props: SelectPropertyProps);
     toDimensions(): Promise<LiveDimension<any>[]>;
 }

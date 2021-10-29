@@ -18,28 +18,20 @@ export interface SelectPropertyProps {
 }
 
 export class SelectProperty extends PropsObject<SelectPropertyProps> implements Property {
-  readonly key: string;
-  readonly propertyType: PropertyType;
-  
-  label: string;
-  listOrder: number;
-  options: SelectPropertyOption[];
+  readonly definition: SelectPropertyDefinition;
 
   constructor(props: SelectPropertyProps) {
     super(props);
     
-    this.key = props.definition.key;
-    this.propertyType = props.definition.propertyType;
-    this.label = props.definition.label;
-    this.options = props.definition.options;
+    this.definition = props.definition;
   }
 
   async toDimensions(): Promise<LiveDimension<any>[]> {
     return [
       LiveDimension.ofEntry({
-        dimensionKey: this.key,
-        dimensionLabel: this.label,
-        valuePath: ValuePath.givenParts(["propertyValues", this.key]),
+        dimensionKey: this.definition.key,
+        dimensionLabel: this.definition.label,
+        valuePath: ValuePath.givenParts(["propertyValues", this.definition.key]),
         valueType: "single",
       })
     ];
