@@ -19,6 +19,7 @@ class Entry extends skytree_1.PropsObject {
             return false;
         }
         this.data = row.data;
+        this.propertyValues = row.propertyValues;
         this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAtEpochMs);
         this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAtEpochMs);
         this.status = "saved";

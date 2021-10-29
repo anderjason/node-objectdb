@@ -59,6 +59,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     }
 
     this.data = row.data;
+    this.propertyValues = row.propertyValues;
     this.createdAt = Instant.givenEpochMilliseconds(row.createdAtEpochMs);
     this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAtEpochMs);
     this.status = "saved";
