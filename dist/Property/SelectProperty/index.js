@@ -7,8 +7,10 @@ const __1 = require("../..");
 class SelectProperty extends skytree_1.PropsObject {
     constructor(props) {
         super(props);
-        this.key = props.key;
-        this.label = props.label;
+        this.key = props.definition.key;
+        this.propertyType = props.definition.propertyType;
+        this.label = props.definition.label;
+        this.options = props.definition.options;
     }
     async toDimensions() {
         return [

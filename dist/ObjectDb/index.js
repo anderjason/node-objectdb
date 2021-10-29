@@ -9,6 +9,7 @@ const skytree_1 = require("skytree");
 const Benchmark_1 = require("../Benchmark");
 const Dimension_1 = require("../Dimension");
 const Entry_1 = require("../Entry");
+const Property_1 = require("../Property");
 class ObjectDb extends skytree_1.Actor {
     constructor() {
         super(...arguments);
@@ -19,6 +20,7 @@ class ObjectDb extends skytree_1.Actor {
         this.isLoaded = observable_1.ReadOnlyObservable.givenObservable(this._isLoaded);
         this.stopwatch = new time_1.Stopwatch(this.props.label);
         this._dimensions = [];
+        this._propertyByKey = new Map();
         this._caches = new Map();
     }
     get mongoDb() {
@@ -194,13 +196,20 @@ class ObjectDb extends skytree_1.Actor {
     async toDimensions() {
         return [...this._dimensions];
     }
-    async setProperty(property) { }
-    async deletePropertyKey(key) { }
-    async toPropertyGivenKey(key) {
-        return undefined;
+    async writeProperty(definition) {
+        await this._db.collection("properties").updateOne({ key: definition.key }, definition, { upsert: true });
+        const property = (0, Property_1.propertyGivenDefinition)(definition);
+        this._propertyByKey.set(definition.key, property);
+    }
+    async deletePropertyKey(key) {
+        await this._db.collection("properties").deleteOne({ key });
+        this._propertyByKey.delete(key);
+    }
+    async toOptionalPropertyGivenKey(key) {
+        return this._propertyByKey.get(key);
     }
     async toProperties() {
-        return [];
+        return Array.from(this._propertyByKey.values());
     }
     async rebuildMetadataGivenEntry(entry) {
         const timer = this.stopwatch.start("rebuildMetadataGivenEntry");

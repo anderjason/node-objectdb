@@ -3,16 +3,16 @@ import {
   Dict,
   Observable,
   ReadOnlyObservable,
-  TypedEvent,
+  TypedEvent
 } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
-import { ArrayUtil, NumberUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
+import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Benchmark } from "../Benchmark";
-import { Dimension, hashCodeGivenBucketIdentifier } from "../Dimension";
-import { Bucket, BucketIdentifier } from "../Dimension";
+import { Bucket, BucketIdentifier, Dimension, hashCodeGivenBucketIdentifier } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
+import { Property, PropertyDefinition, propertyGivenDefinition } from "../Property";
 
 export interface Order {
   key: string;
@@ -49,24 +49,6 @@ interface CacheData {
   entryKeys: string[];
 }
 
-interface BasePropertyDefinition {
-  key: string;
-  label: string;
-  listOrder: number;
-}
-
-export interface SelectPropertyOption {
-  key: string;
-  label: string;
-}
-
-export interface SelectPropertyDefinition extends BasePropertyDefinition {
-  type: "select";
-  options: SelectPropertyOption[];
-}
-
-export type PropertyDefinition = SelectPropertyDefinition;
-
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly collectionDidChange = new TypedEvent();
   readonly entryWillChange = new TypedEvent<EntryChange<T>>();
@@ -78,6 +60,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly stopwatch = new Stopwatch(this.props.label);
 
   private _dimensions: Dimension<T>[] = [];
+  private _propertyByKey: Map<string, Property> = new Map();
   private _caches = new Map<number, CacheData>();
 
   private _db: MongoDb;
@@ -321,16 +304,28 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return [...this._dimensions];
   }
 
-  async setProperty(property: PropertyDefinition): Promise<void> {}
+  async writeProperty(definition: PropertyDefinition): Promise<void> {
+    await this._db.collection("properties").updateOne(
+      { key: definition.key },
+      definition,
+      { upsert: true}
+    );
 
-  async deletePropertyKey(key: string): Promise<void> {}
-
-  async toPropertyGivenKey(key: string): Promise<PropertyDefinition> {
-    return undefined;
+    const property = propertyGivenDefinition(definition);
+    this._propertyByKey.set(definition.key, property);
   }
 
-  async toProperties(): Promise<PropertyDefinition[]> {
-    return [];
+  async deletePropertyKey(key: string): Promise<void> {
+    await this._db.collection("properties").deleteOne({ key });
+    this._propertyByKey.delete(key);
+  }
+
+  async toOptionalPropertyGivenKey(key: string): Promise<Property | undefined> {
+    return this._propertyByKey.get(key);
+  }
+
+  async toProperties(): Promise<Property[]> {
+    return Array.from(this._propertyByKey.values());
   }
 
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {

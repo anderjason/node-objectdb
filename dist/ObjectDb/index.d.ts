@@ -1,10 +1,10 @@
 import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
 import { Instant, Stopwatch } from "@anderjason/time";
 import { Actor } from "skytree";
-import { Dimension } from "../Dimension";
-import { Bucket, BucketIdentifier } from "../Dimension";
+import { Bucket, BucketIdentifier, Dimension } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
+import { Property, PropertyDefinition } from "../Property";
 export interface Order {
     key: string;
     direction: "ascending" | "descending";
@@ -29,20 +29,6 @@ export interface EntryChange<T> {
     oldData?: T;
     newData?: T;
 }
-interface BasePropertyDefinition {
-    key: string;
-    label: string;
-    listOrder: number;
-}
-export interface SelectPropertyOption {
-    key: string;
-    label: string;
-}
-export interface SelectPropertyDefinition extends BasePropertyDefinition {
-    type: "select";
-    options: SelectPropertyOption[];
-}
-export declare type PropertyDefinition = SelectPropertyDefinition;
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly collectionDidChange: TypedEvent<void>;
     readonly entryWillChange: TypedEvent<EntryChange<T>>;
@@ -51,6 +37,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly isLoaded: ReadOnlyObservable<boolean>;
     readonly stopwatch: Stopwatch;
     private _dimensions;
+    private _propertyByKey;
     private _caches;
     private _db;
     get mongoDb(): MongoDb;
@@ -67,10 +54,10 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toEntryGivenKey(entryKey: string): Promise<Entry<T>>;
     toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined>;
     toDimensions(): Promise<Dimension<T>[]>;
-    setProperty(property: PropertyDefinition): Promise<void>;
+    writeProperty(definition: PropertyDefinition): Promise<void>;
     deletePropertyKey(key: string): Promise<void>;
-    toPropertyGivenKey(key: string): Promise<PropertyDefinition>;
-    toProperties(): Promise<PropertyDefinition[]>;
+    toOptionalPropertyGivenKey(key: string): Promise<Property | undefined>;
+    toProperties(): Promise<Property[]>;
     rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
     rebuildMetadata(): Promise<void>;
     toOptionalDimensionGivenKey(dimensionKey: string): Promise<Dimension<T> | undefined>;
@@ -79,4 +66,3 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Promise<Entry<T>>;
     deleteEntryKey(entryKey: string): Promise<void>;
 }
-export {};
