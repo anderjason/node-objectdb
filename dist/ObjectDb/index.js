@@ -197,7 +197,7 @@ class ObjectDb extends skytree_1.Actor {
         return [...this._dimensions];
     }
     async writeProperty(definition) {
-        await this._db.collection("properties").updateOne({ key: definition.key }, definition, { upsert: true });
+        await this._db.collection("properties").updateOne({ key: definition.key }, { $set: definition }, { upsert: true });
         const property = (0, Property_1.propertyGivenDefinition)(definition);
         this._propertyByKey.set(definition.key, property);
     }

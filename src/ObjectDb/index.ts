@@ -307,7 +307,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   async writeProperty(definition: PropertyDefinition): Promise<void> {
     await this._db.collection("properties").updateOne(
       { key: definition.key },
-      definition,
+      { $set: definition },
       { upsert: true}
     );
 
