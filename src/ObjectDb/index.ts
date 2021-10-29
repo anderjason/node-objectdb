@@ -316,6 +316,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       });
     }
 
+    for (const dimension of result) {
+      await dimension.init(this._db, this.stopwatch);
+    }
+
     return result;
   }
 

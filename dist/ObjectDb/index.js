@@ -206,6 +206,9 @@ class ObjectDb extends skytree_1.Actor {
                 result.push(dimension);
             });
         }
+        for (const dimension of result) {
+            await dimension.init(this._db, this.stopwatch);
+        }
         return result;
     }
     async writeProperty(definition) {
