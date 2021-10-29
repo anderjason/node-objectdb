@@ -54,7 +54,12 @@ class ObjectDb extends skytree_1.Actor {
                 this._dimensions.push(dimension);
             }
         }
-        const propertyDefinitions = await this._db.collection("properties").find({}).toArray();
+        const propertyDefinitions = await this._db
+            .collection("properties")
+            .find({}, {
+            projection: { _id: 0 },
+        })
+            .toArray();
         for (const propertyDefinition of propertyDefinitions) {
             const property = (0, Property_1.propertyGivenDefinition)(propertyDefinition);
             this._propertyByKey.set(propertyDefinition.key, property);
@@ -120,7 +125,7 @@ class ObjectDb extends skytree_1.Actor {
                 entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
             }
             if (options.shuffle == true) {
-                entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, e => Math.random(), "ascending");
+                entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (e) => Math.random(), "ascending");
             }
         }
         if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
@@ -212,7 +217,9 @@ class ObjectDb extends skytree_1.Actor {
         return result;
     }
     async writeProperty(definition) {
-        await this._db.collection("properties").updateOne({ key: definition.key }, { $set: definition }, { upsert: true });
+        await this._db
+            .collection("properties")
+            .updateOne({ key: definition.key }, { $set: definition }, { upsert: true });
         const property = (0, Property_1.propertyGivenDefinition)(definition);
         this._propertyByKey.set(definition.key, property);
     }

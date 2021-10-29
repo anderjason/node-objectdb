@@ -3,16 +3,25 @@ import {
   Dict,
   Observable,
   ReadOnlyObservable,
-  TypedEvent
+  TypedEvent,
 } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
 import { Actor, Timer } from "skytree";
 import { Benchmark } from "../Benchmark";
-import { Bucket, BucketIdentifier, Dimension, hashCodeGivenBucketIdentifier } from "../Dimension";
+import {
+  Bucket,
+  BucketIdentifier,
+  Dimension,
+  hashCodeGivenBucketIdentifier,
+} from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
-import { Property, PropertyDefinition, propertyGivenDefinition } from "../Property";
+import {
+  Property,
+  PropertyDefinition,
+  propertyGivenDefinition,
+} from "../Property";
 
 export interface Order {
   key: string;
@@ -107,7 +116,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       }
     }
 
-    const propertyDefinitions = await this._db.collection<PropertyDefinition>("properties").find({}).toArray();
+    const propertyDefinitions = await this._db
+      .collection<PropertyDefinition>("properties")
+      .find(
+        {},
+        {
+          projection: { _id: 0 },
+        }
+      )
+      .toArray();
+
     for (const propertyDefinition of propertyDefinitions) {
       const property = propertyGivenDefinition(propertyDefinition);
       this._propertyByKey.set(propertyDefinition.key, property);
@@ -196,7 +214,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       }
 
       if (options.shuffle == true) {
-        entryKeys = ArrayUtil.arrayWithOrderFromValue(entryKeys, e => Math.random(), "ascending");
+        entryKeys = ArrayUtil.arrayWithOrderFromValue(
+          entryKeys,
+          (e) => Math.random(),
+          "ascending"
+        );
       }
     }
 
@@ -324,11 +346,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async writeProperty(definition: PropertyDefinition): Promise<void> {
-    await this._db.collection("properties").updateOne(
-      { key: definition.key },
-      { $set: definition },
-      { upsert: true}
-    );
+    await this._db
+      .collection("properties")
+      .updateOne(
+        { key: definition.key },
+        { $set: definition },
+        { upsert: true }
+      );
 
     const property = propertyGivenDefinition(definition);
     this._propertyByKey.set(definition.key, property);
@@ -348,7 +372,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
-    const timer = this.stopwatch.start("rebuildMetadataGivenEntry")
+    const timer = this.stopwatch.start("rebuildMetadataGivenEntry");
     const dimensions = await this.toDimensions();
 
     await Promise.all(
