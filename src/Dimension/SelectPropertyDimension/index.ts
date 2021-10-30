@@ -40,7 +40,7 @@ export class SelectPropertyDimension<T>
     };
 
     const fullPropertyValuePath = ValuePath.givenParts([
-      "propertyValue",
+      "propertyValues",
       this.props.property.definition.key,
     ]).toString();
 
@@ -71,19 +71,25 @@ export class SelectPropertyDimension<T>
     const timer2 = this._stopwatch.start("ld-toBuckets-loop");
     for (const identifier of bucketIdentifiers) {
       const fullPropertyValuePath = ValuePath.givenParts([
-        "propertyValue",
+        "propertyValues",
         this.props.property.definition.key,
       ]).toString();
+
+      const mongoFilter = {
+        [fullPropertyValuePath]: identifier.bucketKey
+      };
+
+      console.log(mongoFilter);
 
       result.push(
         new LiveBucket({
           identifier,
           db: this._db,
-          mongoFilter: {
-            [fullPropertyValuePath]: identifier.bucketKey
-          },
+          mongoFilter,
         })
       );
+
+      
     }
     timer2.stop();
 
