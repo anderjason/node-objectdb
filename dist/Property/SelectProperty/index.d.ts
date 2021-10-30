@@ -1,6 +1,6 @@
 import { PropsObject } from "skytree";
 import { BasePropertyDefinition, Property } from "..";
-import { LiveDimension } from "../..";
+import { Dimension } from "../../Dimension";
 export interface SelectPropertyOption {
     key: string;
     label: string;
@@ -15,5 +15,5 @@ export interface SelectPropertyProps {
 export declare class SelectProperty extends PropsObject<SelectPropertyProps> implements Property {
     readonly definition: SelectPropertyDefinition;
     constructor(props: SelectPropertyProps);
-    toDimensions(): Promise<LiveDimension<any>[]>;
+    toDimensions(): Promise<Dimension<any>[]>;
 }

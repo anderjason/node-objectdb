@@ -1,7 +1,7 @@
-import { ValuePath } from "@anderjason/util";
 import { PropsObject } from "skytree";
-import { BasePropertyDefinition, Property, PropertyType } from "..";
-import { LiveDimension } from "../..";
+import { BasePropertyDefinition, Property } from "..";
+import { Dimension } from "../../Dimension";
+import { SelectPropertyDimension } from "../../Dimension/SelectPropertyDimension";
 
 export interface SelectPropertyOption {
   key: string;
@@ -26,13 +26,10 @@ export class SelectProperty extends PropsObject<SelectPropertyProps> implements 
     this.definition = props.definition;
   }
 
-  async toDimensions(): Promise<LiveDimension<any>[]> {
+  async toDimensions(): Promise<Dimension<any>[]> {
     return [
-      LiveDimension.ofEntry({
-        dimensionKey: this.definition.key,
-        dimensionLabel: this.definition.label,
-        valuePath: ValuePath.givenParts(["propertyValues", this.definition.key]),
-        valueType: "single",
+      new SelectPropertyDimension({
+        property: this
       })
     ];
   }
