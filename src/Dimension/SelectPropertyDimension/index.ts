@@ -85,10 +85,9 @@ export class SelectPropertyDimension<T>
           db: this._db,
           mongoFilter,
         })
-      );
-
-      
+      );      
     }
+    
     timer2.stop();
 
     return result;

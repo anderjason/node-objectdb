@@ -10,6 +10,7 @@ const Benchmark_1 = require("../Benchmark");
 const Dimension_1 = require("../Dimension");
 const Entry_1 = require("../Entry");
 const Property_1 = require("../Property");
+const SelectProperty_1 = require("../Property/SelectProperty");
 class ObjectDb extends skytree_1.Actor {
     constructor() {
         super(...arguments);
@@ -217,10 +218,14 @@ class ObjectDb extends skytree_1.Actor {
         return result;
     }
     async writeProperty(definition) {
-        await this._db
-            .collection("properties")
-            .updateOne({ key: definition.key }, { $set: definition }, { upsert: true });
-        const property = (0, Property_1.propertyGivenDefinition)(definition);
+        let property;
+        switch (definition.propertyType) {
+            case "select":
+                property = await SelectProperty_1.SelectProperty.writeDefinition(this._db, definition);
+                break;
+            default:
+                throw new Error(`Unsupported property type '${definition.propertyType}'`);
+        }
         this._propertyByKey.set(definition.key, property);
     }
     async deletePropertyKey(propertyKey) {

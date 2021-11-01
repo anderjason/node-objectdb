@@ -22,6 +22,7 @@ import {
   PropertyDefinition,
   propertyGivenDefinition,
 } from "../Property";
+import { SelectProperty } from "../Property/SelectProperty";
 
 export interface Order {
   key: string;
@@ -346,15 +347,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async writeProperty(definition: PropertyDefinition): Promise<void> {
-    await this._db
-      .collection("properties")
-      .updateOne(
-        { key: definition.key },
-        { $set: definition },
-        { upsert: true }
-      );
+    let property: Property;
+    
+    switch (definition.propertyType) {
+      case "select":
+        property = await SelectProperty.writeDefinition(this._db, definition);
+        break;
+      default:
+        throw new Error(`Unsupported property type '${definition.propertyType}'`);
+    }
 
-    const property = propertyGivenDefinition(definition);
     this._propertyByKey.set(definition.key, property);
   }
 
