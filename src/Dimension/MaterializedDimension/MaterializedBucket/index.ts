@@ -49,7 +49,7 @@ export class MaterializedBucket<T>
       { upsert: true }
     );
 
-    const bucketRow = await this.props.db
+    await this.props.db
       .collection<any>("buckets")
       .findOne({ key: this.props.identifier.bucketKey });
   }

@@ -55,7 +55,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined>;
     toDimensions(): Promise<Dimension<T>[]>;
     writeProperty(definition: PropertyDefinition): Promise<void>;
-    deletePropertyKey(key: string): Promise<void>;
+    deletePropertyKey(propertyKey: string): Promise<void>;
     toOptionalPropertyGivenKey(key: string): Promise<Property | undefined>;
     toProperties(): Promise<Property[]>;
     rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;

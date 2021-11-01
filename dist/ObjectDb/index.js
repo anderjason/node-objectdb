@@ -223,9 +223,13 @@ class ObjectDb extends skytree_1.Actor {
         const property = (0, Property_1.propertyGivenDefinition)(definition);
         this._propertyByKey.set(definition.key, property);
     }
-    async deletePropertyKey(key) {
-        await this._db.collection("properties").deleteOne({ key });
-        this._propertyByKey.delete(key);
+    async deletePropertyKey(propertyKey) {
+        await this._db.collection("properties").deleteOne({ key: propertyKey });
+        const fullPropertyPath = `propertyValues.${propertyKey}`;
+        await this.props.db.collection("buckets").updateMany({ [fullPropertyPath]: { $exists: true } }, {
+            $unset: { [fullPropertyPath]: 1 },
+        });
+        this._propertyByKey.delete(propertyKey);
     }
     async toOptionalPropertyGivenKey(key) {
         return this._propertyByKey.get(key);

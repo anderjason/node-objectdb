@@ -358,9 +358,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._propertyByKey.set(definition.key, property);
   }
 
-  async deletePropertyKey(key: string): Promise<void> {
-    await this._db.collection("properties").deleteOne({ key });
-    this._propertyByKey.delete(key);
+  async deletePropertyKey(propertyKey: string): Promise<void> {
+    await this._db.collection("properties").deleteOne({ key: propertyKey });
+
+    const fullPropertyPath = `propertyValues.${propertyKey}`;
+    await this.props.db.collection("buckets").updateMany(
+      { [fullPropertyPath]: { $exists: true } },
+      {
+        $unset: { [fullPropertyPath]: 1 },
+      }
+    );
+
+    this._propertyByKey.delete(propertyKey);
   }
 
   async toOptionalPropertyGivenKey(key: string): Promise<Property | undefined> {
