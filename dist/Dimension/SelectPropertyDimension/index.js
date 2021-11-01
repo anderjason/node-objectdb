@@ -54,7 +54,6 @@ class SelectPropertyDimension extends skytree_1.PropsObject {
             const mongoFilter = {
                 [fullPropertyValuePath]: identifier.bucketKey
             };
-            console.log(mongoFilter);
             result.push(new LiveBucket_1.LiveBucket({
                 identifier,
                 db: this._db,

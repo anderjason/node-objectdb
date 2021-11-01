@@ -79,8 +79,6 @@ export class SelectPropertyDimension<T>
         [fullPropertyValuePath]: identifier.bucketKey
       };
 
-      console.log(mongoFilter);
-
       result.push(
         new LiveBucket({
           identifier,
