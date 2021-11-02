@@ -8,6 +8,7 @@ import { deleteSelectOptionValues } from "./deleteSelectOption";
 export interface SelectPropertyOption {
   key: string;
   label: string;
+  colorName: string;
   isDeleted?: boolean;
 }
 
@@ -19,8 +20,6 @@ export interface SelectPropertyDefinition extends BasePropertyDefinition {
 export interface SelectPropertyProps {
   definition: SelectPropertyDefinition;
 }
-
-
 
 export class SelectProperty
   extends PropsObject<SelectPropertyProps>

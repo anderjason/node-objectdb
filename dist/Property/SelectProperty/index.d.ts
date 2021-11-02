@@ -5,6 +5,7 @@ import { Dimension } from "../../Dimension";
 export interface SelectPropertyOption {
     key: string;
     label: string;
+    colorName: string;
     isDeleted?: boolean;
 }
 export interface SelectPropertyDefinition extends BasePropertyDefinition {
