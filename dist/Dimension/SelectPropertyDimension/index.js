@@ -45,14 +45,15 @@ class SelectPropertyDimension extends skytree_1.PropsObject {
     async toBuckets() {
         const bucketIdentifiers = await this.toBucketIdentifiers();
         const result = [];
-        const timer2 = this._stopwatch.start("ld-toBuckets-loop");
+        const timer2 = this._stopwatch.start("spd-toBuckets-loop");
         for (const identifier of bucketIdentifiers) {
             const fullPropertyValuePath = util_1.ValuePath.givenParts([
                 "propertyValues",
                 this.props.property.definition.key,
+                identifier.bucketKey,
             ]).toString();
             const mongoFilter = {
-                [fullPropertyValuePath]: identifier.bucketKey
+                [fullPropertyValuePath]: 1
             };
             result.push(new LiveBucket_1.LiveBucket({
                 identifier,
