@@ -12,7 +12,7 @@ export declare class SelectPropertyDimension<T> extends PropsObject<SelectProper
     get key(): string;
     get label(): string;
     init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
-    toOptionalBucketGivenKey(bucketKey: string): Promise<Bucket | undefined>;
+    toOptionalBucketGivenKey(bucketKey: string, bucketLabel?: string): Promise<Bucket | undefined>;
     toBucketIdentifiers(): Promise<BucketIdentifier[]>;
     toBuckets(): Promise<Bucket[]>;
     deleteEntryKey(entryKey: string): Promise<void>;

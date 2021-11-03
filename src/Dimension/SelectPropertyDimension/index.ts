@@ -31,12 +31,13 @@ export class SelectPropertyDimension<T>
   }
 
   async toOptionalBucketGivenKey(
-    bucketKey: string
+    bucketKey: string,
+    bucketLabel?: string
   ): Promise<Bucket | undefined> {
     const identifier = {
       dimensionKey: this.key,
       bucketKey,
-      bucketLabel: bucketKey,
+      bucketLabel: bucketLabel ?? bucketKey,
     };
 
     const fullPropertyValuePath = ValuePath.givenParts([
@@ -72,7 +73,7 @@ export class SelectPropertyDimension<T>
     const timer2 = this._stopwatch.start("spd-toBuckets-loop");
     
     for (const identifier of bucketIdentifiers) {
-      const bucket = await this.toOptionalBucketGivenKey(identifier.bucketKey);
+      const bucket = await this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel);
 
       result.push(bucket);      
     }

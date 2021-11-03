@@ -15,11 +15,11 @@ class SelectPropertyDimension extends skytree_1.PropsObject {
         this._db = db;
         this._stopwatch = stopwatch;
     }
-    async toOptionalBucketGivenKey(bucketKey) {
+    async toOptionalBucketGivenKey(bucketKey, bucketLabel) {
         const identifier = {
             dimensionKey: this.key,
             bucketKey,
-            bucketLabel: bucketKey,
+            bucketLabel: bucketLabel !== null && bucketLabel !== void 0 ? bucketLabel : bucketKey,
         };
         const fullPropertyValuePath = util_1.ValuePath.givenParts([
             "propertyValues",
@@ -48,7 +48,7 @@ class SelectPropertyDimension extends skytree_1.PropsObject {
         const result = [];
         const timer2 = this._stopwatch.start("spd-toBuckets-loop");
         for (const identifier of bucketIdentifiers) {
-            const bucket = await this.toOptionalBucketGivenKey(identifier.bucketKey);
+            const bucket = await this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel);
             result.push(bucket);
         }
         timer2.stop();
