@@ -3,7 +3,6 @@ import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "..";
 import { Entry, MongoDb } from "../..";
 import { SelectProperty } from "../../Property/SelectProperty";
-import { LiveBucket } from "../LiveDimension/LiveBucket";
 export interface SelectPropertyDimensionProps {
     property: SelectProperty;
 }
@@ -15,7 +14,7 @@ export declare class SelectPropertyDimension<T> extends PropsObject<SelectProper
     init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
     toOptionalBucketGivenKey(bucketKey: string): Promise<Bucket | undefined>;
     toBucketIdentifiers(): Promise<BucketIdentifier[]>;
-    toBuckets(): Promise<LiveBucket<T>[]>;
+    toBuckets(): Promise<Bucket[]>;
     deleteEntryKey(entryKey: string): Promise<void>;
     rebuildEntry(entry: Entry<T>): Promise<void>;
 }

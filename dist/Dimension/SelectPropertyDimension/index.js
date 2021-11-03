@@ -24,12 +24,13 @@ class SelectPropertyDimension extends skytree_1.PropsObject {
         const fullPropertyValuePath = util_1.ValuePath.givenParts([
             "propertyValues",
             this.props.property.definition.key,
+            bucketKey
         ]).toString();
         return new LiveBucket_1.LiveBucket({
             identifier,
             db: this._db,
             mongoFilter: {
-                [fullPropertyValuePath]: bucketKey,
+                [fullPropertyValuePath]: 1,
             },
         });
     }
@@ -47,19 +48,8 @@ class SelectPropertyDimension extends skytree_1.PropsObject {
         const result = [];
         const timer2 = this._stopwatch.start("spd-toBuckets-loop");
         for (const identifier of bucketIdentifiers) {
-            const fullPropertyValuePath = util_1.ValuePath.givenParts([
-                "propertyValues",
-                this.props.property.definition.key,
-                identifier.bucketKey,
-            ]).toString();
-            const mongoFilter = {
-                [fullPropertyValuePath]: 1
-            };
-            result.push(new LiveBucket_1.LiveBucket({
-                identifier,
-                db: this._db,
-                mongoFilter,
-            }));
+            const bucket = await this.toOptionalBucketGivenKey(identifier.bucketKey);
+            result.push(bucket);
         }
         timer2.stop();
         return result;
