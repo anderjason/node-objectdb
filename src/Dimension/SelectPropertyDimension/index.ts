@@ -55,6 +55,22 @@ export class SelectPropertyDimension<T>
     });
   }
 
+  async deleteBucketKey(bucketKey: string): Promise<void> {
+    const fullPropertyValuePath = ValuePath.givenParts([
+      "propertyValues",
+      this.props.property.definition.key,
+      bucketKey
+    ]).toString();
+
+    await this._db.collection("entries").updateMany({
+      [fullPropertyValuePath]: 1
+    }, {
+      $unset: {
+        [fullPropertyValuePath]: 1
+      }
+    });
+  }
+
   async toBucketIdentifiers(): Promise<BucketIdentifier[]> {
     return this.props.property.definition.options.map((option) => {
       return {
@@ -69,15 +85,13 @@ export class SelectPropertyDimension<T>
     const bucketIdentifiers = await this.toBucketIdentifiers();
 
     const result: Bucket[] = [];
-
-    const timer2 = this._stopwatch.start("spd-toBuckets-loop");
     
+    const timer2 = this._stopwatch.start("spd-toBuckets-loop");
     for (const identifier of bucketIdentifiers) {
       const bucket = await this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel);
 
       result.push(bucket);      
     }
-    
     timer2.stop();
 
     return result;

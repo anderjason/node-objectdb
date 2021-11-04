@@ -35,8 +35,12 @@ export class SelectProperty
       (option) => option.isDeleted == true
     );
 
+    const property = new SelectProperty({ definition });
+    const dimension = property.toSelectPropertyDimension();
+
     for (const option of deletedOptions) {
       await deleteSelectOptionValues(db, definition.key, option.key);
+      await dimension.deleteBucketKey(option.key);
     }
 
     definition.options = definition.options.filter(option => option.isDeleted != true);
@@ -49,7 +53,7 @@ export class SelectProperty
         { upsert: true }
       );
 
-    return new SelectProperty({ definition });
+    return property;
   }
 
   constructor(props: SelectPropertyProps) {
@@ -58,11 +62,15 @@ export class SelectProperty
     this.definition = props.definition;
   }
 
+  toSelectPropertyDimension<T>(): SelectPropertyDimension<T> {
+    return new SelectPropertyDimension({
+      property: this,
+    });
+  }
+
   async toDimensions(): Promise<Dimension<any>[]> {
     return [
-      new SelectPropertyDimension({
-        property: this,
-      }),
+      this.toSelectPropertyDimension(),
     ];
   }
 }

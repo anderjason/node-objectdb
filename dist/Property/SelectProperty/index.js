@@ -11,20 +11,26 @@ class SelectProperty extends skytree_1.PropsObject {
     }
     static async writeDefinition(db, definition) {
         const deletedOptions = definition.options.filter((option) => option.isDeleted == true);
+        const property = new SelectProperty({ definition });
+        const dimension = property.toSelectPropertyDimension();
         for (const option of deletedOptions) {
             await (0, deleteSelectOption_1.deleteSelectOptionValues)(db, definition.key, option.key);
+            await dimension.deleteBucketKey(option.key);
         }
         definition.options = definition.options.filter(option => option.isDeleted != true);
         await db
             .collection("properties")
             .updateOne({ key: definition.key }, { $set: definition }, { upsert: true });
-        return new SelectProperty({ definition });
+        return property;
+    }
+    toSelectPropertyDimension() {
+        return new SelectPropertyDimension_1.SelectPropertyDimension({
+            property: this,
+        });
     }
     async toDimensions() {
         return [
-            new SelectPropertyDimension_1.SelectPropertyDimension({
-                property: this,
-            }),
+            this.toSelectPropertyDimension(),
         ];
     }
 }

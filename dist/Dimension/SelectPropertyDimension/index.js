@@ -34,6 +34,20 @@ class SelectPropertyDimension extends skytree_1.PropsObject {
             },
         });
     }
+    async deleteBucketKey(bucketKey) {
+        const fullPropertyValuePath = util_1.ValuePath.givenParts([
+            "propertyValues",
+            this.props.property.definition.key,
+            bucketKey
+        ]).toString();
+        await this._db.collection("entries").updateMany({
+            [fullPropertyValuePath]: 1
+        }, {
+            $unset: {
+                [fullPropertyValuePath]: 1
+            }
+        });
+    }
     async toBucketIdentifiers() {
         return this.props.property.definition.options.map((option) => {
             return {
