@@ -1,3 +1,4 @@
+import { Stopwatch } from "@anderjason/time";
 import { PropsObject } from "skytree";
 import { BasePropertyDefinition, Property } from "..";
 import { MongoDb } from "../..";
@@ -37,6 +38,7 @@ export class SelectProperty
 
     const property = new SelectProperty({ definition });
     const dimension = property.toSelectPropertyDimension();
+    dimension.init(db, new Stopwatch(""));
 
     for (const option of deletedOptions) {
       await deleteSelectOptionValues(db, definition.key, option.key);
