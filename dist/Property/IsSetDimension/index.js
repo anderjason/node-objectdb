@@ -1,15 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SelectPropertyDimension = void 0;
+exports.IsSetDimension = void 0;
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
-const LiveBucket_1 = require("../LiveDimension/LiveBucket");
-class SelectPropertyDimension extends skytree_1.PropsObject {
+const LiveBucket_1 = require("../../Dimension/LiveDimension/LiveBucket");
+class IsSetDimension extends skytree_1.PropsObject {
     get key() {
-        return this.props.property.definition.key;
+        return `${this.props.property.definition.key}-isSet`;
     }
     get label() {
-        return this.props.property.definition.label;
+        return `${this.props.property.definition.key} is set`;
     }
     async init(db, stopwatch) {
         this._db = db;
@@ -23,39 +23,41 @@ class SelectPropertyDimension extends skytree_1.PropsObject {
         };
         const fullPropertyValuePath = util_1.ValuePath.givenParts([
             "propertyValues",
-            this.props.property.definition.key,
-            bucketKey
+            this.props.property.definition.key
         ]).toString();
+        let mongoFilter;
+        if (bucketKey === "true") {
+            mongoFilter = {
+                [fullPropertyValuePath]: { $exists: true, $ne: {} },
+            };
+        }
+        else {
+            mongoFilter = {
+                [fullPropertyValuePath]: { $or: [{ $exists: false }, { $eq: {} }] },
+            };
+        }
         return new LiveBucket_1.LiveBucket({
             identifier,
             db: this._db,
-            mongoFilter: {
-                [fullPropertyValuePath]: 1,
-            },
+            mongoFilter,
         });
     }
     async deleteBucketKey(bucketKey) {
-        const fullPropertyValuePath = util_1.ValuePath.givenParts([
-            "propertyValues",
-            this.props.property.definition.key,
-            bucketKey
-        ]).toString();
-        await this._db.collection("entries").updateMany({
-            [fullPropertyValuePath]: 1
-        }, {
-            $unset: {
-                [fullPropertyValuePath]: 1
-            }
-        });
+        // empty
     }
     async toBucketIdentifiers() {
-        return this.props.property.definition.options.map((option) => {
-            return {
+        return [
+            {
                 dimensionKey: this.key,
-                bucketKey: option.key,
-                bucketLabel: option.label,
-            };
-        });
+                bucketKey: "true",
+                bucketLabel: "true",
+            },
+            {
+                dimensionKey: this.key,
+                bucketKey: "false",
+                bucketLabel: "false",
+            }
+        ];
     }
     async toBuckets() {
         const bucketIdentifiers = await this.toBucketIdentifiers();
@@ -75,5 +77,5 @@ class SelectPropertyDimension extends skytree_1.PropsObject {
         // empty
     }
 }
-exports.SelectPropertyDimension = SelectPropertyDimension;
+exports.IsSetDimension = IsSetDimension;
 //# sourceMappingURL=index.js.map

@@ -1,4 +1,4 @@
-import { MongoDb } from "../..";
+import { MongoDb } from "../../..";
 
 export async function deleteSelectOptionValues(db: MongoDb, propertyKey: string, optionKey: string): Promise<void> {
   const fullPropertyPath = `propertyValues.${propertyKey}`;

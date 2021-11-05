@@ -22,7 +22,7 @@ import {
   PropertyDefinition,
   propertyGivenDefinition,
 } from "../Property";
-import { SelectProperty } from "../Property/SelectProperty";
+import { SelectProperty } from "../Property/Select/SelectProperty";
 
 export interface Order {
   key: string;

@@ -1,5 +1,5 @@
 import { Dimension } from "../Dimension";
-import { SelectPropertyDefinition } from "./SelectProperty";
+import { SelectPropertyDefinition } from "./Select/SelectProperty";
 export declare type PropertyType = "select";
 export interface Property {
     readonly definition: PropertyDefinition;

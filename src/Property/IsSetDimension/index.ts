@@ -1,28 +1,28 @@
 import { Stopwatch } from "@anderjason/time";
 import { ValuePath } from "@anderjason/util";
 import { PropsObject } from "skytree";
-import { Bucket, BucketIdentifier, Dimension } from "..";
+import { Bucket, BucketIdentifier, Dimension } from "../../Dimension";
 import { Entry, MongoDb } from "../..";
-import { SelectProperty } from "../../Property/SelectProperty";
-import { LiveBucket } from "../LiveDimension/LiveBucket";
+import { SelectProperty } from "../Select/SelectProperty";
+import { LiveBucket } from "../../Dimension/LiveDimension/LiveBucket";
 
-export interface SelectPropertyDimensionProps {
+export interface IsSetDimensionProps {
   property: SelectProperty;
 }
 
-export class SelectPropertyDimension<T>
-  extends PropsObject<SelectPropertyDimensionProps>
+export class IsSetDimension<T>
+  extends PropsObject<IsSetDimensionProps>
   implements Dimension<T>
 {
   private _db: MongoDb;
   private _stopwatch: Stopwatch;
 
   get key(): string {
-    return this.props.property.definition.key;
+    return `${this.props.property.definition.key}-isSet`;
   }
 
   get label(): string {
-    return this.props.property.definition.label;
+    return `${this.props.property.definition.key} is set`;
   }
 
   async init(db: MongoDb, stopwatch: Stopwatch): Promise<void> {
@@ -42,43 +42,44 @@ export class SelectPropertyDimension<T>
 
     const fullPropertyValuePath = ValuePath.givenParts([
       "propertyValues",
-      this.props.property.definition.key,
-      bucketKey
+      this.props.property.definition.key
     ]).toString();
+
+    let mongoFilter: any;
+    if (bucketKey === "true") {
+      mongoFilter = {
+        [fullPropertyValuePath]: { $exists: true, $ne: {} },
+      }
+    } else {
+      mongoFilter = {
+        [fullPropertyValuePath]: { $or: [ { $exists: false }, { $eq: {} } ] },
+      }
+    }
 
     return new LiveBucket({
       identifier,
       db: this._db,
-      mongoFilter: {
-        [fullPropertyValuePath]: 1,
-      },
+      mongoFilter,
     });
   }
 
   async deleteBucketKey(bucketKey: string): Promise<void> {
-    const fullPropertyValuePath = ValuePath.givenParts([
-      "propertyValues",
-      this.props.property.definition.key,
-      bucketKey
-    ]).toString();
-
-    await this._db.collection("entries").updateMany({
-      [fullPropertyValuePath]: 1
-    }, {
-      $unset: {
-        [fullPropertyValuePath]: 1
-      }
-    });
+    // empty
   }
 
   async toBucketIdentifiers(): Promise<BucketIdentifier[]> {
-    return this.props.property.definition.options.map((option) => {
-      return {
+    return [
+      {
         dimensionKey: this.key,
-        bucketKey: option.key,
-        bucketLabel: option.label,
-      };
-    });
+        bucketKey: "true",
+        bucketLabel: "true",
+      },
+      {
+        dimensionKey: this.key,
+        bucketKey: "false",
+        bucketLabel: "false",
+      }
+    ]
   }
 
   async toBuckets(): Promise<Bucket[]> {

@@ -10,7 +10,7 @@ const Benchmark_1 = require("../Benchmark");
 const Dimension_1 = require("../Dimension");
 const Entry_1 = require("../Entry");
 const Property_1 = require("../Property");
-const SelectProperty_1 = require("../Property/SelectProperty");
+const SelectProperty_1 = require("../Property/Select/SelectProperty");
 class ObjectDb extends skytree_1.Actor {
     constructor() {
         super(...arguments);

@@ -1,12 +1,12 @@
 import { Stopwatch } from "@anderjason/time";
 import { PropsObject } from "skytree";
-import { Bucket, BucketIdentifier, Dimension } from "..";
+import { Bucket, BucketIdentifier, Dimension } from "../../Dimension";
 import { Entry, MongoDb } from "../..";
-import { SelectProperty } from "../../Property/SelectProperty";
-export interface SelectPropertyDimensionProps {
+import { SelectProperty } from "../Select/SelectProperty";
+export interface IsSetDimensionProps {
     property: SelectProperty;
 }
-export declare class SelectPropertyDimension<T> extends PropsObject<SelectPropertyDimensionProps> implements Dimension<T> {
+export declare class IsSetDimension<T> extends PropsObject<IsSetDimensionProps> implements Dimension<T> {
     private _db;
     private _stopwatch;
     get key(): string;

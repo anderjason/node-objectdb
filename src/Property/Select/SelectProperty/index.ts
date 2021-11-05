@@ -1,9 +1,10 @@
 import { Stopwatch } from "@anderjason/time";
 import { PropsObject } from "skytree";
-import { BasePropertyDefinition, Property } from "..";
-import { MongoDb } from "../..";
-import { Dimension } from "../../Dimension";
-import { SelectPropertyDimension } from "../../Dimension/SelectPropertyDimension";
+import { BasePropertyDefinition, Property } from "../..";
+import { MongoDb } from "../../..";
+import { Dimension } from "../../../Dimension";
+import { IsSetDimension } from "../../IsSetDimension";
+import { SelectDimension } from "../SelectDimension";
 import { deleteSelectOptionValues } from "./deleteSelectOption";
 
 export interface SelectPropertyOption {
@@ -37,7 +38,7 @@ export class SelectProperty
     );
 
     const property = new SelectProperty({ definition });
-    const dimension = property.toSelectPropertyDimension();
+    const dimension = property.toSelectDimension();
     dimension.init(db, new Stopwatch(""));
 
     for (const option of deletedOptions) {
@@ -64,15 +65,18 @@ export class SelectProperty
     this.definition = props.definition;
   }
 
-  toSelectPropertyDimension<T>(): SelectPropertyDimension<T> {
-    return new SelectPropertyDimension({
+  toSelectDimension<T>(): SelectDimension<T> {
+    return new SelectDimension({
       property: this,
     });
   }
 
   async toDimensions(): Promise<Dimension<any>[]> {
     return [
-      this.toSelectPropertyDimension(),
+      this.toSelectDimension(),
+      new IsSetDimension({
+        property: this
+      })
     ];
   }
 }

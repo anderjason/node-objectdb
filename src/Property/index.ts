@@ -1,5 +1,5 @@
 import { Dimension } from "../Dimension";
-import { SelectProperty, SelectPropertyDefinition } from "./SelectProperty";
+import { SelectProperty, SelectPropertyDefinition } from "./Select/SelectProperty";
 
 export type PropertyType = "select";
 

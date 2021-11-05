@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.propertyGivenDefinition = void 0;
-const SelectProperty_1 = require("./SelectProperty");
+const SelectProperty_1 = require("./Select/SelectProperty");
 function propertyGivenDefinition(definition) {
     switch (definition.propertyType) {
         case "select":
