@@ -9,7 +9,7 @@ class IsSetDimension extends skytree_1.PropsObject {
         return `${this.props.property.definition.key}-isSet`;
     }
     get label() {
-        return `${this.props.property.definition.key} is set`;
+        return `${this.props.property.definition.label} is set`;
     }
     async init(db, stopwatch) {
         this._db = db;
@@ -23,7 +23,7 @@ class IsSetDimension extends skytree_1.PropsObject {
         };
         const fullPropertyValuePath = util_1.ValuePath.givenParts([
             "propertyValues",
-            this.props.property.definition.key
+            this.props.property.definition.key,
         ]).toString();
         let mongoFilter;
         if (bucketKey === "true") {
@@ -33,7 +33,14 @@ class IsSetDimension extends skytree_1.PropsObject {
         }
         else {
             mongoFilter = {
-                [fullPropertyValuePath]: { $or: [{ $exists: false }, { $eq: {} }] },
+                $or: [
+                    {
+                        [fullPropertyValuePath]: { $exists: false },
+                    },
+                    {
+                        [fullPropertyValuePath]: { $eq: {} },
+                    },
+                ],
             };
         }
         return new LiveBucket_1.LiveBucket({
@@ -56,7 +63,7 @@ class IsSetDimension extends skytree_1.PropsObject {
                 dimensionKey: this.key,
                 bucketKey: "false",
                 bucketLabel: "false",
-            }
+            },
         ];
     }
     async toBuckets() {

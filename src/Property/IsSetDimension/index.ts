@@ -22,7 +22,7 @@ export class IsSetDimension<T>
   }
 
   get label(): string {
-    return `${this.props.property.definition.key} is set`;
+    return `${this.props.property.definition.label} is set`;
   }
 
   async init(db: MongoDb, stopwatch: Stopwatch): Promise<void> {
@@ -42,18 +42,25 @@ export class IsSetDimension<T>
 
     const fullPropertyValuePath = ValuePath.givenParts([
       "propertyValues",
-      this.props.property.definition.key
+      this.props.property.definition.key,
     ]).toString();
 
     let mongoFilter: any;
     if (bucketKey === "true") {
       mongoFilter = {
         [fullPropertyValuePath]: { $exists: true, $ne: {} },
-      }
+      };
     } else {
       mongoFilter = {
-        [fullPropertyValuePath]: { $or: [ { $exists: false }, { $eq: {} } ] },
-      }
+        $or: [
+          {
+            [fullPropertyValuePath]: { $exists: false },
+          },
+          {
+            [fullPropertyValuePath]: { $eq: {} },
+          },
+        ],
+      };
     }
 
     return new LiveBucket({
@@ -78,20 +85,23 @@ export class IsSetDimension<T>
         dimensionKey: this.key,
         bucketKey: "false",
         bucketLabel: "false",
-      }
-    ]
+      },
+    ];
   }
 
   async toBuckets(): Promise<Bucket[]> {
     const bucketIdentifiers = await this.toBucketIdentifiers();
 
     const result: Bucket[] = [];
-    
+
     const timer2 = this._stopwatch.start("spd-toBuckets-loop");
     for (const identifier of bucketIdentifiers) {
-      const bucket = await this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel);
+      const bucket = await this.toOptionalBucketGivenKey(
+        identifier.bucketKey,
+        identifier.bucketLabel
+      );
 
-      result.push(bucket);      
+      result.push(bucket);
     }
     timer2.stop();
 
