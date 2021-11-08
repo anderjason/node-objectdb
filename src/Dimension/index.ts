@@ -11,7 +11,7 @@ export interface Dimension<T> {
   deleteEntryKey(entryKey: string): Promise<void>;
   rebuildEntry(entry: Entry<T>): Promise<void>;
   
-  toOptionalBucketGivenKey(key: string): Promise<Bucket | undefined>;
+  toOptionalBucketGivenKey(bucketKey: string, bucketLabel?: string): Promise<Bucket | undefined>;
   toBuckets(): Promise<Bucket[]>;
 }
 

@@ -461,7 +461,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return undefined;
     }
 
-    return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
+    return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey, bucketIdentifier.bucketLabel);
   }
 
   async writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void> {

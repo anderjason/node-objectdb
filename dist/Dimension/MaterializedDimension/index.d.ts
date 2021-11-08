@@ -14,7 +14,7 @@ export declare class MaterializedDimension<T> extends PropsObject<MaterializedDi
     get key(): string;
     get label(): string;
     init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
-    toOptionalBucketGivenKey(bucketKey: string): Promise<Bucket | undefined>;
+    toOptionalBucketGivenKey(bucketKey: string, bucketLabel?: string): Promise<Bucket | undefined>;
     toBuckets(): Promise<MaterializedBucket<T>[]>;
     deleteEntryKey(entryKey: string): Promise<void>;
     private addEntryToBucket;

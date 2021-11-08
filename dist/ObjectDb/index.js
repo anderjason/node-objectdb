@@ -308,7 +308,7 @@ class ObjectDb extends skytree_1.Actor {
         if (dimension == null) {
             return undefined;
         }
-        return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
+        return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey, bucketIdentifier.bucketLabel);
     }
     async writeEntry(entry) {
         if (entry == null) {

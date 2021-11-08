@@ -15,7 +15,7 @@ class MaterializedDimension extends skytree_1.PropsObject {
         this._stopwatch = stopwatch;
         await this._db.collection("buckets").createIndex({ entryKeys: 1 });
     }
-    async toOptionalBucketGivenKey(bucketKey) {
+    async toOptionalBucketGivenKey(bucketKey, bucketLabel) {
         const find = {
             "identifier.dimensionKey": this.props.key,
             "identifier.bucketKey": bucketKey,
@@ -27,7 +27,7 @@ class MaterializedDimension extends skytree_1.PropsObject {
             return undefined;
         }
         return new MaterializedBucket_1.MaterializedBucket({
-            identifier: bucketRow.identifier,
+            identifier: Object.assign(Object.assign({}, bucketRow.identifier), { bucketLabel: bucketLabel !== null && bucketLabel !== void 0 ? bucketLabel : bucketRow.identifier.bucketLabel }),
             db: this._db,
         });
     }
@@ -64,7 +64,7 @@ class MaterializedDimension extends skytree_1.PropsObject {
             throw new Error(`Received a bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
         }
         const timer = this._stopwatch.start("md-addEntryToBucket");
-        let bucket = (await this.toOptionalBucketGivenKey(bucketIdentifier.bucketKey));
+        let bucket = (await this.toOptionalBucketGivenKey(bucketIdentifier.bucketKey, bucketIdentifier.bucketLabel));
         if (bucket == null) {
             bucket = new MaterializedBucket_1.MaterializedBucket({
                 identifier: bucketIdentifier,

@@ -80,11 +80,11 @@ class LiveDimension extends skytree_1.PropsObject {
         this._db = db;
         this._stopwatch = stopwatch;
     }
-    async toOptionalBucketGivenKey(bucketKey) {
+    async toOptionalBucketGivenKey(bucketKey, bucketLabel) {
         const identifier = {
             dimensionKey: this.key,
             bucketKey,
-            bucketLabel: bucketKey,
+            bucketLabel: bucketLabel !== null && bucketLabel !== void 0 ? bucketLabel : bucketKey,
         };
         return new LiveBucket_1.LiveBucket({
             identifier,

@@ -35,7 +35,8 @@ export class MaterializedDimension<T>
   }
 
   async toOptionalBucketGivenKey(
-    bucketKey: string
+    bucketKey: string,
+    bucketLabel?: string
   ): Promise<Bucket | undefined> {
     const find = {
       "identifier.dimensionKey": this.props.key,
@@ -51,7 +52,10 @@ export class MaterializedDimension<T>
     }
 
     return new MaterializedBucket({
-      identifier: bucketRow.identifier,
+      identifier: {
+        ...bucketRow.identifier,
+        bucketLabel: bucketLabel ?? bucketRow.identifier.bucketLabel
+      },
       db: this._db,
     });
   }
@@ -107,7 +111,8 @@ export class MaterializedDimension<T>
     const timer = this._stopwatch.start("md-addEntryToBucket");
 
     let bucket = (await this.toOptionalBucketGivenKey(
-      bucketIdentifier.bucketKey
+      bucketIdentifier.bucketKey,
+      bucketIdentifier.bucketLabel
     )) as MaterializedBucket<T>;
 
     if (bucket == null) {

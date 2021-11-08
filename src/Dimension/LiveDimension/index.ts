@@ -124,12 +124,13 @@ export class LiveDimension<T>
   }
 
   async toOptionalBucketGivenKey(
-    bucketKey: string
+    bucketKey: string,
+    bucketLabel?: string
   ): Promise<Bucket | undefined> {
     const identifier = {
       dimensionKey: this.key,
       bucketKey,
-      bucketLabel: bucketKey,
+      bucketLabel: bucketLabel ?? bucketKey,
     };
 
     return new LiveBucket({

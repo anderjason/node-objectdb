@@ -6,7 +6,7 @@ export interface Dimension<T> {
     init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
     deleteEntryKey(entryKey: string): Promise<void>;
     rebuildEntry(entry: Entry<T>): Promise<void>;
-    toOptionalBucketGivenKey(key: string): Promise<Bucket | undefined>;
+    toOptionalBucketGivenKey(bucketKey: string, bucketLabel?: string): Promise<Bucket | undefined>;
     toBuckets(): Promise<Bucket[]>;
 }
 export interface BucketIdentifier {
