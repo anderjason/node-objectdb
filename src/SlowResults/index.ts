@@ -16,7 +16,7 @@ export class SlowResults<TO, TI = any> extends PropsObject<
     this._processedCount
   );
 
-  readonly didFinish = new TypedEvent<void>();
+  readonly didFinish = new TypedEvent<TO[]>();
   readonly foundResult = new TypedEvent<TO>();
 
   private _results: TO[] = [];
@@ -33,7 +33,7 @@ export class SlowResults<TO, TI = any> extends PropsObject<
 
     for await (const item of this.props.getItems()) {
       const output = await this.props.fn(item);
-      
+
       if (output != null) {
         this._results.push(output);
         this.foundResult.emit(output);
@@ -42,6 +42,6 @@ export class SlowResults<TO, TI = any> extends PropsObject<
       this._processedCount.setValue(this._processedCount.value + 1);
     }
 
-    this.didFinish.emit();
+    this.didFinish.emit(this._results);
   }
 }

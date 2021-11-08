@@ -7,7 +7,7 @@ export interface SlowResultsProps<TO, TI = any> {
 export declare class SlowResults<TO, TI = any> extends PropsObject<SlowResultsProps<TO, TI>> {
     private _processedCount;
     readonly processedCount: ReadOnlyObservable<number>;
-    readonly didFinish: TypedEvent<void>;
+    readonly didFinish: TypedEvent<TO[]>;
     readonly foundResult: TypedEvent<TO>;
     private _results;
     constructor(props: SlowResultsProps<TO, TI>);

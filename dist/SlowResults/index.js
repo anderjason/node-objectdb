@@ -42,7 +42,7 @@ class SlowResults extends skytree_1.PropsObject {
             }
             finally { if (e_1) throw e_1.error; }
         }
-        this.didFinish.emit();
+        this.didFinish.emit(this._results);
     }
 }
 exports.SlowResults = SlowResults;
