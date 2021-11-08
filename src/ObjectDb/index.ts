@@ -23,6 +23,7 @@ import {
   propertyGivenDefinition,
 } from "../Property";
 import { SelectProperty } from "../Property/Select/SelectProperty";
+import { SlowResults } from "../SlowResults";
 
 export interface Order {
   key: string;
@@ -348,13 +349,15 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   async writeProperty(definition: PropertyDefinition): Promise<void> {
     let property: Property;
-    
+
     switch (definition.propertyType) {
       case "select":
         property = await SelectProperty.writeDefinition(this._db, definition);
         break;
       default:
-        throw new Error(`Unsupported property type '${definition.propertyType}'`);
+        throw new Error(
+          `Unsupported property type '${definition.propertyType}'`
+        );
     }
 
     this._propertyByKey.set(definition.key, property);
@@ -413,6 +416,28 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
 
     console.log("Done rebuilding metadata");
+  }
+
+  toBucketsGivenEntryKey(entryKey: string): SlowResults<BucketIdentifier> {
+    const self = this;
+    async function* getItems() {
+      const dimensions = await self.toDimensions();
+      for (const dimension of dimensions) {
+        const buckets = await dimension.toBuckets();
+        
+        for (const bucket of buckets) {
+          yield bucket;
+        }
+      }
+    }
+
+    return new SlowResults({
+      getItems,
+      fn: async (bucket) => {
+        const hasItem = await bucket.hasEntryKey(entryKey);
+        return hasItem ? bucket.identifier : undefined;
+      },
+    });
   }
 
   async toOptionalDimensionGivenKey(
