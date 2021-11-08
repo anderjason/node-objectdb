@@ -410,7 +410,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     timer.stop();
   }
 
-  async * rebuildMetadata(): AsyncGenerator<void> {
+  async * rebuildMetadata(): AsyncGenerator<any> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
     const entryKeys = this.allEntryKeys();

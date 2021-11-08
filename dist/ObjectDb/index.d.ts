@@ -60,7 +60,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toOptionalPropertyGivenKey(key: string): Promise<Property | undefined>;
     toProperties(): Promise<Property[]>;
     rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
-    rebuildMetadata(): AsyncGenerator<void>;
+    rebuildMetadata(): AsyncGenerator<any>;
     toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier>;
     toOptionalDimensionGivenKey(dimensionKey: string): Promise<Dimension<T> | undefined>;
     toOptionalBucketGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<Bucket | undefined>;
