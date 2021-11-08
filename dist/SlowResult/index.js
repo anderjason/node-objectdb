@@ -11,9 +11,9 @@ exports.SlowResult = void 0;
 const observable_1 = require("@anderjason/observable");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
-class SlowResult extends skytree_1.PropsObject {
-    constructor(props) {
-        super(props);
+class SlowResult extends skytree_1.Actor {
+    constructor() {
+        super(...arguments);
         this.key = util_1.StringUtil.stringOfRandomCharacters(8);
         this._status = observable_1.Observable.givenValue("busy");
         this.status = observable_1.ReadOnlyObservable.givenObservable(this._status);
@@ -21,7 +21,6 @@ class SlowResult extends skytree_1.PropsObject {
         this.error = new observable_1.TypedEvent();
         this._results = [];
         this._errors = [];
-        this.run();
     }
     get results() {
         return this._results;
@@ -32,6 +31,11 @@ class SlowResult extends skytree_1.PropsObject {
     get totalCount() {
         return undefined;
     }
+    onActivate() {
+        setTimeout(() => {
+            this.run();
+        }, 1);
+    }
     async run() {
         var e_1, _a;
         this._status.setValue("busy");
@@ -39,8 +43,17 @@ class SlowResult extends skytree_1.PropsObject {
         try {
             for (var _b = __asyncValues(this.props.getItems()), _c; _c = await _b.next(), !_c.done;) {
                 const item = _c.value;
+                if (this.isActive == false) {
+                    console.log("SlowResult cancelled 1");
+                    break;
+                }
                 try {
                     const output = await this.props.fn(item);
+                    // @ts-ignore
+                    if (this.isActive == false) {
+                        console.log("SlowResult cancelled 2");
+                        break;
+                    }
                     if (output != null) {
                         this._results.push(output);
                         this.foundResult.emit(output);

@@ -1,10 +1,10 @@
 import {
   Observable,
   ReadOnlyObservable,
-  TypedEvent,
+  TypedEvent
 } from "@anderjason/observable";
 import { StringUtil } from "@anderjason/util";
-import { PropsObject } from "skytree";
+import { Actor } from "skytree";
 
 export interface SlowResultProps<TO, TI = any> {
   getItems: () => AsyncGenerator<TI>;
@@ -13,7 +13,7 @@ export interface SlowResultProps<TO, TI = any> {
 
 export type SlowResultStatus = "busy" | "done" | "error";
 
-export class SlowResult<TO, TI = any> extends PropsObject<
+export class SlowResult<TO, TI = any> extends Actor<
   SlowResultProps<TO, TI>
 > {
   readonly key = StringUtil.stringOfRandomCharacters(8);
@@ -38,10 +38,10 @@ export class SlowResult<TO, TI = any> extends PropsObject<
     return undefined;
   }
 
-  constructor(props: SlowResultProps<TO, TI>) {
-    super(props);
-
-    this.run();
+  onActivate() {
+    setTimeout(() => {
+      this.run();
+    }, 1);
   }
 
   private async run() {
@@ -49,8 +49,19 @@ export class SlowResult<TO, TI = any> extends PropsObject<
     this._results = [];
 
     for await (const item of this.props.getItems()) {
+      if (this.isActive == false) {
+        console.log("SlowResult cancelled 1");
+        break;
+      }
+
       try {
         const output = await this.props.fn(item);
+
+        // @ts-ignore
+        if (this.isActive == false) {
+          console.log("SlowResult cancelled 2");
+          break;
+        }
 
         if (output != null) {
           this._results.push(output);
