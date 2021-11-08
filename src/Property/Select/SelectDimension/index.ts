@@ -71,30 +71,22 @@ export class SelectDimension<T>
     });
   }
 
-  async toBucketIdentifiers(): Promise<BucketIdentifier[]> {
-    return this.props.property.definition.options.map((option) => {
-      return {
+  async *toBucketIdentifiers(): AsyncGenerator<BucketIdentifier> {
+    for (const option of this.props.property.definition.options) {
+      yield {
         dimensionKey: this.key,
         bucketKey: option.key,
         bucketLabel: option.label,
-      };
-    });
+      }
+    }
   }
 
-  async toBuckets(): Promise<Bucket[]> {
-    const bucketIdentifiers = await this.toBucketIdentifiers();
-
-    const result: Bucket[] = [];
-    
-    const timer2 = this._stopwatch.start("spd-toBuckets-loop");
-    for (const identifier of bucketIdentifiers) {
+  async *toBuckets(): AsyncGenerator<Bucket> {
+    for await (const identifier of this.toBucketIdentifiers()) {
       const bucket = await this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel);
 
-      result.push(bucket);      
+      yield bucket;
     }
-    timer2.stop();
-
-    return result;
   }
 
   async deleteEntryKey(entryKey: string): Promise<void> {

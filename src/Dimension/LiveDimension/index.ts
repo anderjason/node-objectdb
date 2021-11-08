@@ -45,7 +45,10 @@ export class LiveDimension<T>
             .toArray();
 
           const values = entries.map((e) => {
-            return ObjectUtil.optionalValueAtPathGivenObject(e, params.valuePath);
+            return ObjectUtil.optionalValueAtPathGivenObject(
+              e,
+              params.valuePath
+            );
           });
 
           const uniqueValues = Array.from(new Set(values));
@@ -97,8 +100,11 @@ export class LiveDimension<T>
       mongoFilterGivenBucketIdentifier: (
         bucketIdentifier: BucketIdentifier
       ) => {
-        const key = bucketIdentifier.bucketKey
-        const value = params.mongoValueGivenBucketKey != null ? params.mongoValueGivenBucketKey(key) : key;
+        const key = bucketIdentifier.bucketKey;
+        const value =
+          params.mongoValueGivenBucketKey != null
+            ? params.mongoValueGivenBucketKey(key)
+            : key;
 
         return {
           [fullPropertyName]: value,
@@ -140,31 +146,22 @@ export class LiveDimension<T>
     });
   }
 
-  async toBucketIdentifiers(): Promise<BucketIdentifier[]> {
-    const timer = this._stopwatch.start("ld-allBucketIdentifiers");
+  async *toBucketIdentifiers(): AsyncGenerator<BucketIdentifier> {
+    // TODO optimize
     const bucketIdentifiers = await this.props.allBucketIdentifiers(this._db);
-    timer.stop();
-    return bucketIdentifiers;
+    for (const identifier of bucketIdentifiers) {
+      yield identifier;
+    }
   }
 
-  async toBuckets(): Promise<LiveBucket<T>[]> {
-    const bucketIdentifiers = await this.toBucketIdentifiers();
-
-    const result: LiveBucket<T>[] = [];
-
-    const timer2 = this._stopwatch.start("ld-toBuckets-loop");
-    for (const identifier of bucketIdentifiers) {
-      result.push(
-        new LiveBucket({
-          identifier,
-          db: this._db,
-          mongoFilter: this.props.mongoFilterGivenBucketIdentifier(identifier),
-        })
-      );
+  async *toBuckets(): AsyncGenerator<LiveBucket<T>> {
+    for await (const identifier of this.toBucketIdentifiers()) {
+      yield new LiveBucket({
+        identifier,
+        db: this._db,
+        mongoFilter: this.props.mongoFilterGivenBucketIdentifier(identifier),
+      });
     }
-    timer2.stop();
-
-    return result;
   }
 
   async deleteEntryKey(entryKey: string): Promise<void> {

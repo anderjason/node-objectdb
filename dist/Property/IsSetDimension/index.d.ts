@@ -15,7 +15,7 @@ export declare class IsSetDimension<T> extends PropsObject<IsSetDimensionProps> 
     toOptionalBucketGivenKey(bucketKey: string, bucketLabel?: string): Promise<Bucket | undefined>;
     deleteBucketKey(bucketKey: string): Promise<void>;
     toBucketIdentifiers(): Promise<BucketIdentifier[]>;
-    toBuckets(): Promise<Bucket[]>;
+    toBuckets(): AsyncGenerator<Bucket>;
     deleteEntryKey(entryKey: string): Promise<void>;
     rebuildEntry(entry: Entry<T>): Promise<void>;
 }

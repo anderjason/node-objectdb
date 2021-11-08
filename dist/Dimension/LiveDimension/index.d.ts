@@ -26,8 +26,8 @@ export declare class LiveDimension<T> extends PropsObject<LiveDimensionProps<T>>
     get label(): string;
     init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
     toOptionalBucketGivenKey(bucketKey: string, bucketLabel?: string): Promise<Bucket | undefined>;
-    toBucketIdentifiers(): Promise<BucketIdentifier[]>;
-    toBuckets(): Promise<LiveBucket<T>[]>;
+    toBucketIdentifiers(): AsyncGenerator<BucketIdentifier>;
+    toBuckets(): AsyncGenerator<LiveBucket<T>>;
     deleteEntryKey(entryKey: string): Promise<void>;
     rebuildEntry(entry: Entry<T>): Promise<void>;
 }

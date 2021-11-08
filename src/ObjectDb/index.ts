@@ -60,29 +60,36 @@ interface CacheData {
   entryKeys: string[];
 }
 
-async function* allEntryKeys(db: MongoDb): AsyncGenerator<string> {
-  const entries = db
-      .collection<PortableEntry<any>>("entries")
-      .find(
-        {},
-        {
-          projection: { key: 1 },
-        }
-      );
-
-      for await (const document of entries) {
-        yield document.key;
-      }
-}
-
-async function arrayGivenAsyncIterable<T>(asyncIterator: AsyncIterable<T>): Promise<T[]> {
+export async function arrayGivenAsyncIterable<T>(
+  asyncIterable: AsyncIterable<T>
+): Promise<T[]> {
   const result: T[] = [];
 
-  for await (const item of asyncIterator) {
-    result.push(item); 
+  for await (const item of asyncIterable) {
+    result.push(item);
   }
 
   return result;
+}
+
+export async function countGivenAsyncIterable<T>(
+  asyncIterable: AsyncIterable<T>
+): Promise<number> {
+  let result: number = 0;
+
+  for await (const item of asyncIterable) {
+    result += 1;
+  }
+
+  return result;
+}
+
+export async function optionalFirstGivenAsyncIterable<T>(
+  asyncIterable: AsyncIterable<T>
+): Promise<T> {
+  const iterator = asyncIterable[Symbol.asyncIterator]();
+  const r = await iterator.next();
+  return r.value;
 }
 
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
@@ -168,11 +175,22 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     // console.log(`ObjectDb is idle in ${this.props.label}`);
   }
 
-  private allEntryKeys(): AsyncGenerator<string> {
-    return allEntryKeys(this._db);
+  private async *allEntryKeys(): AsyncGenerator<string> {
+    const entries = this._db.collection<PortableEntry<any>>("entries").find(
+      {},
+      {
+        projection: { key: 1 },
+      }
+    );
+
+    for await (const document of entries) {
+      yield document.key;
+    }
   }
 
-  async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
+  async *toEntryKeys(
+    options: ObjectDbReadOptions = {}
+  ): AsyncGenerator<string> {
     const now = Instant.ofNow();
 
     let entryKeys: string[] = undefined;
@@ -259,7 +277,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const result = entryKeys.slice(start, end);
 
-    return result;
+    for (const i of result) {
+      yield i;
+    }
   }
 
   // TC: O(N)
@@ -272,42 +292,35 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async hasEntry(entryKey: string): Promise<boolean> {
-    const keys = await this.toEntryKeys();
+    const keys = await arrayGivenAsyncIterable(this.toEntryKeys());
     return keys.includes(entryKey);
   }
 
   async toEntryCount(filter?: BucketIdentifier[]): Promise<number> {
-    const keys = await this.toEntryKeys({
-      filter,
-    });
-
-    return keys.length;
+    return countGivenAsyncIterable(
+      this.toEntryKeys({
+        filter,
+      })
+    );
   }
 
-  async toEntries(options: ObjectDbReadOptions = {}): Promise<Entry<T>[]> {
-    const entryKeys = await this.toEntryKeys(options);
-
-    const entries: Entry<T>[] = [];
-
-    for (const entryKey of entryKeys) {
-      const result = await this.toOptionalEntryGivenKey(entryKey);
-      if (result != null) {
-        entries.push(result);
-      }
+  async *toEntries(
+    options: ObjectDbReadOptions = {}
+  ): AsyncGenerator<Entry<T>> {
+    for await (const entryKey of this.toEntryKeys(options)) {
+      yield this.toOptionalEntryGivenKey(entryKey);
     }
-
-    return entries;
   }
 
   async toOptionalFirstEntry(
     options: ObjectDbReadOptions = {}
   ): Promise<Entry<T> | undefined> {
-    const results = await this.toEntries({
-      ...options,
-      limit: 1,
-    });
-
-    return results[0];
+    return optionalFirstGivenAsyncIterable(
+      this.toEntries({
+        ...options,
+        limit: 1,
+      })
+    );
   }
 
   async toEntryGivenKey(entryKey: string): Promise<Entry<T>> {
@@ -410,7 +423,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     timer.stop();
   }
 
-  async * rebuildMetadata(): AsyncGenerator<any> {
+  async *rebuildMetadata(): AsyncGenerator<void> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
     const entryKeys = this.allEntryKeys();
@@ -426,21 +439,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     console.log("Done rebuilding metadata");
   }
 
-  toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier> {
-    const self = this;
-    async function* getItems() {
-      const dimensions = await self.toDimensions();
-      for (const dimension of dimensions) {
-        const buckets = await dimension.toBuckets();
-
-        for (const bucket of buckets) {
-          yield bucket;
-        }
+  async *toBuckets(): AsyncGenerator<Bucket> {
+    const dimensions = await this.toDimensions();
+    for await (const dimension of dimensions) {
+      for await (const bucket of dimension.toBuckets()) {
+        yield bucket;
       }
     }
+  }
 
+  toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier> {
     return new SlowResult({
-      getItems,
+      getItems: () => this.toBuckets(),
       fn: async (bucket) => {
         const hasItem = await bucket.hasEntryKey(entryKey);
         return hasItem ? bucket.identifier : undefined;
@@ -469,7 +479,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return undefined;
     }
 
-    return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey, bucketIdentifier.bucketLabel);
+    return dimension.toOptionalBucketGivenKey(
+      bucketIdentifier.bucketKey,
+      bucketIdentifier.bucketLabel
+    );
   }
 
   async writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void> {

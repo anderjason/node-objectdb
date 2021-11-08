@@ -7,12 +7,12 @@ export interface Dimension<T> {
   readonly label: string;
   
   init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
-
+  
   deleteEntryKey(entryKey: string): Promise<void>;
   rebuildEntry(entry: Entry<T>): Promise<void>;
   
   toOptionalBucketGivenKey(bucketKey: string, bucketLabel?: string): Promise<Bucket | undefined>;
-  toBuckets(): Promise<Bucket[]>;
+  toBuckets(): AsyncGenerator<Bucket>;
 }
 
 export interface BucketIdentifier {

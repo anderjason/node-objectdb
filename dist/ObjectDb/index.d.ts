@@ -30,6 +30,9 @@ export interface EntryChange<T> {
     oldData?: T;
     newData?: T;
 }
+export declare function arrayGivenAsyncIterable<T>(asyncIterable: AsyncIterable<T>): Promise<T[]>;
+export declare function countGivenAsyncIterable<T>(asyncIterable: AsyncIterable<T>): Promise<number>;
+export declare function optionalFirstGivenAsyncIterable<T>(asyncIterable: AsyncIterable<T>): Promise<T>;
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly collectionDidChange: TypedEvent<void>;
     readonly entryWillChange: TypedEvent<EntryChange<T>>;
@@ -46,11 +49,11 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private load;
     ensureIdle(): Promise<void>;
     private allEntryKeys;
-    toEntryKeys(options?: ObjectDbReadOptions): Promise<string[]>;
+    toEntryKeys(options?: ObjectDbReadOptions): AsyncGenerator<string>;
     forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void>;
     hasEntry(entryKey: string): Promise<boolean>;
     toEntryCount(filter?: BucketIdentifier[]): Promise<number>;
-    toEntries(options?: ObjectDbReadOptions): Promise<Entry<T>[]>;
+    toEntries(options?: ObjectDbReadOptions): AsyncGenerator<Entry<T>>;
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Promise<Entry<T> | undefined>;
     toEntryGivenKey(entryKey: string): Promise<Entry<T>>;
     toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined>;
@@ -60,7 +63,8 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toOptionalPropertyGivenKey(key: string): Promise<Property | undefined>;
     toProperties(): Promise<Property[]>;
     rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
-    rebuildMetadata(): AsyncGenerator<any>;
+    rebuildMetadata(): AsyncGenerator<void>;
+    toBuckets(): AsyncGenerator<Bucket>;
     toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier>;
     toOptionalDimensionGivenKey(dimensionKey: string): Promise<Dimension<T> | undefined>;
     toOptionalBucketGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<Bucket | undefined>;

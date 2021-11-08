@@ -89,23 +89,18 @@ export class IsSetDimension<T>
     ];
   }
 
-  async toBuckets(): Promise<Bucket[]> {
-    const bucketIdentifiers = await this.toBucketIdentifiers();
-
-    const result: Bucket[] = [];
-
-    const timer2 = this._stopwatch.start("spd-toBuckets-loop");
-    for (const identifier of bucketIdentifiers) {
+  async *toBuckets(): AsyncGenerator<Bucket> {
+    // TODO optimize
+    const identifiers = await this.toBucketIdentifiers();
+    
+    for (const identifier of identifiers) {
       const bucket = await this.toOptionalBucketGivenKey(
         identifier.bucketKey,
         identifier.bucketLabel
       );
 
-      result.push(bucket);
+      yield bucket;
     }
-    timer2.stop();
-
-    return result;
   }
 
   async deleteEntryKey(entryKey: string): Promise<void> {

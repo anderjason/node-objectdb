@@ -1,6 +1,6 @@
 import { Test } from "@anderjason/tests";
 import { StringUtil, ValuePath } from "@anderjason/util";
-import { ObjectDb } from ".";
+import { arrayGivenAsyncIterable, ObjectDb } from ".";
 import { MaterializedDimension } from "../Dimension/MaterializedDimension";
 import { LiveDimension } from "../Dimension/LiveDimension";
 import { MaterializedBucket } from "../Dimension/MaterializedDimension/MaterializedBucket";
@@ -447,7 +447,7 @@ Test.define(
         },
       ];
 
-      const bucketIdentifiers = await dim.toBucketIdentifiers();
+      const bucketIdentifiers = await arrayGivenAsyncIterable(dim.toBucketIdentifiers());
 
       Test.assertIsDeepEqual(
         bucketIdentifiers,
@@ -507,7 +507,7 @@ Test.define(
         };
       });
 
-      const bucketIdentifiers = await dim.toBucketIdentifiers();
+      const bucketIdentifiers = await arrayGivenAsyncIterable(dim.toBucketIdentifiers());
 
       Test.assertIsDeepEqual(
         bucketIdentifiers,
@@ -518,15 +518,17 @@ Test.define(
       const bucket = await dim.toOptionalBucketGivenKey("5");
       Test.assert(bucket != null, "bucket should not be null");
 
-      const entries = await objectDb.toEntries({
-        filter: [
-          {
-            dimensionKey: "number",
-            bucketKey: "5",
-            bucketLabel: "5",
-          },
-        ],
-      });
+      const entries = await arrayGivenAsyncIterable(
+        objectDb.toEntries({
+          filter: [
+            {
+              dimensionKey: "number",
+              bucketKey: "5",
+              bucketLabel: "5",
+            },
+          ],
+        })
+      );
       Test.assert(entries.length == 1, "entries should have one entry");
       Test.assert(
         entries.some((e) => e.key == odd.key),
@@ -538,30 +540,29 @@ Test.define(
   }
 );
 
-Test.define(
-  "ObjectDb live dimensions are case insensitive",
-  async () => {
-    await usingTestDb(async (db) => {
-      const dim = LiveDimension.ofEntry<TestEntryData>({
-        dimensionKey: "message",
-        dimensionLabel: "Message",
-        valuePath: ValuePath.givenParts(["data", "message"]),
-        valueType: "single"
-      });
+Test.define("ObjectDb live dimensions are case insensitive", async () => {
+  await usingTestDb(async (db) => {
+    const dim = LiveDimension.ofEntry<TestEntryData>({
+      dimensionKey: "message",
+      dimensionLabel: "Message",
+      valuePath: ValuePath.givenParts(["data", "message"]),
+      valueType: "single",
+    });
 
-      const objectDb = new ObjectDb<TestEntryData>({
-        label: "testDb",
-        db,
-        dimensions: [dim],
-      });
-      objectDb.activate();
-      await objectDb.ensureIdle();
+    const objectDb = new ObjectDb<TestEntryData>({
+      label: "testDb",
+      db,
+      dimensions: [dim],
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
 
-      const apple = await objectDb.writeEntryData({
-        message: "Apple"
-      });
+    const apple = await objectDb.writeEntryData({
+      message: "Apple",
+    });
 
-      const entries = await objectDb.toEntries({
+    const entries = await arrayGivenAsyncIterable(
+      objectDb.toEntries({
         filter: [
           {
             dimensionKey: "message",
@@ -569,15 +570,15 @@ Test.define(
             bucketLabel: "Apple",
           },
         ],
-      });
+      })
+    );
 
-      Test.assert(entries.length == 1, "entries should have one entry");
-      Test.assert(
-        entries.some((e) => e.key == apple.key),
-        "entries should have apple"
-      );
+    Test.assert(entries.length == 1, "entries should have one entry");
+    Test.assert(
+      entries.some((e) => e.key == apple.key),
+      "entries should have apple"
+    );
 
-      objectDb.deactivate();
-    });
-  }
-);
+    objectDb.deactivate();
+  });
+});

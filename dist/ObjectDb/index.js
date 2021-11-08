@@ -19,7 +19,7 @@ var __asyncGenerator = (this && this.__asyncGenerator) || function (thisArg, _ar
     function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ObjectDb = void 0;
+exports.ObjectDb = exports.optionalFirstGivenAsyncIterable = exports.countGivenAsyncIterable = exports.arrayGivenAsyncIterable = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
 const observable_1 = require("@anderjason/observable");
 const time_1 = require("@anderjason/time");
@@ -30,47 +30,50 @@ const Entry_1 = require("../Entry");
 const Property_1 = require("../Property");
 const SelectProperty_1 = require("../Property/Select/SelectProperty");
 const SlowResult_1 = require("../SlowResult");
-function allEntryKeys(db) {
-    return __asyncGenerator(this, arguments, function* allEntryKeys_1() {
-        var e_1, _a;
-        const entries = db
-            .collection("entries")
-            .find({}, {
-            projection: { key: 1 },
-        });
-        try {
-            for (var entries_1 = __asyncValues(entries), entries_1_1; entries_1_1 = yield __await(entries_1.next()), !entries_1_1.done;) {
-                const document = entries_1_1.value;
-                yield yield __await(document.key);
-            }
-        }
-        catch (e_1_1) { e_1 = { error: e_1_1 }; }
-        finally {
-            try {
-                if (entries_1_1 && !entries_1_1.done && (_a = entries_1.return)) yield __await(_a.call(entries_1));
-            }
-            finally { if (e_1) throw e_1.error; }
-        }
-    });
-}
-async function arrayGivenAsyncIterable(asyncIterator) {
-    var e_2, _a;
+async function arrayGivenAsyncIterable(asyncIterable) {
+    var e_1, _a;
     const result = [];
     try {
-        for (var asyncIterator_1 = __asyncValues(asyncIterator), asyncIterator_1_1; asyncIterator_1_1 = await asyncIterator_1.next(), !asyncIterator_1_1.done;) {
-            const item = asyncIterator_1_1.value;
+        for (var asyncIterable_1 = __asyncValues(asyncIterable), asyncIterable_1_1; asyncIterable_1_1 = await asyncIterable_1.next(), !asyncIterable_1_1.done;) {
+            const item = asyncIterable_1_1.value;
             result.push(item);
+        }
+    }
+    catch (e_1_1) { e_1 = { error: e_1_1 }; }
+    finally {
+        try {
+            if (asyncIterable_1_1 && !asyncIterable_1_1.done && (_a = asyncIterable_1.return)) await _a.call(asyncIterable_1);
+        }
+        finally { if (e_1) throw e_1.error; }
+    }
+    return result;
+}
+exports.arrayGivenAsyncIterable = arrayGivenAsyncIterable;
+async function countGivenAsyncIterable(asyncIterable) {
+    var e_2, _a;
+    let result = 0;
+    try {
+        for (var asyncIterable_2 = __asyncValues(asyncIterable), asyncIterable_2_1; asyncIterable_2_1 = await asyncIterable_2.next(), !asyncIterable_2_1.done;) {
+            const item = asyncIterable_2_1.value;
+            result += 1;
         }
     }
     catch (e_2_1) { e_2 = { error: e_2_1 }; }
     finally {
         try {
-            if (asyncIterator_1_1 && !asyncIterator_1_1.done && (_a = asyncIterator_1.return)) await _a.call(asyncIterator_1);
+            if (asyncIterable_2_1 && !asyncIterable_2_1.done && (_a = asyncIterable_2.return)) await _a.call(asyncIterable_2);
         }
         finally { if (e_2) throw e_2.error; }
     }
     return result;
 }
+exports.countGivenAsyncIterable = countGivenAsyncIterable;
+async function optionalFirstGivenAsyncIterable(asyncIterable) {
+    const iterator = asyncIterable[Symbol.asyncIterator]();
+    const r = await iterator.next();
+    return r.value;
+}
+exports.optionalFirstGivenAsyncIterable = optionalFirstGivenAsyncIterable;
 class ObjectDb extends skytree_1.Actor {
     constructor() {
         super(...arguments);
@@ -133,76 +136,98 @@ class ObjectDb extends skytree_1.Actor {
         // console.log(`ObjectDb is idle in ${this.props.label}`);
     }
     allEntryKeys() {
-        return allEntryKeys(this._db);
-    }
-    async toEntryKeys(options = {}) {
-        var _a;
-        const now = time_1.Instant.ofNow();
-        let entryKeys = undefined;
-        await this.ensureIdle();
-        let fullCacheKey = undefined;
-        if (options.cacheKey != null) {
-            const bucketIdentifiers = (_a = options.filter) !== null && _a !== void 0 ? _a : [];
-            const buckets = [];
-            for (const bucketIdentifier of bucketIdentifiers) {
-                const bucket = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
-                if (bucket != null) {
-                    buckets.push(bucket);
-                }
-            }
-            const hashCodes = buckets.map((bucket) => (0, Dimension_1.hashCodeGivenBucketIdentifier)(bucket.identifier));
-            const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
-            fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
-        }
-        if (fullCacheKey != null) {
-            const cacheData = this._caches.get(fullCacheKey);
-            if (cacheData != null) {
-                cacheData.expiresAt = now.withAddedDuration(time_1.Duration.givenSeconds(300));
-                entryKeys = cacheData.entryKeys;
-            }
-        }
-        if (entryKeys == null) {
-            if (util_1.ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
-                entryKeys = await arrayGivenAsyncIterable(this.allEntryKeys());
-            }
-            else {
-                const sets = [];
-                for (const bucketIdentifier of options.filter) {
-                    const bucket = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
-                    if (bucket == null) {
-                        sets.push(new Set());
-                    }
-                    else {
-                        const entryKeys = await bucket.toEntryKeys();
-                        sets.push(entryKeys);
-                    }
-                }
-                entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
-            }
-            if (options.shuffle == true) {
-                entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (e) => Math.random(), "ascending");
-            }
-        }
-        if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
-            this._caches.set(fullCacheKey, {
-                entryKeys,
-                expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(300)),
+        return __asyncGenerator(this, arguments, function* allEntryKeys_1() {
+            var e_3, _a;
+            const entries = this._db.collection("entries").find({}, {
+                projection: { key: 1 },
             });
-        }
-        let start = 0;
-        let end = entryKeys.length;
-        if (options.offset != null) {
-            start = parseInt(options.offset, 10);
-        }
-        if (options.limit != null) {
-            end = Math.min(end, start + parseInt(options.limit, 10));
-        }
-        const result = entryKeys.slice(start, end);
-        return result;
+            try {
+                for (var entries_1 = __asyncValues(entries), entries_1_1; entries_1_1 = yield __await(entries_1.next()), !entries_1_1.done;) {
+                    const document = entries_1_1.value;
+                    yield yield __await(document.key);
+                }
+            }
+            catch (e_3_1) { e_3 = { error: e_3_1 }; }
+            finally {
+                try {
+                    if (entries_1_1 && !entries_1_1.done && (_a = entries_1.return)) yield __await(_a.call(entries_1));
+                }
+                finally { if (e_3) throw e_3.error; }
+            }
+        });
+    }
+    toEntryKeys(options = {}) {
+        var _a;
+        return __asyncGenerator(this, arguments, function* toEntryKeys_1() {
+            const now = time_1.Instant.ofNow();
+            let entryKeys = undefined;
+            yield __await(this.ensureIdle());
+            let fullCacheKey = undefined;
+            if (options.cacheKey != null) {
+                const bucketIdentifiers = (_a = options.filter) !== null && _a !== void 0 ? _a : [];
+                const buckets = [];
+                for (const bucketIdentifier of bucketIdentifiers) {
+                    const bucket = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
+                    if (bucket != null) {
+                        buckets.push(bucket);
+                    }
+                }
+                const hashCodes = buckets.map((bucket) => (0, Dimension_1.hashCodeGivenBucketIdentifier)(bucket.identifier));
+                const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
+                fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
+            }
+            if (fullCacheKey != null) {
+                const cacheData = this._caches.get(fullCacheKey);
+                if (cacheData != null) {
+                    cacheData.expiresAt = now.withAddedDuration(time_1.Duration.givenSeconds(300));
+                    entryKeys = cacheData.entryKeys;
+                }
+            }
+            if (entryKeys == null) {
+                if (util_1.ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
+                    entryKeys = yield __await(arrayGivenAsyncIterable(this.allEntryKeys()));
+                }
+                else {
+                    const sets = [];
+                    for (const bucketIdentifier of options.filter) {
+                        const bucket = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
+                        if (bucket == null) {
+                            sets.push(new Set());
+                        }
+                        else {
+                            const entryKeys = yield __await(bucket.toEntryKeys());
+                            sets.push(entryKeys);
+                        }
+                    }
+                    entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
+                }
+                if (options.shuffle == true) {
+                    entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (e) => Math.random(), "ascending");
+                }
+            }
+            if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
+                this._caches.set(fullCacheKey, {
+                    entryKeys,
+                    expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(300)),
+                });
+            }
+            let start = 0;
+            let end = entryKeys.length;
+            if (options.offset != null) {
+                start = parseInt(options.offset, 10);
+            }
+            if (options.limit != null) {
+                end = Math.min(end, start + parseInt(options.limit, 10));
+            }
+            const result = entryKeys.slice(start, end);
+            for (const i of result) {
+                yield yield __await(i);
+            }
+        });
     }
     // TC: O(N)
     async forEach(fn) {
-        var e_3, _a;
+        var e_4, _a;
         const entryKeys = this.allEntryKeys();
         try {
             for (var entryKeys_1 = __asyncValues(entryKeys), entryKeys_1_1; entryKeys_1_1 = await entryKeys_1.next(), !entryKeys_1_1.done;) {
@@ -211,38 +236,43 @@ class ObjectDb extends skytree_1.Actor {
                 await fn(entry);
             }
         }
-        catch (e_3_1) { e_3 = { error: e_3_1 }; }
+        catch (e_4_1) { e_4 = { error: e_4_1 }; }
         finally {
             try {
                 if (entryKeys_1_1 && !entryKeys_1_1.done && (_a = entryKeys_1.return)) await _a.call(entryKeys_1);
             }
-            finally { if (e_3) throw e_3.error; }
+            finally { if (e_4) throw e_4.error; }
         }
     }
     async hasEntry(entryKey) {
-        const keys = await this.toEntryKeys();
+        const keys = await arrayGivenAsyncIterable(this.toEntryKeys());
         return keys.includes(entryKey);
     }
     async toEntryCount(filter) {
-        const keys = await this.toEntryKeys({
+        return countGivenAsyncIterable(this.toEntryKeys({
             filter,
-        });
-        return keys.length;
+        }));
     }
-    async toEntries(options = {}) {
-        const entryKeys = await this.toEntryKeys(options);
-        const entries = [];
-        for (const entryKey of entryKeys) {
-            const result = await this.toOptionalEntryGivenKey(entryKey);
-            if (result != null) {
-                entries.push(result);
+    toEntries(options = {}) {
+        return __asyncGenerator(this, arguments, function* toEntries_1() {
+            var e_5, _a;
+            try {
+                for (var _b = __asyncValues(this.toEntryKeys(options)), _c; _c = yield __await(_b.next()), !_c.done;) {
+                    const entryKey = _c.value;
+                    yield yield __await(this.toOptionalEntryGivenKey(entryKey));
+                }
             }
-        }
-        return entries;
+            catch (e_5_1) { e_5 = { error: e_5_1 }; }
+            finally {
+                try {
+                    if (_c && !_c.done && (_a = _b.return)) yield __await(_a.call(_b));
+                }
+                finally { if (e_5) throw e_5.error; }
+            }
+        });
     }
     async toOptionalFirstEntry(options = {}) {
-        const results = await this.toEntries(Object.assign(Object.assign({}, options), { limit: 1 }));
-        return results[0];
+        return optionalFirstGivenAsyncIterable(this.toEntries(Object.assign(Object.assign({}, options), { limit: 1 })));
     }
     async toEntryGivenKey(entryKey) {
         const result = await this.toOptionalEntryGivenKey(entryKey);
@@ -315,7 +345,7 @@ class ObjectDb extends skytree_1.Actor {
     }
     rebuildMetadata() {
         return __asyncGenerator(this, arguments, function* rebuildMetadata_1() {
-            var e_4, _a;
+            var e_6, _a;
             console.log(`Rebuilding metadata for ${this.props.label}...`);
             const entryKeys = this.allEntryKeys();
             try {
@@ -328,31 +358,50 @@ class ObjectDb extends skytree_1.Actor {
                     yield __await(this.rebuildMetadataGivenEntry(entry));
                 }
             }
-            catch (e_4_1) { e_4 = { error: e_4_1 }; }
+            catch (e_6_1) { e_6 = { error: e_6_1 }; }
             finally {
                 try {
                     if (entryKeys_2_1 && !entryKeys_2_1.done && (_a = entryKeys_2.return)) yield __await(_a.call(entryKeys_2));
                 }
-                finally { if (e_4) throw e_4.error; }
+                finally { if (e_6) throw e_6.error; }
             }
             console.log("Done rebuilding metadata");
         });
     }
-    toBucketsGivenEntryKey(entryKey) {
-        const self = this;
-        function getItems() {
-            return __asyncGenerator(this, arguments, function* getItems_1() {
-                const dimensions = yield __await(self.toDimensions());
-                for (const dimension of dimensions) {
-                    const buckets = yield __await(dimension.toBuckets());
-                    for (const bucket of buckets) {
-                        yield yield __await(bucket);
+    toBuckets() {
+        return __asyncGenerator(this, arguments, function* toBuckets_1() {
+            var e_7, _a, e_8, _b;
+            const dimensions = yield __await(this.toDimensions());
+            try {
+                for (var dimensions_1 = __asyncValues(dimensions), dimensions_1_1; dimensions_1_1 = yield __await(dimensions_1.next()), !dimensions_1_1.done;) {
+                    const dimension = dimensions_1_1.value;
+                    try {
+                        for (var _c = (e_8 = void 0, __asyncValues(dimension.toBuckets())), _d; _d = yield __await(_c.next()), !_d.done;) {
+                            const bucket = _d.value;
+                            yield yield __await(bucket);
+                        }
+                    }
+                    catch (e_8_1) { e_8 = { error: e_8_1 }; }
+                    finally {
+                        try {
+                            if (_d && !_d.done && (_b = _c.return)) yield __await(_b.call(_c));
+                        }
+                        finally { if (e_8) throw e_8.error; }
                     }
                 }
-            });
-        }
+            }
+            catch (e_7_1) { e_7 = { error: e_7_1 }; }
+            finally {
+                try {
+                    if (dimensions_1_1 && !dimensions_1_1.done && (_a = dimensions_1.return)) yield __await(_a.call(dimensions_1));
+                }
+                finally { if (e_7) throw e_7.error; }
+            }
+        });
+    }
+    toBucketsGivenEntryKey(entryKey) {
         return new SlowResult_1.SlowResult({
-            getItems,
+            getItems: () => this.toBuckets(),
             fn: async (bucket) => {
                 const hasItem = await bucket.hasEntryKey(entryKey);
                 return hasItem ? bucket.identifier : undefined;

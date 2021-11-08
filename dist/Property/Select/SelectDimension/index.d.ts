@@ -14,8 +14,8 @@ export declare class SelectDimension<T> extends PropsObject<SelectDimensionProps
     init(db: MongoDb, stopwatch: Stopwatch): Promise<void>;
     toOptionalBucketGivenKey(bucketKey: string, bucketLabel?: string): Promise<Bucket | undefined>;
     deleteBucketKey(bucketKey: string): Promise<void>;
-    toBucketIdentifiers(): Promise<BucketIdentifier[]>;
-    toBuckets(): Promise<Bucket[]>;
+    toBucketIdentifiers(): AsyncGenerator<BucketIdentifier>;
+    toBuckets(): AsyncGenerator<Bucket>;
     deleteEntryKey(entryKey: string): Promise<void>;
     rebuildEntry(entry: Entry<T>): Promise<void>;
 }

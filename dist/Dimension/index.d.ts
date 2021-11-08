@@ -7,7 +7,7 @@ export interface Dimension<T> {
     deleteEntryKey(entryKey: string): Promise<void>;
     rebuildEntry(entry: Entry<T>): Promise<void>;
     toOptionalBucketGivenKey(bucketKey: string, bucketLabel?: string): Promise<Bucket | undefined>;
-    toBuckets(): Promise<Bucket[]>;
+    toBuckets(): AsyncGenerator<Bucket>;
 }
 export interface BucketIdentifier {
     dimensionKey: string;

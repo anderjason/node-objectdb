@@ -54,34 +54,23 @@ export class MaterializedDimension<T>
     return new MaterializedBucket({
       identifier: {
         ...bucketRow.identifier,
-        bucketLabel: bucketLabel ?? bucketRow.identifier.bucketLabel
+        bucketLabel: bucketLabel ?? bucketRow.identifier.bucketLabel,
       },
       db: this._db,
     });
   }
 
-  async toBuckets(): Promise<MaterializedBucket<T>[]> {
-    const timer = this._stopwatch.start("md-toBuckets");
-    const bucketRows = await this._db
+  async *toBuckets(): AsyncGenerator<MaterializedBucket<T>> {
+    const bucketRows = this._db
       .collection<any>("buckets")
-      .find({ "identifier.dimensionKey": this.props.key })
-      .toArray();
-    timer.stop();
+      .find({ "identifier.dimensionKey": this.props.key });
 
-    const result: MaterializedBucket<T>[] = [];
-
-    const timer2 = this._stopwatch.start("md-toBuckets-loop");
-    for (const row of bucketRows) {
-      result.push(
-        new MaterializedBucket({
-          identifier: row.identifier,
-          db: this._db,
-        })
-      );
+    for await (const row of bucketRows) {
+      yield new MaterializedBucket({
+        identifier: row.identifier,
+        db: this._db,
+      });
     }
-    timer2.stop();
-
-    return result;
   }
 
   async deleteEntryKey(entryKey: string): Promise<void> {
