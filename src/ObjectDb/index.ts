@@ -23,7 +23,7 @@ import {
   propertyGivenDefinition,
 } from "../Property";
 import { SelectProperty } from "../Property/Select/SelectProperty";
-import { SlowResults } from "../SlowResults";
+import { SlowResult } from "../SlowResult";
 
 export interface Order {
   key: string;
@@ -418,20 +418,20 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     console.log("Done rebuilding metadata");
   }
 
-  toBucketsGivenEntryKey(entryKey: string): SlowResults<BucketIdentifier> {
+  toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier> {
     const self = this;
     async function* getItems() {
       const dimensions = await self.toDimensions();
       for (const dimension of dimensions) {
         const buckets = await dimension.toBuckets();
-        
+
         for (const bucket of buckets) {
           yield bucket;
         }
       }
     }
 
-    return new SlowResults({
+    return new SlowResult({
       getItems,
       fn: async (bucket) => {
         const hasItem = await bucket.hasEntryKey(entryKey);

@@ -23,7 +23,7 @@ const Dimension_1 = require("../Dimension");
 const Entry_1 = require("../Entry");
 const Property_1 = require("../Property");
 const SelectProperty_1 = require("../Property/Select/SelectProperty");
-const SlowResults_1 = require("../SlowResults");
+const SlowResult_1 = require("../SlowResult");
 class ObjectDb extends skytree_1.Actor {
     constructor() {
         super(...arguments);
@@ -288,7 +288,7 @@ class ObjectDb extends skytree_1.Actor {
                 }
             });
         }
-        return new SlowResults_1.SlowResults({
+        return new SlowResult_1.SlowResult({
             getItems,
             fn: async (bucket) => {
                 const hasItem = await bucket.hasEntryKey(entryKey);

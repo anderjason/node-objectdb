@@ -5,7 +5,7 @@ import { Bucket, BucketIdentifier, Dimension } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
 import { Property, PropertyDefinition } from "../Property";
-import { SlowResults } from "../SlowResults";
+import { SlowResult } from "../SlowResult";
 export interface Order {
     key: string;
     direction: "ascending" | "descending";
@@ -61,7 +61,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toProperties(): Promise<Property[]>;
     rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
     rebuildMetadata(): Promise<void>;
-    toBucketsGivenEntryKey(entryKey: string): SlowResults<BucketIdentifier>;
+    toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier>;
     toOptionalDimensionGivenKey(dimensionKey: string): Promise<Dimension<T> | undefined>;
     toOptionalBucketGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<Bucket | undefined>;
     writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void>;

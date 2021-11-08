@@ -7,32 +7,50 @@ var __asyncValues = (this && this.__asyncValues) || function (o) {
     function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SlowResults = void 0;
+exports.SlowResult = void 0;
 const observable_1 = require("@anderjason/observable");
+const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
-class SlowResults extends skytree_1.PropsObject {
+class SlowResult extends skytree_1.PropsObject {
     constructor(props) {
         super(props);
-        this._processedCount = observable_1.Observable.ofEmpty();
-        this.processedCount = observable_1.ReadOnlyObservable.givenObservable(this._processedCount);
-        this.didFinish = new observable_1.TypedEvent();
+        this.key = util_1.StringUtil.stringOfRandomCharacters(8);
+        this._status = observable_1.Observable.givenValue("busy");
+        this.status = observable_1.ReadOnlyObservable.givenObservable(this._status);
         this.foundResult = new observable_1.TypedEvent();
+        this.error = new observable_1.TypedEvent();
         this._results = [];
+        this._errors = [];
         this.run();
+    }
+    get results() {
+        return this._results;
+    }
+    get errors() {
+        return this._errors;
+    }
+    get totalCount() {
+        return undefined;
     }
     async run() {
         var e_1, _a;
-        this._processedCount.setValue(0);
+        this._status.setValue("busy");
         this._results = [];
         try {
             for (var _b = __asyncValues(this.props.getItems()), _c; _c = await _b.next(), !_c.done;) {
                 const item = _c.value;
-                const output = await this.props.fn(item);
-                if (output != null) {
-                    this._results.push(output);
-                    this.foundResult.emit(output);
+                try {
+                    const output = await this.props.fn(item);
+                    if (output != null) {
+                        this._results.push(output);
+                        this.foundResult.emit(output);
+                    }
                 }
-                this._processedCount.setValue(this._processedCount.value + 1);
+                catch (err) {
+                    const error = String(err);
+                    this._errors.push(error);
+                    this.error.emit(error);
+                }
             }
         }
         catch (e_1_1) { e_1 = { error: e_1_1 }; }
@@ -42,8 +60,8 @@ class SlowResults extends skytree_1.PropsObject {
             }
             finally { if (e_1) throw e_1.error; }
         }
-        this.didFinish.emit(this._results);
+        this._status.setValue("done");
     }
 }
-exports.SlowResults = SlowResults;
+exports.SlowResult = SlowResult;
 //# sourceMappingURL=index.js.map
