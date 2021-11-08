@@ -44,14 +44,14 @@ class SlowResult extends skytree_1.Actor {
             for (var _b = __asyncValues(this.props.getItems()), _c; _c = await _b.next(), !_c.done;) {
                 const item = _c.value;
                 if (this.isActive == false) {
-                    console.log("SlowResult cancelled 1");
+                    // cancelled
                     break;
                 }
                 try {
                     const output = await this.props.fn(item);
                     // @ts-ignore
                     if (this.isActive == false) {
-                        console.log("SlowResult cancelled 2");
+                        // cancelled
                         break;
                     }
                     if (output != null) {

@@ -50,7 +50,7 @@ export class SlowResult<TO, TI = any> extends Actor<
 
     for await (const item of this.props.getItems()) {
       if (this.isActive == false) {
-        console.log("SlowResult cancelled 1");
+        // cancelled
         break;
       }
 
@@ -59,7 +59,7 @@ export class SlowResult<TO, TI = any> extends Actor<
 
         // @ts-ignore
         if (this.isActive == false) {
-          console.log("SlowResult cancelled 2");
+          // cancelled
           break;
         }
 
