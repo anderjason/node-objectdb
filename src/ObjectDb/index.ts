@@ -60,6 +60,31 @@ interface CacheData {
   entryKeys: string[];
 }
 
+async function* allEntryKeys(db: MongoDb): AsyncGenerator<string> {
+  const entries = db
+      .collection<PortableEntry<any>>("entries")
+      .find(
+        {},
+        {
+          projection: { key: 1 },
+        }
+      );
+
+      for await (const document of entries) {
+        yield document.key;
+      }
+}
+
+async function arrayGivenAsyncIterable<T>(asyncIterator: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = [];
+
+  for await (const item of asyncIterator) {
+    result.push(item); 
+  }
+
+  return result;
+}
+
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly collectionDidChange = new TypedEvent();
   readonly entryWillChange = new TypedEvent<EntryChange<T>>();
@@ -143,18 +168,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     // console.log(`ObjectDb is idle in ${this.props.label}`);
   }
 
-  private async allEntryKeys(): Promise<string[]> {
-    const entries = await this._db
-      .collection<PortableEntry<T>>("entries")
-      .find(
-        {},
-        {
-          projection: { key: 1 },
-        }
-      )
-      .toArray();
-
-    return entries.map((row) => row.key);
+  private allEntryKeys(): AsyncGenerator<string> {
+    return allEntryKeys(this._db);
   }
 
   async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
@@ -196,7 +211,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (entryKeys == null) {
       if (ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
-        entryKeys = await this.allEntryKeys();
+        entryKeys = await arrayGivenAsyncIterable(this.allEntryKeys());
       } else {
         const sets: Set<string>[] = [];
 
@@ -249,8 +264,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   // TC: O(N)
   async forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void> {
-    const entryKeys = await this.allEntryKeys();
-    for (const entryKey of entryKeys) {
+    const entryKeys = this.allEntryKeys();
+    for await (const entryKey of entryKeys) {
       const entry = await this.toOptionalEntryGivenKey(entryKey);
       await fn(entry);
     }
@@ -395,25 +410,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     timer.stop();
   }
 
-  async rebuildMetadata(): Promise<void> {
+  async * rebuildMetadata(): AsyncGenerator<void> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
-    const totalCount: number = await this._db
-      .collection<PortableEntry<T>>("entries")
-      .countDocuments();
-
-    const benchmark = new Benchmark(
-      totalCount,
-      this.props.rebuildBucketSize,
-      () => {
-        this.stopwatch.report();
+    const entryKeys = this.allEntryKeys();
+    for await (const entryKey of entryKeys) {
+      const entry = await this.toOptionalEntryGivenKey(entryKey);
+      if (entry == null) {
+        continue;
       }
-    );
 
-    await this.forEach(async (entry) => {
-      benchmark.log(`Rebuilding ${entry.key}`);
       await this.rebuildMetadataGivenEntry(entry);
-    });
+    }
 
     console.log("Done rebuilding metadata");
   }

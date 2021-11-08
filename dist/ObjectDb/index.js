@@ -1,4 +1,11 @@
 "use strict";
+var __asyncValues = (this && this.__asyncValues) || function (o) {
+    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+    var m = o[Symbol.asyncIterator], i;
+    return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+    function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+    function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+};
 var __await = (this && this.__await) || function (v) { return this instanceof __await ? (this.v = v, this) : new __await(v); }
 var __asyncGenerator = (this && this.__asyncGenerator) || function (thisArg, _arguments, generator) {
     if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
@@ -18,12 +25,52 @@ const observable_1 = require("@anderjason/observable");
 const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
-const Benchmark_1 = require("../Benchmark");
 const Dimension_1 = require("../Dimension");
 const Entry_1 = require("../Entry");
 const Property_1 = require("../Property");
 const SelectProperty_1 = require("../Property/Select/SelectProperty");
 const SlowResult_1 = require("../SlowResult");
+function allEntryKeys(db) {
+    return __asyncGenerator(this, arguments, function* allEntryKeys_1() {
+        var e_1, _a;
+        const entries = db
+            .collection("entries")
+            .find({}, {
+            projection: { key: 1 },
+        });
+        try {
+            for (var entries_1 = __asyncValues(entries), entries_1_1; entries_1_1 = yield __await(entries_1.next()), !entries_1_1.done;) {
+                const document = entries_1_1.value;
+                yield yield __await(document.key);
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (entries_1_1 && !entries_1_1.done && (_a = entries_1.return)) yield __await(_a.call(entries_1));
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+    });
+}
+async function arrayGivenAsyncIterable(asyncIterator) {
+    var e_2, _a;
+    const result = [];
+    try {
+        for (var asyncIterator_1 = __asyncValues(asyncIterator), asyncIterator_1_1; asyncIterator_1_1 = await asyncIterator_1.next(), !asyncIterator_1_1.done;) {
+            const item = asyncIterator_1_1.value;
+            result.push(item);
+        }
+    }
+    catch (e_2_1) { e_2 = { error: e_2_1 }; }
+    finally {
+        try {
+            if (asyncIterator_1_1 && !asyncIterator_1_1.done && (_a = asyncIterator_1.return)) await _a.call(asyncIterator_1);
+        }
+        finally { if (e_2) throw e_2.error; }
+    }
+    return result;
+}
 class ObjectDb extends skytree_1.Actor {
     constructor() {
         super(...arguments);
@@ -85,14 +132,8 @@ class ObjectDb extends skytree_1.Actor {
         await this._isLoaded.toPromise((v) => v);
         // console.log(`ObjectDb is idle in ${this.props.label}`);
     }
-    async allEntryKeys() {
-        const entries = await this._db
-            .collection("entries")
-            .find({}, {
-            projection: { key: 1 },
-        })
-            .toArray();
-        return entries.map((row) => row.key);
+    allEntryKeys() {
+        return allEntryKeys(this._db);
     }
     async toEntryKeys(options = {}) {
         var _a;
@@ -122,7 +163,7 @@ class ObjectDb extends skytree_1.Actor {
         }
         if (entryKeys == null) {
             if (util_1.ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
-                entryKeys = await this.allEntryKeys();
+                entryKeys = await arrayGivenAsyncIterable(this.allEntryKeys());
             }
             else {
                 const sets = [];
@@ -161,10 +202,21 @@ class ObjectDb extends skytree_1.Actor {
     }
     // TC: O(N)
     async forEach(fn) {
-        const entryKeys = await this.allEntryKeys();
-        for (const entryKey of entryKeys) {
-            const entry = await this.toOptionalEntryGivenKey(entryKey);
-            await fn(entry);
+        var e_3, _a;
+        const entryKeys = this.allEntryKeys();
+        try {
+            for (var entryKeys_1 = __asyncValues(entryKeys), entryKeys_1_1; entryKeys_1_1 = await entryKeys_1.next(), !entryKeys_1_1.done;) {
+                const entryKey = entryKeys_1_1.value;
+                const entry = await this.toOptionalEntryGivenKey(entryKey);
+                await fn(entry);
+            }
+        }
+        catch (e_3_1) { e_3 = { error: e_3_1 }; }
+        finally {
+            try {
+                if (entryKeys_1_1 && !entryKeys_1_1.done && (_a = entryKeys_1.return)) await _a.call(entryKeys_1);
+            }
+            finally { if (e_3) throw e_3.error; }
         }
     }
     async hasEntry(entryKey) {
@@ -261,19 +313,30 @@ class ObjectDb extends skytree_1.Actor {
         await Promise.all(dimensions.map((dimension) => dimension.rebuildEntry(entry)));
         timer.stop();
     }
-    async rebuildMetadata() {
-        console.log(`Rebuilding metadata for ${this.props.label}...`);
-        const totalCount = await this._db
-            .collection("entries")
-            .countDocuments();
-        const benchmark = new Benchmark_1.Benchmark(totalCount, this.props.rebuildBucketSize, () => {
-            this.stopwatch.report();
+    rebuildMetadata() {
+        return __asyncGenerator(this, arguments, function* rebuildMetadata_1() {
+            var e_4, _a;
+            console.log(`Rebuilding metadata for ${this.props.label}...`);
+            const entryKeys = this.allEntryKeys();
+            try {
+                for (var entryKeys_2 = __asyncValues(entryKeys), entryKeys_2_1; entryKeys_2_1 = yield __await(entryKeys_2.next()), !entryKeys_2_1.done;) {
+                    const entryKey = entryKeys_2_1.value;
+                    const entry = yield __await(this.toOptionalEntryGivenKey(entryKey));
+                    if (entry == null) {
+                        continue;
+                    }
+                    yield __await(this.rebuildMetadataGivenEntry(entry));
+                }
+            }
+            catch (e_4_1) { e_4 = { error: e_4_1 }; }
+            finally {
+                try {
+                    if (entryKeys_2_1 && !entryKeys_2_1.done && (_a = entryKeys_2.return)) yield __await(_a.call(entryKeys_2));
+                }
+                finally { if (e_4) throw e_4.error; }
+            }
+            console.log("Done rebuilding metadata");
         });
-        await this.forEach(async (entry) => {
-            benchmark.log(`Rebuilding ${entry.key}`);
-            await this.rebuildMetadataGivenEntry(entry);
-        });
-        console.log("Done rebuilding metadata");
     }
     toBucketsGivenEntryKey(entryKey) {
         const self = this;
