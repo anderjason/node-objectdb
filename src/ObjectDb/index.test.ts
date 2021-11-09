@@ -296,6 +296,7 @@ Test.define("ObjectDb supports materialized dimensions", async () => {
       "Bucket two should have entry B"
     );
 
+    await objB.load();
     objB.data.message = "B to C";
     objB.status = "updated";
     await objectDb.writeEntry(objB);
@@ -580,5 +581,33 @@ Test.define("ObjectDb live dimensions are case insensitive", async () => {
     );
 
     objectDb.deactivate();
+  });
+});
+
+Test.define("ObjectDb prevents saving stale entries", async () => {
+  await usingTestDb(async (db) => {
+    const objectDb = new ObjectDb<TestEntryData>({
+      label: "testDb",
+      db,
+      dimensions: [],
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
+
+    const original = await objectDb.writeEntryData({
+      message: "one",
+    });
+
+    const first = await objectDb.toEntryGivenKey(original.key);
+    const second = await objectDb.toEntryGivenKey(original.key);
+
+    first.data.message = "first";
+    await objectDb.writeEntry(first);
+
+    second.data.message = "second";
+
+    await Test.assertThrows(async () => {
+      await objectDb.writeEntry(second);
+    }, "Should fail to write second entry");
   });
 });

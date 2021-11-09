@@ -14,6 +14,7 @@ export interface PortableEntry<T> {
     data: T;
     propertyValues: Dict<JSONSerializable>;
     status: EntryStatus;
+    documentVersion?: number;
 }
 export interface EntryProps<T> {
     key?: string;
@@ -29,6 +30,7 @@ export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     data: T;
     propertyValues: Dict<JSONSerializable>;
     status: EntryStatus;
+    documentVersion: number | undefined;
     constructor(props: EntryProps<T>);
     load(): Promise<boolean>;
     save(): Promise<void>;

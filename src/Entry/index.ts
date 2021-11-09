@@ -22,6 +22,7 @@ export interface PortableEntry<T> {
   data: T;
   propertyValues: Dict<JSONSerializable>;
   status: EntryStatus;
+  documentVersion?: number;
 }
 
 export interface EntryProps<T> {
@@ -40,6 +41,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
   data: T;
   propertyValues: Dict<JSONSerializable>;
   status: EntryStatus;
+  documentVersion: number | undefined;
 
   constructor(props: EntryProps<T>) {
     super(props);
@@ -63,6 +65,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.createdAt = Instant.givenEpochMilliseconds(row.createdAtEpochMs);
     this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAtEpochMs);
     this.status = "saved";
+    this.documentVersion = row.documentVersion;
 
     return true;
   }
@@ -77,8 +80,10 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     const createdAtMs = this.createdAt.toEpochMilliseconds();
     const updatedAtMs = this.updatedAt.toEpochMilliseconds();
 
-    await this.props.db.collection<PortableEntry<T>>("entries").updateOne(
-      { key: this.key },
+    const newDocumentVersion = this.documentVersion == null ? 1 : this.documentVersion + 1;
+
+    const result = await this.props.db.collection<PortableEntry<T>>("entries").updateOne(
+      { key: this.key, documentVersion: this.documentVersion },
       {
         $set: {
           key: this.key,
@@ -87,10 +92,15 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
           data: this.data,
           propertyValues: this.propertyValues ?? {},
           status: this.status,
+          documentVersion: newDocumentVersion
         },
       },
       { upsert: true }
     );
+
+    if (result.modifiedCount == 0 && result.upsertedCount == 0) {
+      throw new Error("Failed to save entry - could be a document version mismatch");
+    }
 
     this.status = "saved";
   }
@@ -103,6 +113,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
       data: this.data,
       propertyValues: this.propertyValues ?? {},
       status: this.status,
+      documentVersion: this.documentVersion
     };
   }
 }

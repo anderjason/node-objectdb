@@ -435,20 +435,20 @@ class ObjectDb extends skytree_1.Actor {
             case "updated":
             case "unknown":
                 if ("createdAt" in entry) {
-                    await this.writeEntryData(entry.data, entry.propertyValues, entry.key, entry.createdAt);
+                    await this.writeEntryData(entry.data, entry.propertyValues, entry.key, entry.createdAt, entry.documentVersion);
                 }
                 else {
                     const createdAt = entry.createdAtEpochMs != null
                         ? time_1.Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
                         : undefined;
-                    await this.writeEntryData(entry.data, entry.propertyValues, entry.key, createdAt);
+                    await this.writeEntryData(entry.data, entry.propertyValues, entry.key, createdAt, entry.documentVersion);
                 }
                 break;
             default:
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
     }
-    async writeEntryData(entryData, propertyValues = {}, entryKey, createdAt) {
+    async writeEntryData(entryData, propertyValues = {}, entryKey, createdAt, documentVersion) {
         if (entryKey == null) {
             entryKey = node_crypto_1.UniqueId.ofRandom().toUUIDString();
         }
@@ -456,6 +456,10 @@ class ObjectDb extends skytree_1.Actor {
             throw new Error("Entry key length must be at least 5 characters");
         }
         let entry = await this.toOptionalEntryGivenKey(entryKey);
+        const oldDocumentVersion = entry === null || entry === void 0 ? void 0 : entry.documentVersion;
+        if (oldDocumentVersion != null && oldDocumentVersion !== documentVersion) {
+            throw new Error("Document version does not match");
+        }
         const oldPortableEntry = entry === null || entry === void 0 ? void 0 : entry.toPortableEntry();
         const oldData = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.data;
         const oldPropertyValues = oldPortableEntry === null || oldPortableEntry === void 0 ? void 0 : oldPortableEntry.propertyValues;

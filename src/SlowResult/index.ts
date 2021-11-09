@@ -1,7 +1,7 @@
 import {
   Observable,
   ReadOnlyObservable,
-  TypedEvent
+  TypedEvent,
 } from "@anderjason/observable";
 import { StringUtil } from "@anderjason/util";
 import { Actor } from "skytree";
@@ -9,13 +9,13 @@ import { Actor } from "skytree";
 export interface SlowResultProps<TO, TI = any> {
   getItems: () => AsyncGenerator<TI>;
   fn: (item: TI) => Promise<TO | undefined>;
+
+  getTotalCount?: () => Promise<number>;
 }
 
 export type SlowResultStatus = "busy" | "done" | "error";
 
-export class SlowResult<TO, TI = any> extends Actor<
-  SlowResultProps<TO, TI>
-> {
+export class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, TI>> {
   readonly key = StringUtil.stringOfRandomCharacters(8);
 
   private _status = Observable.givenValue<SlowResultStatus>("busy");
@@ -23,6 +23,16 @@ export class SlowResult<TO, TI = any> extends Actor<
 
   readonly foundResult = new TypedEvent<TO>();
   readonly error = new TypedEvent<string>();
+
+  private _processedCount: number = 0;
+  get processedCount(): number {
+    return this._processedCount;
+  }
+
+  private _totalCount: number | undefined;
+  get totalCount(): number | undefined {
+    return this._totalCount;
+  }
 
   private _results: TO[] = [];
   get results(): TO[] {
@@ -34,10 +44,6 @@ export class SlowResult<TO, TI = any> extends Actor<
     return this._errors;
   }
 
-  get totalCount(): number | undefined {
-    return undefined;
-  }
-
   onActivate() {
     setTimeout(() => {
       this.run();
@@ -47,6 +53,11 @@ export class SlowResult<TO, TI = any> extends Actor<
   private async run() {
     this._status.setValue("busy");
     this._results = [];
+    this._processedCount = 0;
+
+    if (this.props.getTotalCount != null) {
+      this._totalCount = await this.props.getTotalCount();
+    }
 
     for await (const item of this.props.getItems()) {
       if (this.isActive == false) {
@@ -72,6 +83,8 @@ export class SlowResult<TO, TI = any> extends Actor<
         this._errors.push(error);
         this.error.emit(error);
       }
+
+      this._processedCount += 1;
     }
 
     this._status.setValue("done");

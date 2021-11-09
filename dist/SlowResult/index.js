@@ -19,17 +19,21 @@ class SlowResult extends skytree_1.Actor {
         this.status = observable_1.ReadOnlyObservable.givenObservable(this._status);
         this.foundResult = new observable_1.TypedEvent();
         this.error = new observable_1.TypedEvent();
+        this._processedCount = 0;
         this._results = [];
         this._errors = [];
+    }
+    get processedCount() {
+        return this._processedCount;
+    }
+    get totalCount() {
+        return this._totalCount;
     }
     get results() {
         return this._results;
     }
     get errors() {
         return this._errors;
-    }
-    get totalCount() {
-        return undefined;
     }
     onActivate() {
         setTimeout(() => {
@@ -40,6 +44,10 @@ class SlowResult extends skytree_1.Actor {
         var e_1, _a;
         this._status.setValue("busy");
         this._results = [];
+        this._processedCount = 0;
+        if (this.props.getTotalCount != null) {
+            this._totalCount = await this.props.getTotalCount();
+        }
         try {
             for (var _b = __asyncValues(this.props.getItems()), _c; _c = await _b.next(), !_c.done;) {
                 const item = _c.value;
@@ -64,6 +72,7 @@ class SlowResult extends skytree_1.Actor {
                     this._errors.push(error);
                     this.error.emit(error);
                 }
+                this._processedCount += 1;
             }
         }
         catch (e_1_1) { e_1 = { error: e_1_1 }; }

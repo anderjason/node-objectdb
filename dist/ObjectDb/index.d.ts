@@ -69,6 +69,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toOptionalDimensionGivenKey(dimensionKey: string): Promise<Dimension<T> | undefined>;
     toOptionalBucketGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<Bucket | undefined>;
     writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void>;
-    writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Promise<Entry<T>>;
+    writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant, documentVersion?: number): Promise<Entry<T>>;
     deleteEntryKey(entryKey: string): Promise<void>;
 }

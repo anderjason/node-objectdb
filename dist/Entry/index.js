@@ -23,6 +23,7 @@ class Entry extends skytree_1.PropsObject {
         this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAtEpochMs);
         this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAtEpochMs);
         this.status = "saved";
+        this.documentVersion = row.documentVersion;
         return true;
     }
     async save() {
@@ -33,7 +34,8 @@ class Entry extends skytree_1.PropsObject {
         }
         const createdAtMs = this.createdAt.toEpochMilliseconds();
         const updatedAtMs = this.updatedAt.toEpochMilliseconds();
-        await this.props.db.collection("entries").updateOne({ key: this.key }, {
+        const newDocumentVersion = this.documentVersion == null ? 1 : this.documentVersion + 1;
+        const result = await this.props.db.collection("entries").updateOne({ key: this.key, documentVersion: this.documentVersion }, {
             $set: {
                 key: this.key,
                 createdAtEpochMs: createdAtMs,
@@ -41,8 +43,12 @@ class Entry extends skytree_1.PropsObject {
                 data: this.data,
                 propertyValues: (_a = this.propertyValues) !== null && _a !== void 0 ? _a : {},
                 status: this.status,
+                documentVersion: newDocumentVersion
             },
         }, { upsert: true });
+        if (result.modifiedCount == 0 && result.upsertedCount == 0) {
+            throw new Error("Failed to save entry - could be a document version mismatch");
+        }
         this.status = "saved";
     }
     toPortableEntry() {
@@ -54,6 +60,7 @@ class Entry extends skytree_1.PropsObject {
             data: this.data,
             propertyValues: (_a = this.propertyValues) !== null && _a !== void 0 ? _a : {},
             status: this.status,
+            documentVersion: this.documentVersion
         };
     }
 }

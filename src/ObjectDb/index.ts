@@ -503,7 +503,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
             entry.data,
             entry.propertyValues,
             entry.key,
-            entry.createdAt
+            entry.createdAt,
+            entry.documentVersion
           );
         } else {
           const createdAt =
@@ -515,7 +516,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
             entry.data,
             entry.propertyValues,
             entry.key,
-            createdAt
+            createdAt,
+            entry.documentVersion
           );
         }
 
@@ -529,7 +531,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entryData: T,
     propertyValues: Dict<JSONSerializable> = {},
     entryKey?: string,
-    createdAt?: Instant
+    createdAt?: Instant,
+    documentVersion?: number
   ): Promise<Entry<T>> {
     if (entryKey == null) {
       entryKey = UniqueId.ofRandom().toUUIDString();
@@ -540,6 +543,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     let entry = await this.toOptionalEntryGivenKey(entryKey);
+
+    const oldDocumentVersion = entry?.documentVersion;
+    if (oldDocumentVersion != null && oldDocumentVersion !== documentVersion) {
+      throw new Error("Document version does not match");
+    }
+
     const oldPortableEntry = entry?.toPortableEntry();
     const oldData = oldPortableEntry?.data;
     const oldPropertyValues = oldPortableEntry?.propertyValues;
