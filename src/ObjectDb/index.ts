@@ -545,7 +545,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     let entry = await this.toOptionalEntryGivenKey(entryKey);
 
     const oldDocumentVersion = entry?.documentVersion;
-    if (oldDocumentVersion != null && oldDocumentVersion !== documentVersion) {
+    if (oldDocumentVersion != null && documentVersion != null && oldDocumentVersion !== documentVersion) {
       throw new Error("Document version does not match");
     }
 

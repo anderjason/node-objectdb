@@ -457,7 +457,7 @@ class ObjectDb extends skytree_1.Actor {
         }
         let entry = await this.toOptionalEntryGivenKey(entryKey);
         const oldDocumentVersion = entry === null || entry === void 0 ? void 0 : entry.documentVersion;
-        if (oldDocumentVersion != null && oldDocumentVersion !== documentVersion) {
+        if (oldDocumentVersion != null && documentVersion != null && oldDocumentVersion !== documentVersion) {
             throw new Error("Document version does not match");
         }
         const oldPortableEntry = entry === null || entry === void 0 ? void 0 : entry.toPortableEntry();
