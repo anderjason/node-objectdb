@@ -308,7 +308,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     options: ObjectDbReadOptions = {}
   ): AsyncGenerator<Entry<T>> {
     for await (const entryKey of this.toEntryKeys(options)) {
-      yield this.toOptionalEntryGivenKey(entryKey);
+      const entry = await this.toOptionalEntryGivenKey(entryKey);
+      if (entry != null) {
+        yield entry;
+      }
     }
   }
 

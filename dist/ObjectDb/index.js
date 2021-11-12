@@ -259,7 +259,10 @@ class ObjectDb extends skytree_1.Actor {
             try {
                 for (var _b = __asyncValues(this.toEntryKeys(options)), _c; _c = yield __await(_b.next()), !_c.done;) {
                     const entryKey = _c.value;
-                    yield yield __await(this.toOptionalEntryGivenKey(entryKey));
+                    const entry = yield __await(this.toOptionalEntryGivenKey(entryKey));
+                    if (entry != null) {
+                        yield yield __await(entry);
+                    }
                 }
             }
             catch (e_5_1) { e_5 = { error: e_5_1 }; }
