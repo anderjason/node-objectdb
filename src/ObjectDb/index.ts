@@ -423,20 +423,21 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     timer.stop();
   }
 
-  async *rebuildMetadata(): AsyncGenerator<void> {
+  rebuildMetadata(): SlowResult<any> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
-    const entryKeys = this.allEntryKeys();
-    for await (const entryKey of entryKeys) {
-      const entry = await this.toOptionalEntryGivenKey(entryKey);
-      if (entry == null) {
-        continue;
+    return new SlowResult({
+      getItems: () => this.allEntryKeys(),
+      getTotalCount: () => this.toEntryCount(),
+      fn: async (entryKey) => {
+        const entry = await this.toOptionalEntryGivenKey(entryKey);
+        if (entry == null) {
+          return;
+        }
+  
+        await this.rebuildMetadataGivenEntry(entry);
       }
-
-      await this.rebuildMetadataGivenEntry(entry);
-    }
-
-    console.log("Done rebuilding metadata");
+    });
   }
 
   async *toBuckets(): AsyncGenerator<Bucket> {

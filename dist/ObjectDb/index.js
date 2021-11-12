@@ -344,58 +344,47 @@ class ObjectDb extends skytree_1.Actor {
         timer.stop();
     }
     rebuildMetadata() {
-        return __asyncGenerator(this, arguments, function* rebuildMetadata_1() {
-            var e_6, _a;
-            console.log(`Rebuilding metadata for ${this.props.label}...`);
-            const entryKeys = this.allEntryKeys();
-            try {
-                for (var entryKeys_2 = __asyncValues(entryKeys), entryKeys_2_1; entryKeys_2_1 = yield __await(entryKeys_2.next()), !entryKeys_2_1.done;) {
-                    const entryKey = entryKeys_2_1.value;
-                    const entry = yield __await(this.toOptionalEntryGivenKey(entryKey));
-                    if (entry == null) {
-                        continue;
-                    }
-                    yield __await(this.rebuildMetadataGivenEntry(entry));
+        console.log(`Rebuilding metadata for ${this.props.label}...`);
+        return new SlowResult_1.SlowResult({
+            getItems: () => this.allEntryKeys(),
+            getTotalCount: () => this.toEntryCount(),
+            fn: async (entryKey) => {
+                const entry = await this.toOptionalEntryGivenKey(entryKey);
+                if (entry == null) {
+                    return;
                 }
+                await this.rebuildMetadataGivenEntry(entry);
             }
-            catch (e_6_1) { e_6 = { error: e_6_1 }; }
-            finally {
-                try {
-                    if (entryKeys_2_1 && !entryKeys_2_1.done && (_a = entryKeys_2.return)) yield __await(_a.call(entryKeys_2));
-                }
-                finally { if (e_6) throw e_6.error; }
-            }
-            console.log("Done rebuilding metadata");
         });
     }
     toBuckets() {
         return __asyncGenerator(this, arguments, function* toBuckets_1() {
-            var e_7, _a, e_8, _b;
+            var e_6, _a, e_7, _b;
             const dimensions = yield __await(this.toDimensions());
             try {
                 for (var dimensions_1 = __asyncValues(dimensions), dimensions_1_1; dimensions_1_1 = yield __await(dimensions_1.next()), !dimensions_1_1.done;) {
                     const dimension = dimensions_1_1.value;
                     try {
-                        for (var _c = (e_8 = void 0, __asyncValues(dimension.toBuckets())), _d; _d = yield __await(_c.next()), !_d.done;) {
+                        for (var _c = (e_7 = void 0, __asyncValues(dimension.toBuckets())), _d; _d = yield __await(_c.next()), !_d.done;) {
                             const bucket = _d.value;
                             yield yield __await(bucket);
                         }
                     }
-                    catch (e_8_1) { e_8 = { error: e_8_1 }; }
+                    catch (e_7_1) { e_7 = { error: e_7_1 }; }
                     finally {
                         try {
                             if (_d && !_d.done && (_b = _c.return)) yield __await(_b.call(_c));
                         }
-                        finally { if (e_8) throw e_8.error; }
+                        finally { if (e_7) throw e_7.error; }
                     }
                 }
             }
-            catch (e_7_1) { e_7 = { error: e_7_1 }; }
+            catch (e_6_1) { e_6 = { error: e_6_1 }; }
             finally {
                 try {
                     if (dimensions_1_1 && !dimensions_1_1.done && (_a = dimensions_1.return)) yield __await(_a.call(dimensions_1));
                 }
-                finally { if (e_7) throw e_7.error; }
+                finally { if (e_6) throw e_6.error; }
             }
         });
     }
