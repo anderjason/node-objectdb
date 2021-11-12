@@ -546,6 +546,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const oldDocumentVersion = entry?.documentVersion;
     if (oldDocumentVersion != null && documentVersion != null && oldDocumentVersion !== documentVersion) {
+      console.log("key", entryKey);
+      console.log("old version", oldDocumentVersion, entry?.data);
+      console.log("new version", documentVersion, entryData);
+
       throw new Error("Document version does not match");
     }
 
