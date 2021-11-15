@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Entry = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
 const time_1 = require("@anderjason/time");
+const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
 class Entry extends skytree_1.PropsObject {
     constructor(props) {
@@ -50,6 +51,20 @@ class Entry extends skytree_1.PropsObject {
             throw new Error("Failed to save entry - could be a document version mismatch");
         }
         this.status = "saved";
+    }
+    toClone() {
+        const result = new Entry({
+            key: this.key,
+            createdAt: this.createdAt,
+            updatedAt: this.updatedAt,
+            db: this.props.db,
+            objectDb: this.props.objectDb
+        });
+        result.data = util_1.ObjectUtil.objectWithDeepMerge({}, this.data);
+        result.propertyValues = util_1.ObjectUtil.objectWithDeepMerge({}, this.propertyValues);
+        result.status = this.status;
+        result.documentVersion = this.documentVersion;
+        return result;
     }
     toPortableEntry() {
         var _a;

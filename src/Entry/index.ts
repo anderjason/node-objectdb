@@ -1,6 +1,7 @@
 import { UniqueId } from "@anderjason/node-crypto";
 import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
+import { ObjectUtil } from "@anderjason/util";
 import { PropsObject } from "skytree";
 import { ObjectDb } from "..";
 import { MongoDb } from "../MongoDb";
@@ -103,6 +104,22 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     }
 
     this.status = "saved";
+  }
+
+  toClone(): Entry<T> {
+    const result = new Entry({
+      key: this.key,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      db: this.props.db,
+      objectDb: this.props.objectDb
+    });
+    result.data = ObjectUtil.objectWithDeepMerge({}, this.data);
+    result.propertyValues = ObjectUtil.objectWithDeepMerge({}, this.propertyValues);
+    result.status = this.status;
+    result.documentVersion = this.documentVersion;
+
+    return result;
   }
 
   toPortableEntry(): PortableEntry<T> {

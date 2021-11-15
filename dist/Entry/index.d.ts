@@ -34,5 +34,6 @@ export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     constructor(props: EntryProps<T>);
     load(): Promise<boolean>;
     save(): Promise<void>;
+    toClone(): Entry<T>;
     toPortableEntry(): PortableEntry<T>;
 }
