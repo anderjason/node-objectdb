@@ -7,13 +7,17 @@ import { StringUtil } from "@anderjason/util";
 import { Actor } from "skytree";
 
 export interface SlowResultProps<TO, TI = any> {
-  getItems: () => AsyncGenerator<TI>;
+  getItems?: () => AsyncGenerator<TI>;
   fn: (item: TI) => Promise<TO | undefined>;
 
   getTotalCount?: () => Promise<number>;
 }
 
 export type SlowResultStatus = "busy" | "done" | "error";
+
+async function* defaultGetItems<TI>(): AsyncGenerator<TI> {
+  yield undefined;
+}
 
 export class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, TI>> {
   readonly key = StringUtil.stringOfRandomCharacters(8);
@@ -59,7 +63,12 @@ export class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, TI>> {
       this._totalCount = await this.props.getTotalCount();
     }
 
-    for await (const item of this.props.getItems()) {
+    let items =
+      this.props.getItems != null
+        ? this.props.getItems()
+        : defaultGetItems<TI>();
+
+    for await (const item of items) {
       if (this.isActive == false) {
         // cancelled
         break;

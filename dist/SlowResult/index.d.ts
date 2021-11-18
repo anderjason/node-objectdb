@@ -1,7 +1,7 @@
 import { ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
 import { Actor } from "skytree";
 export interface SlowResultProps<TO, TI = any> {
-    getItems: () => AsyncGenerator<TI>;
+    getItems?: () => AsyncGenerator<TI>;
     fn: (item: TI) => Promise<TO | undefined>;
     getTotalCount?: () => Promise<number>;
 }

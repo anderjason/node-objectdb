@@ -1,4 +1,16 @@
 "use strict";
+var __await = (this && this.__await) || function (v) { return this instanceof __await ? (this.v = v, this) : new __await(v); }
+var __asyncGenerator = (this && this.__asyncGenerator) || function (thisArg, _arguments, generator) {
+    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+    var g = generator.apply(thisArg, _arguments || []), i, q = [];
+    return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i;
+    function verb(n) { if (g[n]) i[n] = function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]) > 1 || resume(n, v); }); }; }
+    function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(q[0][3], e); } }
+    function step(r) { r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r); }
+    function fulfill(value) { resume("next", value); }
+    function reject(value) { resume("throw", value); }
+    function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
+};
 var __asyncValues = (this && this.__asyncValues) || function (o) {
     if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
     var m = o[Symbol.asyncIterator], i;
@@ -11,6 +23,11 @@ exports.SlowResult = void 0;
 const observable_1 = require("@anderjason/observable");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
+function defaultGetItems() {
+    return __asyncGenerator(this, arguments, function* defaultGetItems_1() {
+        yield yield __await(undefined);
+    });
+}
 class SlowResult extends skytree_1.Actor {
     constructor() {
         super(...arguments);
@@ -48,9 +65,12 @@ class SlowResult extends skytree_1.Actor {
         if (this.props.getTotalCount != null) {
             this._totalCount = await this.props.getTotalCount();
         }
+        let items = this.props.getItems != null
+            ? this.props.getItems()
+            : defaultGetItems();
         try {
-            for (var _b = __asyncValues(this.props.getItems()), _c; _c = await _b.next(), !_c.done;) {
-                const item = _c.value;
+            for (var items_1 = __asyncValues(items), items_1_1; items_1_1 = await items_1.next(), !items_1_1.done;) {
+                const item = items_1_1.value;
                 if (this.isActive == false) {
                     // cancelled
                     break;
@@ -78,7 +98,7 @@ class SlowResult extends skytree_1.Actor {
         catch (e_1_1) { e_1 = { error: e_1_1 }; }
         finally {
             try {
-                if (_c && !_c.done && (_a = _b.return)) await _a.call(_b);
+                if (items_1_1 && !items_1_1.done && (_a = items_1.return)) await _a.call(items_1);
             }
             finally { if (e_1) throw e_1.error; }
         }
