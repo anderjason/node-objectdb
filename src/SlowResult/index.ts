@@ -63,6 +63,7 @@ export class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, TI>> {
       this._totalCount = await this.props.getTotalCount();
     }
 
+    // if getItems is not provided, fn will be called one time with an undefined item
     let items =
       this.props.getItems != null
         ? this.props.getItems()
