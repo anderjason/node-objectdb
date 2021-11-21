@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { ReadOnlyObservable } from "@anderjason/observable";
 import { Collection, Db } from "mongodb";
 import { Actor } from "skytree";
@@ -5,6 +6,7 @@ export interface MongoDbProps {
     dbName?: string;
     namespace?: string;
     url?: string;
+    cert?: string | Buffer | (string | Buffer)[];
 }
 export declare class MongoDb extends Actor<MongoDbProps> {
     private _isConnected;

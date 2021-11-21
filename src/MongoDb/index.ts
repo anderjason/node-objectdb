@@ -6,6 +6,7 @@ export interface MongoDbProps {
   dbName?: string;
   namespace?: string;
   url?: string;
+  cert?: string | Buffer | (string | Buffer)[];
 }
 
 export class MongoDb extends Actor<MongoDbProps> {
@@ -21,7 +22,9 @@ export class MongoDb extends Actor<MongoDbProps> {
   onActivate() {
     this._isConnected.setValue(false);
     
-    const client = new MongoClient(this.props.url ?? process.env.MONGODB_URL);
+    const client = new MongoClient(this.props.url ?? process.env.MONGODB_URL, {
+      cert: this.props.cert
+    });
 
     this._db = client.db(this.props.dbName);
 

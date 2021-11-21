@@ -16,7 +16,9 @@ class MongoDb extends skytree_1.Actor {
     onActivate() {
         var _a;
         this._isConnected.setValue(false);
-        const client = new mongodb_1.MongoClient((_a = this.props.url) !== null && _a !== void 0 ? _a : process.env.MONGODB_URL);
+        const client = new mongodb_1.MongoClient((_a = this.props.url) !== null && _a !== void 0 ? _a : process.env.MONGODB_URL, {
+            cert: this.props.cert
+        });
         this._db = client.db(this.props.dbName);
         client.connect().then(() => {
             this._isConnected.setValue(true);
