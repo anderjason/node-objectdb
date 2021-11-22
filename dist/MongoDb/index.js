@@ -14,20 +14,30 @@ class MongoDb extends skytree_1.Actor {
         return this._db;
     }
     onActivate() {
-        var _a;
         this._isConnected.setValue(false);
+        this.cancelOnDeactivate(new observable_1.Receipt(() => {
+            this._isConnected.setValue(false);
+            if (this._mongoClient != null) {
+                this._mongoClient.close();
+                this._mongoClient = undefined;
+            }
+            this._db = undefined;
+        }));
+        this.connect();
+    }
+    async connect() {
+        var _a;
+        let cert = undefined;
+        if (this.props.certFile != null) {
+            cert = await this.props.certFile.toContentString();
+        }
         const client = new mongodb_1.MongoClient((_a = this.props.url) !== null && _a !== void 0 ? _a : process.env.MONGODB_URL, {
-            cert: this.props.cert
+            cert
         });
         this._db = client.db(this.props.dbName);
         client.connect().then(() => {
             this._isConnected.setValue(true);
         });
-        this.cancelOnDeactivate(new observable_1.Receipt(() => {
-            this._isConnected.setValue(false);
-            client.close();
-            this._db = undefined;
-        }));
     }
     async ensureConnected() {
         await this._isConnected.toPromise(v => v == true);
