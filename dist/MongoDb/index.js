@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MongoDb = void 0;
+const node_filesystem_1 = require("@anderjason/node-filesystem");
 const observable_1 = require("@anderjason/observable");
 const mongodb_1 = require("mongodb");
 const skytree_1 = require("skytree");
@@ -28,8 +29,9 @@ class MongoDb extends skytree_1.Actor {
     async connect() {
         var _a;
         let cert = undefined;
-        if (this.props.certFile != null) {
-            cert = await this.props.certFile.toContentString();
+        if (this.props.certPath != null) {
+            const file = node_filesystem_1.LocalFile.givenAbsolutePath(this.props.certPath);
+            cert = await file.toContentString();
         }
         const client = new mongodb_1.MongoClient((_a = this.props.url) !== null && _a !== void 0 ? _a : process.env.MONGODB_URL, {
             cert,

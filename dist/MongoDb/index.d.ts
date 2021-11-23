@@ -1,4 +1,3 @@
-import { LocalFile } from "@anderjason/node-filesystem";
 import { ReadOnlyObservable } from "@anderjason/observable";
 import { Collection, Db } from "mongodb";
 import { Actor } from "skytree";
@@ -6,7 +5,7 @@ export interface MongoDbProps {
     dbName?: string;
     namespace?: string;
     url?: string;
-    certFile?: LocalFile;
+    certPath?: string;
 }
 export declare class MongoDb extends Actor<MongoDbProps> {
     private _isConnected;

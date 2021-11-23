@@ -7,7 +7,7 @@ export interface MongoDbProps {
   dbName?: string;
   namespace?: string;
   url?: string;
-  certFile?: LocalFile;
+  certPath?: string;
 }
 
 export class MongoDb extends Actor<MongoDbProps> {
@@ -42,8 +42,9 @@ export class MongoDb extends Actor<MongoDbProps> {
 
   private async connect() {
     let cert: string = undefined;
-    if (this.props.certFile != null) {
-      cert = await this.props.certFile.toContentString();
+    if (this.props.certPath != null) {
+      const file = LocalFile.givenAbsolutePath(this.props.certPath);
+      cert = await file.toContentString();
     }
 
     const client = new MongoClient(this.props.url ?? process.env.MONGODB_URL, {
