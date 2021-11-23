@@ -32,7 +32,8 @@ class MongoDb extends skytree_1.Actor {
             cert = await this.props.certFile.toContentString();
         }
         const client = new mongodb_1.MongoClient((_a = this.props.url) !== null && _a !== void 0 ? _a : process.env.MONGODB_URL, {
-            cert
+            cert,
+            tlsAllowInvalidCertificates: true
         });
         this._db = client.db(this.props.dbName);
         client.connect().then(() => {
