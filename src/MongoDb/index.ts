@@ -42,7 +42,10 @@ export class MongoDb extends Actor<MongoDbProps> {
 
   private async connect() {
     let cert: string = undefined;
-    if (this.props.certPath != null) {
+    
+    if (process.env.MONGODB_CERT) {
+      cert = process.env.MONGODB_CERT;
+    } else if (this.props.certPath != null) {
       const file = LocalFile.givenAbsolutePath(this.props.certPath);
       cert = await file.toContentString();
     }

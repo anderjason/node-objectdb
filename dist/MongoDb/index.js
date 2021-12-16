@@ -29,7 +29,10 @@ class MongoDb extends skytree_1.Actor {
     async connect() {
         var _a;
         let cert = undefined;
-        if (this.props.certPath != null) {
+        if (process.env.MONGODB_CERT) {
+            cert = process.env.MONGODB_CERT;
+        }
+        else if (this.props.certPath != null) {
             const file = node_filesystem_1.LocalFile.givenAbsolutePath(this.props.certPath);
             cert = await file.toContentString();
         }
