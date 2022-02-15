@@ -178,7 +178,7 @@ class ObjectDb extends skytree_1.Actor {
             }
             Object.assign(entry.data, partialData);
             entry.status = "updated";
-            this.writeEntry(entry);
+            await this.writeEntry(entry);
             return entry;
         });
     }

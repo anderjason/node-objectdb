@@ -230,7 +230,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       Object.assign(entry.data, partialData);
       
       entry.status = "updated";
-      this.writeEntry(entry);
+      await this.writeEntry(entry);
 
       return entry;
     });
