@@ -24,6 +24,7 @@ const node_crypto_1 = require("@anderjason/node-crypto");
 const observable_1 = require("@anderjason/observable");
 const time_1 = require("@anderjason/time");
 const util_1 = require("@anderjason/util");
+const async_mutex_1 = require("async-mutex");
 const skytree_1 = require("skytree");
 const Dimension_1 = require("../Dimension");
 const Entry_1 = require("../Entry");
@@ -86,6 +87,7 @@ class ObjectDb extends skytree_1.Actor {
         this._dimensions = [];
         this._propertyByKey = new Map();
         this._caches = new Map();
+        this._mutexByEntryKey = new Map();
     }
     get mongoDb() {
         return this._db;
@@ -134,6 +136,28 @@ class ObjectDb extends skytree_1.Actor {
         // console.log(`Waiting for ObjectDB idle in ${this.props.label}...`);
         await this._isLoaded.toPromise((v) => v);
         // console.log(`ObjectDb is idle in ${this.props.label}`);
+    }
+    async runExclusive(entryKey, fn) {
+        if (entryKey == null) {
+            throw new Error("entryKey is required");
+        }
+        if (fn == null) {
+            throw new Error("fn is required");
+        }
+        if (!this._mutexByEntryKey.has(entryKey)) {
+            this._mutexByEntryKey.set(entryKey, new async_mutex_1.Mutex());
+        }
+        const mutex = this._mutexByEntryKey.get(entryKey);
+        try {
+            await mutex.runExclusive(async () => {
+                await fn();
+            });
+        }
+        finally {
+            if (mutex.isLocked() == false) {
+                this._mutexByEntryKey.delete(entryKey);
+            }
+        }
     }
     allEntryKeys() {
         return __asyncGenerator(this, arguments, function* allEntryKeys_1() {
@@ -357,7 +381,7 @@ class ObjectDb extends skytree_1.Actor {
                     return;
                 }
                 await this.rebuildMetadataGivenEntry(entry);
-            }
+            },
         });
     }
     toBuckets() {
@@ -449,7 +473,9 @@ class ObjectDb extends skytree_1.Actor {
         }
         let entry = await this.toOptionalEntryGivenKey(entryKey);
         const oldDocumentVersion = entry === null || entry === void 0 ? void 0 : entry.documentVersion;
-        if (oldDocumentVersion != null && documentVersion != null && oldDocumentVersion !== documentVersion) {
+        if (oldDocumentVersion != null &&
+            documentVersion != null &&
+            oldDocumentVersion !== documentVersion) {
             console.log("key", entryKey);
             console.log("old version", oldDocumentVersion, entry === null || entry === void 0 ? void 0 : entry.data);
             console.log("new version", documentVersion, entryData);

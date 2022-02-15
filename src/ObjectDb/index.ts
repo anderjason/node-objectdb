@@ -7,8 +7,8 @@ import {
 } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
+import { Mutex } from "async-mutex";
 import { Actor, Timer } from "skytree";
-import { Benchmark } from "../Benchmark";
 import {
   Bucket,
   BucketIdentifier,
@@ -105,7 +105,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   private _dimensions: Dimension<T>[] = [];
   private _propertyByKey: Map<string, Property> = new Map();
   private _caches = new Map<number, CacheData>();
-
+  private _mutexByEntryKey = new Map<string, Mutex>();
   private _db: MongoDb;
 
   get mongoDb(): MongoDb {
@@ -173,6 +173,35 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     await this._isLoaded.toPromise((v) => v);
 
     // console.log(`ObjectDb is idle in ${this.props.label}`);
+  }
+
+  async runExclusive(
+    entryKey: string,
+    fn: () => Promise<void> | void
+  ): Promise<void> {
+    if (entryKey == null) {
+      throw new Error("entryKey is required");
+    }
+
+    if (fn == null) {
+      throw new Error("fn is required");
+    }
+
+    if (!this._mutexByEntryKey.has(entryKey)) {
+      this._mutexByEntryKey.set(entryKey, new Mutex());
+    }
+
+    const mutex = this._mutexByEntryKey.get(entryKey);
+
+    try {
+      await mutex.runExclusive(async () => {
+        await fn();
+      });
+    } finally {
+      if (mutex.isLocked() == false) {
+        this._mutexByEntryKey.delete(entryKey);
+      }
+    }
   }
 
   private async *allEntryKeys(): AsyncGenerator<string> {
@@ -437,9 +466,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         if (entry == null) {
           return;
         }
-  
+
         await this.rebuildMetadataGivenEntry(entry);
-      }
+      },
     });
   }
 
@@ -549,7 +578,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     let entry = await this.toOptionalEntryGivenKey(entryKey);
 
     const oldDocumentVersion = entry?.documentVersion;
-    if (oldDocumentVersion != null && documentVersion != null && oldDocumentVersion !== documentVersion) {
+    if (
+      oldDocumentVersion != null &&
+      documentVersion != null &&
+      oldDocumentVersion !== documentVersion
+    ) {
       console.log("key", entryKey);
       console.log("old version", oldDocumentVersion, entry?.data);
       console.log("new version", documentVersion, entryData);
