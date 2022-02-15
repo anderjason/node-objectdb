@@ -159,6 +159,23 @@ class ObjectDb extends skytree_1.Actor {
             }
         }
     }
+    async updateEntryKey(entryKey, partialData) {
+        if (entryKey == null) {
+            throw new Error("entryKey is required");
+        }
+        if (partialData == null) {
+            throw new Error("partialData is required");
+        }
+        if (Object.keys(partialData).length === 0) {
+            return;
+        }
+        await this.runExclusive(entryKey, async () => {
+            const entry = await this.toEntryGivenKey(entryKey);
+            Object.assign(entry.data, partialData);
+            entry.status = "updated";
+            this.writeEntry(entry);
+        });
+    }
     allEntryKeys() {
         return __asyncGenerator(this, arguments, function* allEntryKeys_1() {
             var e_3, _a;

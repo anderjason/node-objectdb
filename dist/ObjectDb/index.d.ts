@@ -50,6 +50,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     private load;
     ensureIdle(): Promise<void>;
     runExclusive(entryKey: string, fn: () => Promise<void> | void): Promise<void>;
+    updateEntryKey(entryKey: string, partialData: Partial<T>): Promise<void>;
     private allEntryKeys;
     toEntryKeys(options?: ObjectDbReadOptions): AsyncGenerator<string>;
     forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void>;

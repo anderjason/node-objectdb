@@ -204,6 +204,29 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
+  async updateEntryKey(entryKey: string, partialData: Partial<T>): Promise<void> {
+    if (entryKey == null) {
+      throw new Error("entryKey is required");
+    }
+
+    if (partialData == null) {
+      throw new Error("partialData is required");
+    }
+
+    if (Object.keys(partialData).length === 0) {
+      return;
+    }
+
+    await this.runExclusive(entryKey, async () => {
+      const entry = await this.toEntryGivenKey(entryKey);
+
+      Object.assign(entry.data, partialData);
+      
+      entry.status = "updated";
+      this.writeEntry(entry);
+    });
+  }
+
   private async *allEntryKeys(): AsyncGenerator<string> {
     const entries = this._db.collection<PortableEntry<any>>("entries").find(
       {},
