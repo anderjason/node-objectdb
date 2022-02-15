@@ -148,9 +148,10 @@ class ObjectDb extends skytree_1.Actor {
             this._mutexByEntryKey.set(entryKey, new async_mutex_1.Mutex());
         }
         const mutex = this._mutexByEntryKey.get(entryKey);
+        let result;
         try {
             await mutex.runExclusive(async () => {
-                await fn();
+                result = await fn();
             });
         }
         finally {
@@ -158,6 +159,7 @@ class ObjectDb extends skytree_1.Actor {
                 this._mutexByEntryKey.delete(entryKey);
             }
         }
+        return result;
     }
     async updateEntryKey(entryKey, partialData) {
         if (entryKey == null) {
@@ -169,11 +171,15 @@ class ObjectDb extends skytree_1.Actor {
         if (Object.keys(partialData).length === 0) {
             return;
         }
-        await this.runExclusive(entryKey, async () => {
+        return this.runExclusive(entryKey, async () => {
             const entry = await this.toEntryGivenKey(entryKey);
+            if (entry == null) {
+                throw new Error("Entry not found in updateEntryKey");
+            }
             Object.assign(entry.data, partialData);
             entry.status = "updated";
             this.writeEntry(entry);
+            return entry;
         });
     }
     allEntryKeys() {

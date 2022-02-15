@@ -3,7 +3,7 @@ import {
   Dict,
   Observable,
   ReadOnlyObservable,
-  TypedEvent,
+  TypedEvent
 } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
@@ -13,14 +13,14 @@ import {
   Bucket,
   BucketIdentifier,
   Dimension,
-  hashCodeGivenBucketIdentifier,
+  hashCodeGivenBucketIdentifier
 } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
 import {
   Property,
   PropertyDefinition,
-  propertyGivenDefinition,
+  propertyGivenDefinition
 } from "../Property";
 import { SelectProperty } from "../Property/Select/SelectProperty";
 import { SlowResult } from "../SlowResult";
@@ -175,10 +175,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     // console.log(`ObjectDb is idle in ${this.props.label}`);
   }
 
-  async runExclusive(
+  async runExclusive<T = void>(
     entryKey: string,
-    fn: () => Promise<void> | void
-  ): Promise<void> {
+    fn: () => Promise<T> | T
+  ): Promise<T> {
     if (entryKey == null) {
       throw new Error("entryKey is required");
     }
@@ -193,18 +193,22 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const mutex = this._mutexByEntryKey.get(entryKey);
 
+    let result: T;
+
     try {
       await mutex.runExclusive(async () => {
-        await fn();
+        result = await fn();
       });
     } finally {
       if (mutex.isLocked() == false) {
         this._mutexByEntryKey.delete(entryKey);
       }
     }
+
+    return result;
   }
 
-  async updateEntryKey(entryKey: string, partialData: Partial<T>): Promise<void> {
+  async updateEntryKey(entryKey: string, partialData: Partial<T>): Promise<Entry<T>> {
     if (entryKey == null) {
       throw new Error("entryKey is required");
     }
@@ -217,13 +221,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-    await this.runExclusive(entryKey, async () => {
+    return this.runExclusive<Entry<T>>(entryKey, async () => {
       const entry = await this.toEntryGivenKey(entryKey);
+      if (entry == null) {
+        throw new Error("Entry not found in updateEntryKey");
+      }
 
       Object.assign(entry.data, partialData);
       
       entry.status = "updated";
       this.writeEntry(entry);
+
+      return entry;
     });
   }
 

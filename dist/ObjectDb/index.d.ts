@@ -49,8 +49,8 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     onActivate(): void;
     private load;
     ensureIdle(): Promise<void>;
-    runExclusive(entryKey: string, fn: () => Promise<void> | void): Promise<void>;
-    updateEntryKey(entryKey: string, partialData: Partial<T>): Promise<void>;
+    runExclusive<T = void>(entryKey: string, fn: () => Promise<T> | T): Promise<T>;
+    updateEntryKey(entryKey: string, partialData: Partial<T>): Promise<Entry<T>>;
     private allEntryKeys;
     toEntryKeys(options?: ObjectDbReadOptions): AsyncGenerator<string>;
     forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void>;
