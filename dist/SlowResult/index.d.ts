@@ -1,8 +1,9 @@
 import { ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
 import { Actor } from "skytree";
 export interface SlowResultProps<TO, TI = any> {
-    getItems?: () => AsyncGenerator<TI>;
     fn: (item: TI) => Promise<TO | undefined>;
+    label?: string;
+    getItems?: () => AsyncGenerator<TI>;
     getTotalCount?: () => Promise<number>;
 }
 export declare type SlowResultStatus = "busy" | "done" | "error";
@@ -20,6 +21,7 @@ export declare class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, 
     get results(): TO[];
     private _errors;
     get errors(): string[];
+    get label(): string;
     onActivate(): void;
     private run;
 }

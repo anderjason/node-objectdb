@@ -52,6 +52,10 @@ class SlowResult extends skytree_1.Actor {
     get errors() {
         return this._errors;
     }
+    get label() {
+        var _a;
+        return (_a = this.props.label) !== null && _a !== void 0 ? _a : "Processing...";
+    }
     onActivate() {
         setTimeout(() => {
             this.run();
@@ -92,6 +96,8 @@ class SlowResult extends skytree_1.Actor {
                     const error = String(err);
                     this._errors.push(error);
                     this.error.emit(error);
+                    this._status.setValue("error");
+                    return;
                 }
                 this._processedCount += 1;
             }

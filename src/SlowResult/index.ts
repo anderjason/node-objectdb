@@ -7,9 +7,10 @@ import { StringUtil } from "@anderjason/util";
 import { Actor } from "skytree";
 
 export interface SlowResultProps<TO, TI = any> {
-  getItems?: () => AsyncGenerator<TI>;
   fn: (item: TI) => Promise<TO | undefined>;
 
+  label?: string;
+  getItems?: () => AsyncGenerator<TI>;
   getTotalCount?: () => Promise<number>;
 }
 
@@ -46,6 +47,10 @@ export class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, TI>> {
   private _errors: string[] = [];
   get errors(): string[] {
     return this._errors;
+  }
+
+  get label(): string {
+    return this.props.label ?? "Processing...";
   }
 
   onActivate() {
@@ -92,6 +97,8 @@ export class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, TI>> {
         const error = String(err);
         this._errors.push(error);
         this.error.emit(error);
+        this._status.setValue("error");
+        return;
       }
 
       this._processedCount += 1;
