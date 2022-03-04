@@ -52,7 +52,10 @@ export class MongoDb extends Actor<MongoDbProps> {
 
     const client = new MongoClient(this.props.url ?? process.env.MONGODB_URL, {
       cert,
-      tlsAllowInvalidCertificates: true
+      tlsAllowInvalidCertificates: true,
+      keepAlive: true,
+      retryWrites: true,
+      retryReads: true
     });
 
     this._db = client.db(this.props.dbName);
