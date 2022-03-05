@@ -295,9 +295,10 @@ class ObjectDb extends skytree_1.Actor {
         const keys = await arrayGivenAsyncIterable(this.toEntryKeys());
         return keys.includes(entryKey);
     }
-    async toEntryCount(filter) {
+    async toEntryCount(filter, cacheKey) {
         return countGivenAsyncIterable(this.toEntryKeys({
             filter,
+            cacheKey
         }));
     }
     toEntries(options = {}) {

@@ -357,10 +357,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return keys.includes(entryKey);
   }
 
-  async toEntryCount(filter?: BucketIdentifier[]): Promise<number> {
+  async toEntryCount(filter?: BucketIdentifier[], cacheKey?: string): Promise<number> {
     return countGivenAsyncIterable(
       this.toEntryKeys({
         filter,
+        cacheKey
       })
     );
   }

@@ -55,7 +55,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toEntryKeys(options?: ObjectDbReadOptions): AsyncGenerator<string>;
     forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void>;
     hasEntry(entryKey: string): Promise<boolean>;
-    toEntryCount(filter?: BucketIdentifier[]): Promise<number>;
+    toEntryCount(filter?: BucketIdentifier[], cacheKey?: string): Promise<number>;
     toEntries(options?: ObjectDbReadOptions): AsyncGenerator<Entry<T>>;
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Promise<Entry<T> | undefined>;
     toEntryGivenKey(entryKey: string): Promise<Entry<T>>;
