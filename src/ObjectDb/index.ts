@@ -56,7 +56,6 @@ export interface EntryChange<T> {
 }
 
 interface CacheData {
-  expiresAt: Instant;
   entryKeys: string[];
 }
 
@@ -114,23 +113,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   onActivate(): void {
     this._db = this.props.db;
-
-    this.addActor(
-      new Timer({
-        duration: Duration.givenMinutes(1),
-        isRepeating: true,
-        fn: () => {
-          const nowMs = Instant.ofNow().toEpochMilliseconds();
-
-          const entries = Array.from(this._caches.entries());
-          for (const [key, val] of entries) {
-            if (val.expiresAt.toEpochMilliseconds() < nowMs) {
-              this._caches.delete(key);
-            }
-          }
-        },
-      })
-    );
 
     this.load();
   }
@@ -283,7 +265,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (fullCacheKey != null) {
       const cacheData = this._caches.get(fullCacheKey);
       if (cacheData != null) {
-        cacheData.expiresAt = now.withAddedDuration(Duration.givenSeconds(300));
         entryKeys = cacheData.entryKeys;
       }
     }
@@ -321,7 +302,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
       this._caches.set(fullCacheKey, {
         entryKeys,
-        expiresAt: now.withAddedDuration(Duration.givenSeconds(300)),
       });
     }
 

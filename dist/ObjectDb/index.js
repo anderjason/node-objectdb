@@ -94,19 +94,6 @@ class ObjectDb extends skytree_1.Actor {
     }
     onActivate() {
         this._db = this.props.db;
-        this.addActor(new skytree_1.Timer({
-            duration: time_1.Duration.givenMinutes(1),
-            isRepeating: true,
-            fn: () => {
-                const nowMs = time_1.Instant.ofNow().toEpochMilliseconds();
-                const entries = Array.from(this._caches.entries());
-                for (const [key, val] of entries) {
-                    if (val.expiresAt.toEpochMilliseconds() < nowMs) {
-                        this._caches.delete(key);
-                    }
-                }
-            },
-        }));
         this.load();
     }
     async load() {
@@ -226,7 +213,6 @@ class ObjectDb extends skytree_1.Actor {
             if (fullCacheKey != null) {
                 const cacheData = this._caches.get(fullCacheKey);
                 if (cacheData != null) {
-                    cacheData.expiresAt = now.withAddedDuration(time_1.Duration.givenSeconds(300));
                     entryKeys = cacheData.entryKeys;
                 }
             }
@@ -255,7 +241,6 @@ class ObjectDb extends skytree_1.Actor {
             if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
                 this._caches.set(fullCacheKey, {
                     entryKeys,
-                    expiresAt: now.withAddedDuration(time_1.Duration.givenSeconds(300)),
                 });
             }
             let start = 0;
