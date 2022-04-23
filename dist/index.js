@@ -1,14 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ObjectDb = exports.Tag = exports.Metric = exports.Entry = exports.Broadcast = void 0;
+exports.SlowResult = exports.MaterializedDimension = exports.LiveDimension = exports.ObjectDb = exports.MongoDb = exports.Entry = exports.Benchmark = void 0;
 const Entry_1 = require("./Entry");
 Object.defineProperty(exports, "Entry", { enumerable: true, get: function () { return Entry_1.Entry; } });
 const ObjectDb_1 = require("./ObjectDb");
 Object.defineProperty(exports, "ObjectDb", { enumerable: true, get: function () { return ObjectDb_1.ObjectDb; } });
-const Metric_1 = require("./Metric");
-Object.defineProperty(exports, "Metric", { enumerable: true, get: function () { return Metric_1.Metric; } });
-const Tag_1 = require("./Tag");
-Object.defineProperty(exports, "Tag", { enumerable: true, get: function () { return Tag_1.Tag; } });
-const Broadcast_1 = require("./Broadcast");
-Object.defineProperty(exports, "Broadcast", { enumerable: true, get: function () { return Broadcast_1.Broadcast; } });
+const MongoDb_1 = require("./MongoDb");
+Object.defineProperty(exports, "MongoDb", { enumerable: true, get: function () { return MongoDb_1.MongoDb; } });
+const Benchmark_1 = require("./Benchmark");
+Object.defineProperty(exports, "Benchmark", { enumerable: true, get: function () { return Benchmark_1.Benchmark; } });
+const LiveDimension_1 = require("./Dimension/LiveDimension");
+Object.defineProperty(exports, "LiveDimension", { enumerable: true, get: function () { return LiveDimension_1.LiveDimension; } });
+const MaterializedDimension_1 = require("./Dimension/MaterializedDimension");
+Object.defineProperty(exports, "MaterializedDimension", { enumerable: true, get: function () { return MaterializedDimension_1.MaterializedDimension; } });
+const SlowResult_1 = require("./SlowResult");
+Object.defineProperty(exports, "SlowResult", { enumerable: true, get: function () { return SlowResult_1.SlowResult; } });
 //# sourceMappingURL=index.js.map

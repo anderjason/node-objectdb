@@ -1,5 +1,4 @@
 import { UniqueId } from "@anderjason/node-crypto";
-import { LocalFile } from "@anderjason/node-filesystem";
 import {
   Dict,
   Observable,
@@ -8,16 +7,23 @@ import {
 } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
 import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
+import { Mutex } from "async-mutex";
 import { Actor, Timer } from "skytree";
 import {
-  AbsoluteBucketIdentifier,
   Bucket,
+  BucketIdentifier,
   Dimension,
-  DimensionProps
+  hashCodeGivenBucketIdentifier
 } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
-import { Metric } from "../Metric";
-import { DbInstance } from "../SqlClient";
+import { MongoDb } from "../MongoDb";
+import {
+  Property,
+  PropertyDefinition,
+  propertyGivenDefinition
+} from "../Property";
+import { SelectProperty } from "../Property/Select/SelectProperty";
+import { SlowResult } from "../SlowResult";
 
 export interface Order {
   key: string;
@@ -25,106 +31,90 @@ export interface Order {
 }
 
 export interface ObjectDbReadOptions {
-  filter?: AbsoluteBucketIdentifier[];
-  orderByMetric?: Order;
+  filter?: BucketIdentifier[];
   limit?: number;
   offset?: number;
   cacheKey?: string;
+  shuffle?: boolean;
 }
 
 export interface ObjectDbProps<T> {
   label: string;
-  localFile: LocalFile;
-
-  metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
+  db: MongoDb;
 
   cacheSize?: number;
-  dimensions?: Dimension<T, DimensionProps>[];
+  rebuildBucketSize?: number;
+  dimensions?: Dimension<T>[];
 }
 
 export interface EntryChange<T> {
   key: string;
+  entry: Entry<T>;
 
   oldData?: T;
   newData?: T;
 }
 
 interface CacheData {
-  expiresAt: Instant;
   entryKeys: string[];
 }
 
-interface BasePropertyDefinition {
-  key: string;
-  label: string;
-  listOrder: number;
+export async function arrayGivenAsyncIterable<T>(
+  asyncIterable: AsyncIterable<T>
+): Promise<T[]> {
+  const result: T[] = [];
+
+  for await (const item of asyncIterable) {
+    result.push(item);
+  }
+
+  return result;
 }
 
-export interface SelectPropertyOption {
-  key: string;
-  label: string;
+export async function countGivenAsyncIterable<T>(
+  asyncIterable: AsyncIterable<T>
+): Promise<number> {
+  let result: number = 0;
+
+  for await (const item of asyncIterable) {
+    result += 1;
+  }
+
+  return result;
 }
 
-export interface SelectPropertyDefinition extends BasePropertyDefinition {
-  type: "select";
-  options: SelectPropertyOption[];
+export async function optionalFirstGivenAsyncIterable<T>(
+  asyncIterable: AsyncIterable<T>
+): Promise<T> {
+  const iterator = asyncIterable[Symbol.asyncIterator]();
+  const r = await iterator.next();
+  return r.value;
 }
-
-export type PropertyDefinition = SelectPropertyDefinition;
 
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   readonly collectionDidChange = new TypedEvent();
   readonly entryWillChange = new TypedEvent<EntryChange<T>>();
   readonly entryDidChange = new TypedEvent<EntryChange<T>>();
 
-  readonly stopwatch: Stopwatch;
-
   protected _isLoaded = Observable.givenValue(false, Observable.isStrictEqual);
   readonly isLoaded = ReadOnlyObservable.givenObservable(this._isLoaded);
 
-  private _dimensionsByKey = new Map<string, Dimension<T, DimensionProps>>();
-  private _metrics = new Map<string, Metric>();
-  private _properties = new Map<string, PropertyDefinition>();
-  private _entryKeys = new Set<string>();
+  readonly stopwatch = new Stopwatch(this.props.label);
+
+  private _dimensions: Dimension<T>[] = [];
+  private _propertyByKey: Map<string, Property> = new Map();
   private _caches = new Map<number, CacheData>();
+  private _mutexByEntryKey = new Map<string, Mutex>();
+  private _db: MongoDb;
 
-  private _db: DbInstance;
-
-  constructor(props: ObjectDbProps<T>) {
-    super(props);
-
-    this.stopwatch = new Stopwatch(props.localFile.toAbsolutePath());
+  get mongoDb(): MongoDb {
+    return this._db;
   }
 
   onActivate(): void {
-    this._db = this.addActor(
-      new DbInstance({
-        localFile: this.props.localFile,
-      })
-    );
-
-    this.addActor(
-      new Timer({
-        duration: Duration.givenMinutes(1),
-        isRepeating: true,
-        fn: () => {
-          const nowMs = Instant.ofNow().toEpochMilliseconds();
-
-          const entries = Array.from(this._caches.entries());
-          for (const [key, val] of entries) {
-            if (val.expiresAt.toEpochMilliseconds() < nowMs) {
-              this._caches.delete(key);
-            }
-          }
-        },
-      })
-    );
+    this._db = this.props.db;
 
     this.load();
-  }
-
-  get metrics(): Metric[] {
-    return Array.from(this._metrics.values());
   }
 
   private async load(): Promise<void> {
@@ -132,202 +122,163 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-    const db = this._db;
+    await this._db.isConnected.toPromise((v) => v);
 
-    db.runQuery("DROP TABLE IF EXISTS tagEntries");
-    db.runQuery("DROP TABLE IF EXISTS tags");
-    db.runQuery("DROP TABLE IF EXISTS tagPrefixes");
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS meta (
-        id INTEGER PRIMARY KEY CHECK (id = 0),
-        properties TEXT NOT NULL
-      )
-    `);
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS metrics (
-        key text PRIMARY KEY
-      )
-    `);
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS entries (
-        key text PRIMARY KEY,
-        data TEXT NOT NULL,
-        createdAt INTEGER NOT NULL,
-        updatedAt INTEGER NOT NULL
-      )
-    `);
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS dimensions (
-        key text PRIMARY KEY,
-        data TEXT NOT NULL
-      )
-    `);
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS properties (
-        key text PRIMARY KEY,
-        definition TEXT NOT NULL
-      )
-    `);
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS propertyValues (
-        entryKey TEXT NOT NULL,
-        propertyKey TEXT NOT NULL,
-        propertyValue TEXT NOT NULL,
-        FOREIGN KEY(propertyKey) REFERENCES properties(key),
-        FOREIGN KEY(entryKey) REFERENCES entries(key),
-        UNIQUE(propertyKey, entryKey)
-      )
-    `);
-
-    try {
-      db.runQuery(`
-        ALTER TABLE entries
-        ADD COLUMN propertyValues TEXT
-      `);
-    } catch (err) {
-      // ignore
-    }
-
-    db.runQuery(`
-      CREATE TABLE IF NOT EXISTS metricValues (
-        metricKey TEXT NOT NULL,
-        entryKey TEXT NOT NULL,
-        metricValue TEXT NOT NULL,
-        FOREIGN KEY(metricKey) REFERENCES metrics(key),
-        FOREIGN KEY(entryKey) REFERENCES entries(key)
-        UNIQUE(metricKey, entryKey)
-      )
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricKey
-      ON metricValues(metricKey);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxMetricValuesEntryKey
-      ON metricValues(entryKey);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxMetricValuesMetricValue
-      ON metricValues(metricValue);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idsPropertyValuesEntryKey
-      ON propertyValues(entryKey);
-    `);
-
-    db.runQuery(`
-      CREATE INDEX IF NOT EXISTS idxPropertyValuesPropertyKey
-      ON propertyValues(propertyKey);
-    `);
-
-    db.prepareCached(
-      "INSERT OR IGNORE INTO meta (id, properties) VALUES (0, ?)"
-    ).run("{}");
-
-    db.toRows("SELECT key, definition FROM properties").forEach((row) => {
-      const { key, definition } = row;
-
-      // assign property definitions
-      this._properties.set(key, JSON.parse(definition));
-    });
-
-    this.stopwatch.start("selectEntryKeys");
-    db.toRows("SELECT key FROM entries").forEach((row) => {
-      this._entryKeys.add(row.key);
-    });
-    this.stopwatch.stop("selectEntryKeys");
-
-    this.stopwatch.start("selectMetricKeys");
-    const metricKeys = db
-      .toRows("SELECT key FROM metrics")
-      .map((row) => row.key);
-    this.stopwatch.stop("selectMetricKeys");
-
-    this.stopwatch.start("createMetrics");
-    const metricKeyCount = metricKeys.length;
-    for (let i = 0; i < metricKeyCount; i++) {
-      const metricKey = metricKeys[i];
-
-      const metric = this.addActor(
-        new Metric({
-          metricKey,
-          db: this._db,
-        })
-      );
-
-      this._metrics.set(metricKey, metric);
-    }
-    this.stopwatch.stop("createMetrics");
-
-    this.stopwatch.start("addDimensions");
     if (this.props.dimensions != null) {
       for (const dimension of this.props.dimensions) {
-        dimension.db = this._db;
-        dimension.objectDb = this;
+        await dimension.init(this._db, this.stopwatch);
 
-        this.addActor(dimension);
-        await dimension.load();
-
-        this._dimensionsByKey.set(dimension.key, dimension);
+        this._dimensions.push(dimension);
       }
     }
-    this.stopwatch.stop("addDimensions");
+
+    const propertyDefinitions = await this._db
+      .collection<PropertyDefinition>("properties")
+      .find(
+        {},
+        {
+          projection: { _id: 0 },
+        }
+      )
+      .toArray();
+
+    for (const propertyDefinition of propertyDefinitions) {
+      const property = propertyGivenDefinition(propertyDefinition);
+      this._propertyByKey.set(propertyDefinition.key, property);
+    }
 
     this._isLoaded.setValue(true);
   }
 
-  async toEntryKeys(options: ObjectDbReadOptions = {}): Promise<string[]> {
+  async ensureIdle(): Promise<void> {
+    // console.log(`Waiting for ObjectDB idle in ${this.props.label}...`);
+    await this._isLoaded.toPromise((v) => v);
+
+    // console.log(`ObjectDb is idle in ${this.props.label}`);
+  }
+
+  async runExclusive<T = void>(
+    entryKey: string,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    if (entryKey == null) {
+      throw new Error("entryKey is required");
+    }
+
+    if (fn == null) {
+      throw new Error("fn is required");
+    }
+
+    if (!this._mutexByEntryKey.has(entryKey)) {
+      this._mutexByEntryKey.set(entryKey, new Mutex());
+    }
+
+    const mutex = this._mutexByEntryKey.get(entryKey);
+
+    let result: T;
+
+    try {
+      await mutex.runExclusive(async () => {
+        result = await fn();
+      });
+    } finally {
+      if (mutex.isLocked() == false) {
+        this._mutexByEntryKey.delete(entryKey);
+      }
+    }
+
+    return result;
+  }
+
+  async updateEntryKey(entryKey: string, partialData: Partial<T>): Promise<Entry<T>> {
+    if (entryKey == null) {
+      throw new Error("entryKey is required");
+    }
+
+    if (partialData == null) {
+      throw new Error("partialData is required");
+    }
+
+    if (Object.keys(partialData).length === 0) {
+      return;
+    }
+
+    return this.runExclusive<Entry<T>>(entryKey, async () => {
+      const entry = await this.toEntryGivenKey(entryKey);
+      if (entry == null) {
+        throw new Error("Entry not found in updateEntryKey");
+      }
+
+      Object.assign(entry.data, partialData);
+      
+      entry.status = "updated";
+      await this.writeEntry(entry);
+
+      return entry;
+    });
+  }
+
+  private async *allEntryKeys(): AsyncGenerator<string> {
+    const entries = this._db.collection<PortableEntry<any>>("entries").find(
+      {},
+      {
+        projection: { key: 1 },
+      }
+    );
+
+    for await (const document of entries) {
+      yield document.key;
+    }
+  }
+
+  async *toEntryKeys(
+    options: ObjectDbReadOptions = {}
+  ): AsyncGenerator<string> {
     const now = Instant.ofNow();
 
     let entryKeys: string[] = undefined;
 
+    await this.ensureIdle();
+
     let fullCacheKey: number = undefined;
     if (options.cacheKey != null) {
-      const bucketIdentifiers: AbsoluteBucketIdentifier[] =
-        options.filter ?? [];
-      const buckets: Bucket<T>[] = [];
+      const bucketIdentifiers: BucketIdentifier[] = options.filter ?? [];
+      const buckets: Bucket[] = [];
 
       for (const bucketIdentifier of bucketIdentifiers) {
-        const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+        const bucket = await this.toOptionalBucketGivenIdentifier(
+          bucketIdentifier
+        );
         if (bucket != null) {
           buckets.push(bucket);
         }
       }
 
-      const hashCodes = buckets.map((bucket) => bucket.toHashCode());
+      const hashCodes = buckets.map((bucket) =>
+        hashCodeGivenBucketIdentifier(bucket.identifier)
+      );
 
-      const cacheKeyData = `${options.cacheKey}:${
-        options.orderByMetric?.direction
-      }:${options.orderByMetric?.key}:${hashCodes.join(",")}`;
+      const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
       fullCacheKey = StringUtil.hashCodeGivenString(cacheKeyData);
     }
 
     if (fullCacheKey != null) {
       const cacheData = this._caches.get(fullCacheKey);
       if (cacheData != null) {
-        cacheData.expiresAt = now.withAddedDuration(Duration.givenSeconds(300));
         entryKeys = cacheData.entryKeys;
       }
     }
 
     if (entryKeys == null) {
-      if (options.filter == null || options.filter.length === 0) {
-        entryKeys = Array.from(this._entryKeys);
+      if (ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
+        entryKeys = await arrayGivenAsyncIterable(this.allEntryKeys());
       } else {
         const sets: Set<string>[] = [];
 
         for (const bucketIdentifier of options.filter) {
-          const bucket = this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+          const bucket = await this.toOptionalBucketGivenIdentifier(
+            bucketIdentifier
+          );
           if (bucket == null) {
             sets.push(new Set<string>());
           } else {
@@ -339,27 +290,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         entryKeys = Array.from(SetUtil.intersectionGivenSets(sets));
       }
 
-      const order = options.orderByMetric;
-      if (order != null) {
-        const metric = this._metrics.get(order.key);
-        if (metric != null) {
-          const entryMetricValues = await metric.toEntryMetricValues();
-
-          entryKeys = ArrayUtil.arrayWithOrderFromValue(
-            entryKeys,
-            (entryKey) => {
-              return entryMetricValues.get(entryKey);
-            },
-            order.direction
-          );
-        }
+      if (options.shuffle == true) {
+        entryKeys = ArrayUtil.arrayWithOrderFromValue(
+          entryKeys,
+          (e) => Math.random(),
+          "ascending"
+        );
       }
     }
 
     if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
       this._caches.set(fullCacheKey, {
         entryKeys,
-        expiresAt: now.withAddedDuration(Duration.givenSeconds(300)),
       });
     }
 
@@ -376,73 +318,54 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const result = entryKeys.slice(start, end);
 
-    return result;
+    for (const i of result) {
+      yield i;
+    }
   }
 
   // TC: O(N)
   async forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void> {
-    for (const entryKey of this._entryKeys) {
+    const entryKeys = this.allEntryKeys();
+    for await (const entryKey of entryKeys) {
       const entry = await this.toOptionalEntryGivenKey(entryKey);
       await fn(entry);
     }
   }
 
   async hasEntry(entryKey: string): Promise<boolean> {
-    const keys = await this.toEntryKeys();
+    const keys = await arrayGivenAsyncIterable(this.toEntryKeys());
     return keys.includes(entryKey);
   }
 
-  async runTransaction(fn: () => Promise<void>): Promise<void> {
-    let failed = false;
-
-    this._db.runTransaction(async () => {
-      try {
-        await fn();
-      } catch (err) {
-        failed = true;
-        console.error(err);
-      }
-    });
-
-    if (failed) {
-      throw new Error(
-        "The transaction failed, and the ObjectDB instance in memory may be out of sync. You should reload the ObjectDb instance."
-      );
-    }
+  async toEntryCount(filter?: BucketIdentifier[], cacheKey?: string): Promise<number> {
+    return countGivenAsyncIterable(
+      this.toEntryKeys({
+        filter,
+        cacheKey
+      })
+    );
   }
 
-  async toEntryCount(filter?: AbsoluteBucketIdentifier[]): Promise<number> {
-    const keys = await this.toEntryKeys({
-      filter,
-    });
-
-    return keys.length;
-  }
-
-  async toEntries(options: ObjectDbReadOptions = {}): Promise<Entry<T>[]> {
-    const entryKeys = await this.toEntryKeys(options);
-
-    const entries: Entry<T>[] = [];
-
-    for (const entryKey of entryKeys) {
-      const result = await this.toOptionalEntryGivenKey(entryKey);
-      if (result != null) {
-        entries.push(result);
+  async *toEntries(
+    options: ObjectDbReadOptions = {}
+  ): AsyncGenerator<Entry<T>> {
+    for await (const entryKey of this.toEntryKeys(options)) {
+      const entry = await this.toOptionalEntryGivenKey(entryKey);
+      if (entry != null) {
+        yield entry;
       }
     }
-
-    return entries;
   }
 
   async toOptionalFirstEntry(
     options: ObjectDbReadOptions = {}
   ): Promise<Entry<T> | undefined> {
-    const results = await this.toEntries({
-      ...options,
-      limit: 1,
-    });
-
-    return results[0];
+    return optionalFirstGivenAsyncIterable(
+      this.toEntries({
+        ...options,
+        limit: 1,
+      })
+    );
   }
 
   async toEntryGivenKey(entryKey: string): Promise<Entry<T>> {
@@ -480,90 +403,132 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
-  toDimensions(): IterableIterator<Dimension<T, DimensionProps>> {
-    return this._dimensionsByKey.values();
-  }
+  async toDimensions(): Promise<Dimension<T>[]> {
+    const result = [...this._dimensions];
 
-  async setProperty(property: PropertyDefinition): Promise<void> {}
-
-  async deletePropertyKey(key: string): Promise<void> {}
-
-  async toPropertyGivenKey(key: string): Promise<PropertyDefinition> {
-    return undefined;
-  }
-
-  async toProperties(): Promise<PropertyDefinition[]> {
-    return [];
-  }
-
-  async removeMetadataGivenEntryKey(entryKey: string): Promise<void> {
-    for (const dimension of this._dimensionsByKey.values()) {
-      await dimension.deleteEntryKey(entryKey);
+    for (const property of this._propertyByKey.values()) {
+      const propertyDimensions = await property.toDimensions();
+      propertyDimensions.forEach((dimension) => {
+        result.push(dimension);
+      });
     }
 
-    const metricKeys = this._db
-      .prepareCached(
-        "select distinct metricKey from metricValues where entryKey = ?"
-      )
-      .all(entryKey)
-      .map((row) => row.metricKey);
-
-    for (const metricKey of metricKeys) {
-      const metric = await this.metricGivenMetricKey(metricKey);
-      metric.deleteKey(entryKey);
+    for (const dimension of result) {
+      await dimension.init(this._db, this.stopwatch);
     }
+
+    return result;
   }
 
-  async rebuildMetadata(): Promise<void> {
+  async writeProperty(definition: PropertyDefinition): Promise<void> {
+    let property: Property;
+
+    switch (definition.propertyType) {
+      case "select":
+        property = await SelectProperty.writeDefinition(this._db, definition);
+        break;
+      default:
+        throw new Error(
+          `Unsupported property type '${definition.propertyType}'`
+        );
+    }
+
+    this._propertyByKey.set(definition.key, property);
+  }
+
+  async deletePropertyKey(propertyKey: string): Promise<void> {
+    await this._db.collection("properties").deleteOne({ key: propertyKey });
+
+    const fullPropertyPath = `propertyValues.${propertyKey}`;
+    await this.props.db.collection("buckets").updateMany(
+      { [fullPropertyPath]: { $exists: true } },
+      {
+        $unset: { [fullPropertyPath]: 1 },
+      }
+    );
+
+    this._propertyByKey.delete(propertyKey);
+  }
+
+  async toOptionalPropertyGivenKey(key: string): Promise<Property | undefined> {
+    return this._propertyByKey.get(key);
+  }
+
+  async toProperties(): Promise<Property[]> {
+    return Array.from(this._propertyByKey.values());
+  }
+
+  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
+    const timer = this.stopwatch.start("rebuildMetadataGivenEntry");
+    const dimensions = await this.toDimensions();
+
+    await Promise.all(
+      dimensions.map((dimension) => dimension.rebuildEntry(entry))
+    );
+    timer.stop();
+  }
+
+  rebuildMetadata(): SlowResult<any> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
-    const entryKeys = await this.toEntryKeys();
+    return new SlowResult({
+      getItems: () => this.allEntryKeys(),
+      getTotalCount: () => this.toEntryCount(),
+      fn: async (entryKey) => {
+        const entry = await this.toOptionalEntryGivenKey(entryKey);
+        if (entry == null) {
+          return;
+        }
 
-    console.log(`Found ${entryKeys.length} entries`);
-
-    for (const entryKey of entryKeys) {
-      const entry = await this.toOptionalEntryGivenKey(entryKey);
-      if (entry != null) {
         await this.rebuildMetadataGivenEntry(entry);
-      }
-    }
-
-    console.log("Done rebuilding metadata");
+      },
+    });
   }
 
-  toOptionalBucketGivenIdentifier(
-    bucketIdentifier: AbsoluteBucketIdentifier
-  ): Bucket<T> | undefined {
-    if (bucketIdentifier == null) {
+  async *toBuckets(): AsyncGenerator<Bucket> {
+    const dimensions = await this.toDimensions();
+    for await (const dimension of dimensions) {
+      for await (const bucket of dimension.toBuckets()) {
+        yield bucket;
+      }
+    }
+  }
+
+  toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier> {
+    return new SlowResult({
+      getItems: () => this.toBuckets(),
+      fn: async (bucket) => {
+        const hasItem = await bucket.hasEntryKey(entryKey);
+        return hasItem ? bucket.identifier : undefined;
+      },
+    });
+  }
+
+  async toOptionalDimensionGivenKey(
+    dimensionKey: string
+  ): Promise<Dimension<T> | undefined> {
+    if (dimensionKey == null) {
       return undefined;
     }
 
-    const dimension = this._dimensionsByKey.get(bucketIdentifier.dimensionKey);
+    const dimensions = await this.toDimensions();
+    return dimensions.find((d) => d.key === dimensionKey);
+  }
+
+  async toOptionalBucketGivenIdentifier(
+    bucketIdentifier: BucketIdentifier
+  ): Promise<Bucket | undefined> {
+    const dimension = await this.toOptionalDimensionGivenKey(
+      bucketIdentifier.dimensionKey
+    );
     if (dimension == null) {
       return undefined;
     }
 
-    return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey);
-  }
-
-  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
-    await this.removeMetadataGivenEntryKey(entry.key);
-
-    const metricValues = this.props.metricsGivenEntry(entry);
-
-    metricValues.createdAt = entry.createdAt.toEpochMilliseconds().toString();
-    metricValues.updatedAt = entry.updatedAt.toEpochMilliseconds().toString();
-
-    for (const dimension of this._dimensionsByKey.values()) {
-      await dimension.entryDidChange(entry.key);
-    }
-
-    for (const metricKey of Object.keys(metricValues)) {
-      const metric = await this.metricGivenMetricKey(metricKey);
-
-      const metricValue = metricValues[metricKey];
-      metric.setValue(entry.key, metricValue);
-    }
+    return dimension.toOptionalBucketGivenKey(
+      bucketIdentifier.bucketKey,
+      bucketIdentifier.bucketLabel
+    );
   }
 
   async writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void> {
@@ -584,7 +549,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
             entry.data,
             entry.propertyValues,
             entry.key,
-            entry.createdAt
+            entry.createdAt,
+            entry.documentVersion
           );
         } else {
           const createdAt =
@@ -596,7 +562,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
             entry.data,
             entry.propertyValues,
             entry.key,
-            createdAt
+            createdAt,
+            entry.documentVersion
           );
         }
 
@@ -606,26 +573,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  async metricGivenMetricKey(metricKey: string): Promise<Metric> {
-    let metric = this._metrics.get(metricKey);
-    if (metric == null) {
-      metric = this.addActor(
-        new Metric({
-          metricKey,
-          db: this._db,
-        })
-      );
-      this._metrics.set(metricKey, metric);
-    }
-
-    return metric;
-  }
-
   async writeEntryData(
     entryData: T,
     propertyValues: Dict<JSONSerializable> = {},
     entryKey?: string,
-    createdAt?: Instant
+    createdAt?: Instant,
+    documentVersion?: number
   ): Promise<Entry<T>> {
     if (entryKey == null) {
       entryKey = UniqueId.ofRandom().toUUIDString();
@@ -635,8 +588,22 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const oldEntry = await this.toOptionalEntryGivenKey(entryKey);
-    const oldPortableEntry = oldEntry?.toPortableEntry();
+    let entry = await this.toOptionalEntryGivenKey(entryKey);
+
+    const oldDocumentVersion = entry?.documentVersion;
+    if (
+      oldDocumentVersion != null &&
+      documentVersion != null &&
+      oldDocumentVersion !== documentVersion
+    ) {
+      console.log("key", entryKey);
+      console.log("old version", oldDocumentVersion, entry?.data);
+      console.log("new version", documentVersion, entryData);
+
+      throw new Error("Document version does not match");
+    }
+
+    const oldPortableEntry = entry?.toPortableEntry();
     const oldData = oldPortableEntry?.data;
     const oldPropertyValues = oldPortableEntry?.propertyValues;
 
@@ -648,18 +615,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       return;
     }
 
-    const change: EntryChange<T> = {
-      key: entryKey,
-      oldData,
-      newData: entryData,
-    };
-
-    this.entryWillChange.emit(change);
-
     const now = Instant.ofNow();
     let didCreateNewEntry = false;
 
-    let entry = await this.toOptionalEntryGivenKey(entryKey);
     if (entry == null) {
       entry = new Entry<T>({
         key: entryKey,
@@ -674,9 +632,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry.data = entryData;
     entry.propertyValues = propertyValues;
 
-    await entry.save();
+    const change: EntryChange<T> = {
+      key: entryKey,
+      entry,
+      oldData,
+      newData: entryData,
+    };
 
-    this._entryKeys.add(entryKey);
+    this.entryWillChange.emit(change);
+
+    await entry.save();
     await this.rebuildMetadataGivenEntry(entry);
 
     if (didCreateNewEntry) {
@@ -684,6 +649,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     this.entryDidChange.emit(change);
+
+    await this.ensureIdle();
 
     return entry;
   }
@@ -700,25 +667,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const change: EntryChange<T> = {
       key: entryKey,
+      entry: existingRecord,
       oldData: existingRecord.data,
     };
 
     this.entryWillChange.emit(change);
 
-    await this.removeMetadataGivenEntryKey(entryKey);
+    const dimensions = await this.toDimensions();
+    for (const dimension of dimensions) {
+      await dimension.deleteEntryKey(entryKey);
+    }
 
-    this._db.runQuery("DELETE FROM propertyValues WHERE entryKey = ?", [
-      entryKey,
-    ]);
-
-    this._db.runQuery(
-      `
-      DELETE FROM entries WHERE key = ?
-    `,
-      [entryKey]
-    );
-
-    this._entryKeys.delete(entryKey);
+    await this._db.collection("entries").deleteOne({ key: entryKey });
 
     this.entryDidChange.emit(change);
     this.collectionDidChange.emit();

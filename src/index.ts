@@ -1,6 +1,19 @@
 import { Entry } from "./Entry";
 import { ObjectDb } from "./ObjectDb";
-import { Metric } from "./Metric";
-import { Broadcast } from "./Broadcast";
+import { MongoDb } from "./MongoDb";
+import { Benchmark } from "./Benchmark";
+import { Bucket } from "./Dimension";
+import { LiveDimension } from "./Dimension/LiveDimension";
+import { MaterializedDimension } from "./Dimension/MaterializedDimension";
+import { SlowResult } from "./SlowResult";
 
-export { Broadcast, Entry, Metric, ObjectDb };
+export {
+  Benchmark,
+  Entry,
+  MongoDb,
+  ObjectDb,
+  LiveDimension,
+  MaterializedDimension,
+  Bucket,
+  SlowResult,
+};

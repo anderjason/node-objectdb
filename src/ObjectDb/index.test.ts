@@ -1,460 +1,613 @@
-import { LocalFile } from "@anderjason/node-filesystem";
-import { Dict } from "@anderjason/observable";
 import { Test } from "@anderjason/tests";
-import { ObjectDb } from ".";
-import { MaterializedDimension } from "../Dimension";
-import { DbInstance } from "../SqlClient";
-
-const localFile = LocalFile.givenAbsolutePath(
-  "/Users/jason/Desktop/node-objectdb-test.sqlite3"
-);
+import { StringUtil, ValuePath } from "@anderjason/util";
+import { arrayGivenAsyncIterable, ObjectDb } from ".";
+import { MaterializedDimension } from "../Dimension/MaterializedDimension";
+import { LiveDimension } from "../Dimension/LiveDimension";
+import { MaterializedBucket } from "../Dimension/MaterializedDimension/MaterializedBucket";
+import { MongoDb } from "../MongoDb";
 
 interface TestEntryData {
   message: string;
+  numbers?: number[];
 }
 
-Test.define("ObjectDb can be created", async () => {
-  await localFile.deleteFile();
-  const fileDb = new ObjectDb<TestEntryData>({
-    label: "testDb",
-    localFile,
-    metricsGivenEntry: (entry) => ({}),
-  });
-  fileDb.activate();
+let db: MongoDb;
+async function usingTestDb(
+  fn: (db: MongoDb) => Promise<void>,
+  keepDb: boolean = false
+): Promise<void> {
+  if (db == null) {
+    db = new MongoDb({
+      dbName: "test",
+      namespace: StringUtil.stringOfRandomCharacters(6),
+      url: "mongodb://localhost:27017/&ssl=false",
+    });
+  }
 
-  fileDb.deactivate();
+  db.activate();
+  await db.ensureConnected();
+
+  try {
+    await fn(db);
+
+    if (keepDb == false) {
+      await db.dropDatabase();
+    } else {
+      console.log("DB is saved at", db.props.namespace);
+    }
+  } catch (err) {
+    console.log("DB is saved at", db.props.namespace);
+    throw err;
+  } finally {
+    db.deactivate();
+  }
+}
+
+Test.define("MaterializedBucket can insert and query entry keys", async () => {
+  await usingTestDb(async (db) => {
+    const bucket = new MaterializedBucket({
+      identifier: {
+        dimensionKey: "dim1",
+        bucketKey: "bucket1",
+        bucketLabel: "bucket1",
+      },
+      db,
+    });
+
+    await bucket.addEntryKey("entryKey1");
+    await bucket.addEntryKey("entryKey2");
+
+    const hasOne = await bucket.hasEntryKey("entryKey1");
+    const hasTwo = await bucket.hasEntryKey("entryKey2");
+    const hasThree = await bucket.hasEntryKey("entryKey3");
+
+    Test.assert(hasOne == true, "hasOne should be true");
+    Test.assert(hasTwo == true, "hasTwo should be true");
+    Test.assert(hasThree == false, "hasThree should be false");
+  });
+});
+
+Test.define("ObjectDb can be created", async () => {
+  await usingTestDb(async (db) => {
+    const objectDb = new ObjectDb<TestEntryData>({
+      db,
+      label: "TestDb",
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
+
+    objectDb.deactivate();
+  });
 });
 
 Test.define("ObjectDb can write and read a row", async () => {
-  await localFile.deleteFile();
+  await usingTestDb(async (db) => {
+    const objectDb = new ObjectDb<TestEntryData>({
+      db,
+      label: "TestDb",
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
 
-  const fileDb = new ObjectDb<TestEntryData>({
-    label: "testDb",
-    localFile,
-    metricsGivenEntry: (entry) => ({}),
+    const entry = await objectDb.writeEntryData({
+      message: "hello world",
+    });
+
+    Test.assert(entry.key != null, "entry.key should not be null");
+    Test.assert(entry.key.length == 36, "entry.key should be 36 characters");
+    Test.assert(entry.createdAt != null, "entry.createdAt should not be null");
+    Test.assert(entry.updatedAt != null, "entry.updatedAt should not be null");
+    Test.assert(
+      entry.data.message === "hello world",
+      "entry.data.message should be 'hello world'"
+    );
+
+    const result = await objectDb.toEntryGivenKey(entry.key);
+    Test.assertIsDeepEqual(
+      result.data,
+      entry.data,
+      "entry.data should be equal to result.data"
+    );
+
+    objectDb.deactivate();
   });
-  fileDb.activate();
-
-  const entry = await fileDb.writeEntryData({
-    message: "hello world",
-  });
-
-  Test.assert(entry.key != null);
-  Test.assert(entry.key.length == 36);
-  Test.assert(entry.createdAt != null);
-  Test.assert(entry.updatedAt != null);
-  Test.assert(entry.data.message === "hello world");
-
-  const result = await fileDb.toEntryGivenKey(entry.key);
-  Test.assertIsDeepEqual(result.data, entry.data);
-
-  fileDb.deactivate();
 });
-
-Test.define("ObjectDb can assign metrics", async () => {
-  await localFile.deleteFile();
-
-  const fileDb = new ObjectDb<TestEntryData>({
-    label: "testDb",
-    localFile,
-    metricsGivenEntry: (entry) => {
-      const result: Dict<string> = {};
-
-      result.charCount = String(entry.data.message?.length || 0);
-
-      return result;
-    },
-  });
-  fileDb.activate();
-
-  const entry = await fileDb.writeEntryData({
-    message: "hello world",
-  });
-
-  fileDb.deactivate();
-
-  const db = new DbInstance({
-    localFile,
-  });
-  db.activate();
-
-  const row = db
-    .prepareCached(
-      "SELECT metricValue FROM metricValues WHERE metricKey = ? AND entryKey = ?"
-    )
-    .get("charCount", entry.key);
-
-  db.deactivate();
-
-  Test.assertIsEqual(row.metricValue, "11");
-});
-
-// Test.define("ObjectDb can have properties", async () => {
-//   await localFile.deleteFile();
-
-//   const fileDb = new ObjectDb<TestEntryData>({
-//     localFile,
-//     metricsGivenEntry: (entry) => {
-//       const result: Dict<string> = {};
-
-//       result.charCount = String(entry.data.message?.length || 0);
-
-//       return result;
-//     },
-//   });
-//   fileDb.activate();
-
-//   await fileDb.setProperty({
-//     key: "status",
-//     label: "Status",
-//     listOrder: 0,
-//     type: "select",
-//     options: [
-//       { key: "low", label: "Low" },
-//       { key: "medium", label: "Medium" },
-//       { key: "high", label: "High" },
-//     ],
-//   });
-
-//   const statusDefinition = await fileDb.toPropertyGivenKey("status");
-//   Test.assert(statusDefinition != null);
-//   Test.assert(statusDefinition.label === "Status");
-
-//   fileDb.deactivate();
-// });
-
-// Test.define("ObjectDb can filter by property automatically", async () => {
-//   await localFile.deleteFile();
-
-//   const fileDb = new ObjectDb<TestEntryData>({
-//     localFile,
-//     metricsGivenEntry: (entry) => ({}),
-//   });
-//   fileDb.activate();
-
-//   await fileDb.setProperty({
-//     key: "status",
-//     label: "Status",
-//     listOrder: 0,
-//     type: "select",
-//     options: [
-//       { key: "low", label: "Low" },
-//       { key: "medium", label: "Medium" },
-//       { key: "high", label: "High" },
-//     ],
-//   });
-
-//   await fileDb.writeEntryData(
-//     {
-//       message: "low status",
-//     },
-//     {
-//       status: "low",
-//     }
-//   );
-
-//   await fileDb.writeEntryData(
-//     {
-//       message: "medium status",
-//     },
-//     {
-//       status: "medium",
-//     }
-//   );
-
-//   const matchLow = await fileDb.toEntries({
-//     requireTags: [
-//       {
-//         tagPrefixLabel: "Status",
-//         tagLabel: "low",
-//       },
-//     ],
-//   });
-
-//   const matchMedium = await fileDb.toEntries({
-//     requireTags: [
-//       {
-//         tagPrefixLabel: "Status",
-//         tagLabel: "medium",
-//       },
-//     ],
-//   });
-
-//   Test.assert(!ArrayUtil.arrayIsEmptyOrNull(matchLow));
-//   Test.assert(matchLow.length == 1);
-//   Test.assert(matchLow[0].data.message === "low status");
-
-//   Test.assert(!ArrayUtil.arrayIsEmptyOrNull(matchMedium));
-//   Test.assert(matchMedium.length == 1);
-//   Test.assert(matchMedium[0].data.message === "medium status");
-
-//   fileDb.deactivate();
-// });
-
-// Test.define(
-//   "Select properties without a value can be filtered with 'Not set'",
-//   async () => {
-//     await localFile.deleteFile();
-
-//     const fileDb = new ObjectDb<TestEntryData>({
-//       localFile,
-//       tagsGivenEntry: (entry) => [],
-//       metricsGivenEntry: (entry) => ({}),
-//     });
-//     fileDb.activate();
-
-//     await fileDb.setProperty({
-//       key: "status",
-//       label: "Status",
-//       listOrder: 0,
-//       type: "select",
-//       options: [
-//         { key: "low", label: "Low" },
-//         { key: "medium", label: "Medium" },
-//         { key: "high", label: "High" },
-//       ],
-//     });
-
-//     await fileDb.writeEntryData({
-//       message: "low status",
-//     });
-
-//     await fileDb.writeEntryData(
-//       {
-//         message: "medium status",
-//       },
-//       {
-//         status: "medium",
-//       }
-//     );
-
-//     const matchLow = await fileDb.toEntries({
-//       requireTags: [
-//         {
-//           tagPrefixLabel: "Status",
-//           tagLabel: "Not set",
-//         },
-//       ],
-//     });
-
-//     Test.assert(!ArrayUtil.arrayIsEmptyOrNull(matchLow));
-//     Test.assert(matchLow.length == 1);
-//     Test.assert(matchLow[0].data.message === "low status");
-
-//     fileDb.deactivate();
-//   }
-// );
 
 Test.define("ObjectDb can find entries by bucket identifier", async () => {
-  await localFile.deleteFile();
-
-  const fileDb = new ObjectDb<TestEntryData>({
-    label: "testDb",
-    localFile,
-    metricsGivenEntry: (entry) => ({}),
-    dimensions: [
-      new MaterializedDimension({
-        key: "message",
-        label: "Message",
-        bucketIdentifiersGivenEntry: (entry) => {
-          return [
-            {
+  await usingTestDb(async (db) => {
+    const objectDb = new ObjectDb<TestEntryData>({
+      label: "testDb",
+      db,
+      dimensions: [
+        new MaterializedDimension({
+          key: "message",
+          label: "Message",
+          bucketIdentifiersGivenEntry: (entry) => {
+            return {
+              dimensionKey: "message",
               bucketKey: entry.data.message,
               bucketLabel: entry.data.message,
-            },
-          ];
+            };
+          },
+        }),
+      ],
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
+
+    const one = await objectDb.writeEntryData({
+      message: "one",
+    });
+
+    const two = await objectDb.writeEntryData({
+      message: "two",
+    });
+
+    Test.assert(one.key !== two.key, "Keys should be equal");
+
+    const resultOne = await objectDb.toOptionalFirstEntry({
+      filter: [
+        {
+          dimensionKey: "message",
+          bucketKey: "one",
+          bucketLabel: "one",
         },
-      }),
-    ],
-  });
-  fileDb.activate();
+      ],
+    });
 
-  const one = await fileDb.writeEntryData({
-    message: "one",
-  });
+    const resultTwo = await objectDb.toOptionalFirstEntry({
+      filter: [
+        {
+          dimensionKey: "message",
+          bucketKey: "two",
+          bucketLabel: "two",
+        },
+      ],
+    });
 
-  const two = await fileDb.writeEntryData({
-    message: "two",
-  });
+    const resultThree = await objectDb.toOptionalFirstEntry({
+      filter: [
+        {
+          dimensionKey: "message",
+          bucketKey: "three",
+          bucketLabel: "three",
+        },
+      ],
+    });
 
-  Test.assert(one.key !== two.key);
+    Test.assert(resultOne != null, "Result one should not be null");
+    Test.assert(resultTwo != null, "Result two should not be null");
+    Test.assert(resultThree == null, "Result three should be null");
+    Test.assert(resultOne.key === one.key, "Result one key should be equal");
+    Test.assert(resultTwo.key === two.key, "Result two key should be equal");
 
-  const resultOne = await fileDb.toOptionalFirstEntry({
-    filter: [
-      {
-        dimensionKey: "message",
-        bucketKey: "one",
-        bucketLabel: "one",
-      },
-    ],
-  });
-
-  const resultTwo = await fileDb.toOptionalFirstEntry({
-    filter: [
+    const count = await objectDb.toEntryCount([
       {
         dimensionKey: "message",
         bucketKey: "two",
         bucketLabel: "two",
       },
-    ],
-  });
+    ]);
+    Test.assert(count === 1, "Count should be 1");
 
-  const resultThree = await fileDb.toOptionalFirstEntry({
-    filter: [
+    objectDb.deactivate();
+  });
+});
+
+Test.define("ObjectDb can find entry count by bucket identifier", async () => {
+  await usingTestDb(async (db) => {
+    const objectDb = new ObjectDb<TestEntryData>({
+      label: "testDb",
+      db,
+      dimensions: [
+        new MaterializedDimension({
+          key: "message",
+          label: "Message",
+          bucketIdentifiersGivenEntry: (entry) => {
+            return [
+              {
+                dimensionKey: "message",
+                bucketKey: entry.data.message,
+                bucketLabel: entry.data.message,
+              },
+            ];
+          },
+        }),
+      ],
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
+
+    await objectDb.writeEntryData({
+      message: "one",
+    });
+
+    await objectDb.writeEntryData({
+      message: "one",
+    });
+
+    const count = await objectDb.toEntryCount([
       {
         dimensionKey: "message",
-        bucketKey: "three",
-        bucketLabel: "three",
+        bucketKey: "one",
+        bucketLabel: "one",
       },
-    ],
+    ]);
+
+    Test.assertIsEqual(count, 2, "Count should be equal");
+
+    objectDb.deactivate();
   });
-
-  Test.assert(resultOne != null);
-  Test.assert(resultTwo != null);
-  Test.assert(resultThree == null);
-  Test.assert(resultOne.key === one.key);
-  Test.assert(resultTwo.key === two.key);
-
-  const count = await fileDb.toEntryCount([
-    {
-      dimensionKey: "message",
-      bucketKey: "two",
-      bucketLabel: "two",
-    },
-  ]);
-  Test.assert(count === 1);
-
-  fileDb.deactivate();
 });
 
 Test.define("ObjectDb supports materialized dimensions", async () => {
-  const md = new MaterializedDimension<TestEntryData>({
-    key: "message",
-    label: "Message",
-    bucketIdentifiersGivenEntry: (entry) => {
-      return [
-        {
+  await usingTestDb(async (db) => {
+    const md = new MaterializedDimension<TestEntryData>({
+      key: "message",
+      label: "Message",
+      bucketIdentifiersGivenEntry: (entry) => {
+        return {
+          dimensionKey: "message",
           bucketKey: entry.data.message,
           bucketLabel: entry.data.message,
-        },
-      ];
-    },
+        };
+      },
+    });
+
+    const objectDb = new ObjectDb<TestEntryData>({
+      label: "testDb",
+      db,
+      dimensions: [md],
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
+
+    const objA = await objectDb.writeEntryData({
+      message: "A",
+    });
+
+    const objB = await objectDb.writeEntryData({
+      message: "B",
+    });
+
+    await objectDb.ensureIdle();
+
+    const bucketOne = await md.toOptionalBucketGivenKey("A");
+    const bucketTwo = await md.toOptionalBucketGivenKey("B");
+
+    Test.assert(bucketOne != null, "Bucket one should not be null");
+    Test.assert(bucketTwo != null, "Bucket two should not be null");
+
+    Test.assert(
+      (await bucketOne.hasEntryKey(objA.key)) == true,
+      "Bucket one does not have entry A"
+    );
+    Test.assert(
+      (await bucketOne.hasEntryKey(objB.key)) == false,
+      "Bucket one should not have entry B"
+    );
+
+    Test.assert(
+      (await bucketTwo.hasEntryKey(objA.key)) == false,
+      "Bucket two should not have entry A"
+    );
+    Test.assert(
+      (await bucketTwo.hasEntryKey(objB.key)) == true,
+      "Bucket two should have entry B"
+    );
+
+    await objB.load();
+    objB.data.message = "B to C";
+    objB.status = "updated";
+    await objectDb.writeEntry(objB);
+
+    await objectDb.ensureIdle();
+
+    const bucketThree = await md.toOptionalBucketGivenKey("B to C");
+
+    Test.assert(
+      (await bucketOne.hasEntryKey(objB.key)) == false,
+      "Bucket one should not have entry B to C"
+    );
+    Test.assert(
+      (await bucketTwo.hasEntryKey(objB.key)) == false,
+      "Bucket two should not have entry B to C"
+    );
+    Test.assert(
+      (await bucketThree.hasEntryKey(objB.key)) == true,
+      "Bucket three should have entry B to C"
+    );
+
+    objectDb.deactivate();
   });
-
-  await localFile.deleteFile();
-
-  const fileDb = new ObjectDb<TestEntryData>({
-    label: "testDb",
-    localFile,
-    metricsGivenEntry: (entry) => ({}),
-    dimensions: [md],
-  });
-  fileDb.activate();
-
-  const one = await fileDb.writeEntryData({
-    message: "one",
-  });
-
-  const two = await fileDb.writeEntryData({
-    message: "two",
-  });
-
-  await md.isUpdated.toPromise((v) => v == true);
-
-  const bucketOne = md.toOptionalBucketGivenKey("one");
-  const bucketTwo = md.toOptionalBucketGivenKey("two");
-
-  Test.assert((await bucketOne.hasEntryKey(one.key)) == true);
-  Test.assert((await bucketOne.hasEntryKey(two.key)) == false);
-
-  Test.assert((await bucketTwo.hasEntryKey(one.key)) == false);
-  Test.assert((await bucketTwo.hasEntryKey(two.key)) == true);
-
-  two.data.message = "three";
-  two.status = "updated";
-  await fileDb.writeEntry(two);
-
-  await md.isUpdated.toPromise((v) => v == true);
-
-  const bucketThree = md.toOptionalBucketGivenKey("three");
-  Test.assert((await bucketOne.hasEntryKey(two.key)) == false);
-  Test.assert((await bucketTwo.hasEntryKey(two.key)) == false);
-  Test.assert((await bucketThree.hasEntryKey(two.key)) == true);
-
-  fileDb.deactivate();
 });
 
 Test.define("ObjectDb materialized dimensions save their state", async () => {
-  const md = new MaterializedDimension<TestEntryData>({
-    key: "message",
-    label: "Message",
-    bucketIdentifiersGivenEntry: (entry) => {
-      return [
+  await usingTestDb(async (db) => {
+    const md = new MaterializedDimension<TestEntryData>({
+      key: "message",
+      label: "Message",
+      bucketIdentifiersGivenEntry: (entry) => {
+        return [
+          {
+            dimensionKey: "message",
+            bucketKey: entry.data.message,
+            bucketLabel: entry.data.message,
+          },
+        ];
+      },
+    });
+
+    const objectDb = new ObjectDb<TestEntryData>({
+      label: "testDb",
+      db,
+      dimensions: [md],
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
+
+    const one = await objectDb.writeEntryData({
+      message: "one",
+    });
+
+    const two = await objectDb.writeEntryData({
+      message: "two",
+    });
+
+    objectDb.deactivate();
+
+    // ----
+
+    const md2 = new MaterializedDimension<TestEntryData>({
+      key: "message",
+      label: "Message",
+      bucketIdentifiersGivenEntry: (entry) => {
+        return [
+          {
+            dimensionKey: "message",
+            bucketKey: entry.data.message,
+            bucketLabel: entry.data.message,
+          },
+        ];
+      },
+    });
+
+    const objectDb2 = new ObjectDb<TestEntryData>({
+      label: "testDb",
+      db,
+      dimensions: [md2],
+    });
+    objectDb2.activate();
+    await objectDb2.ensureIdle();
+
+    const bucketOne2 = await md2.toOptionalBucketGivenKey("one");
+    const bucketTwo2 = await md2.toOptionalBucketGivenKey("two");
+
+    Test.assert(bucketOne2 != null, "bucketOne2 should not be null");
+    Test.assert(bucketTwo2 != null, "bucketTwo2 should not be null");
+
+    Test.assert(
+      (await bucketOne2.hasEntryKey(one.key)) == true,
+      "Bucket one does not have entry one"
+    );
+    Test.assert(
+      (await bucketOne2.hasEntryKey(two.key)) == false,
+      "Bucket one has entry two"
+    );
+
+    Test.assert(
+      (await bucketTwo2.hasEntryKey(one.key)) == false,
+      "Bucket two has entry one"
+    );
+    Test.assert(
+      (await bucketTwo2.hasEntryKey(two.key)) == true,
+      "Bucket two does not have entry two"
+    );
+
+    objectDb2.deactivate();
+  });
+});
+
+Test.define(
+  "ObjectDb supports live dimensions with string properties",
+  async () => {
+    await usingTestDb(async (db) => {
+      const dim = LiveDimension.ofEntry<TestEntryData>({
+        dimensionKey: "message",
+        dimensionLabel: "Message",
+        valuePath: ValuePath.givenParts(["data", "message"]),
+        valueType: "single",
+      });
+
+      const objectDb = new ObjectDb<TestEntryData>({
+        label: "testDb",
+        db,
+        dimensions: [dim],
+      });
+      objectDb.activate();
+      await objectDb.ensureIdle();
+
+      const one = await objectDb.writeEntryData({
+        message: "one",
+      });
+
+      const two = await objectDb.writeEntryData({
+        message: "two",
+      });
+
+      const expectedBucketIdentifiers = [
         {
-          bucketKey: entry.data.message,
-          bucketLabel: entry.data.message,
+          dimensionKey: "message",
+          bucketKey: "one",
+          bucketLabel: "one",
+        },
+        {
+          dimensionKey: "message",
+          bucketKey: "two",
+          bucketLabel: "two",
         },
       ];
-    },
+
+      const bucketIdentifiers = await arrayGivenAsyncIterable(dim.toBucketIdentifiers());
+
+      Test.assertIsDeepEqual(
+        bucketIdentifiers,
+        expectedBucketIdentifiers,
+        "bucket identifiers should equal expected"
+      );
+
+      const bucket = await dim.toOptionalBucketGivenKey("one");
+      Test.assert(bucket != null, "bucket should not be null");
+
+      const entries = await bucket.toEntryKeys();
+      Test.assert(entries.size == 1, "entries should have one entry");
+      Test.assert(entries.has(one.key), "entries should have entry one");
+
+      objectDb.deactivate();
+    });
+  }
+);
+
+Test.define(
+  "ObjectDb supports live dimensions with array properties",
+  async () => {
+    await usingTestDb(async (db) => {
+      const dim = LiveDimension.ofEntry<TestEntryData>({
+        dimensionKey: "number",
+        dimensionLabel: "Number",
+        valuePath: ValuePath.givenParts(["data", "numbers"]),
+        valueType: "array",
+        mongoValueGivenBucketKey: (bucketKey) => parseInt(bucketKey),
+      });
+
+      const objectDb = new ObjectDb<TestEntryData>({
+        label: "testDb",
+        db,
+        dimensions: [dim],
+      });
+      objectDb.activate();
+      await objectDb.ensureIdle();
+
+      const odd = await objectDb.writeEntryData({
+        message: "odd",
+        numbers: [1, 3, 5, 7, 9],
+      });
+
+      const even = await objectDb.writeEntryData({
+        message: "even",
+        numbers: [2, 4, 6, 8],
+      });
+
+      const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+      const expectedBucketIdentifiers = numbers.map((n) => {
+        return {
+          dimensionKey: "number",
+          bucketKey: String(n),
+          bucketLabel: String(n),
+        };
+      });
+
+      const bucketIdentifiers = await arrayGivenAsyncIterable(dim.toBucketIdentifiers());
+
+      Test.assertIsDeepEqual(
+        bucketIdentifiers,
+        expectedBucketIdentifiers,
+        "bucket identifiers should equal expected"
+      );
+
+      const bucket = await dim.toOptionalBucketGivenKey("5");
+      Test.assert(bucket != null, "bucket should not be null");
+
+      const entries = await arrayGivenAsyncIterable(
+        objectDb.toEntries({
+          filter: [
+            {
+              dimensionKey: "number",
+              bucketKey: "5",
+              bucketLabel: "5",
+            },
+          ],
+        })
+      );
+      Test.assert(entries.length == 1, "entries should have one entry");
+      Test.assert(
+        entries.some((e) => e.key == odd.key),
+        "entries should have entry one"
+      );
+
+      objectDb.deactivate();
+    });
+  }
+);
+
+Test.define("ObjectDb live dimensions are case insensitive", async () => {
+  await usingTestDb(async (db) => {
+    const dim = LiveDimension.ofEntry<TestEntryData>({
+      dimensionKey: "message",
+      dimensionLabel: "Message",
+      valuePath: ValuePath.givenParts(["data", "message"]),
+      valueType: "single",
+    });
+
+    const objectDb = new ObjectDb<TestEntryData>({
+      label: "testDb",
+      db,
+      dimensions: [dim],
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
+
+    const apple = await objectDb.writeEntryData({
+      message: "Apple",
+    });
+
+    const entries = await arrayGivenAsyncIterable(
+      objectDb.toEntries({
+        filter: [
+          {
+            dimensionKey: "message",
+            bucketKey: "apple",
+            bucketLabel: "Apple",
+          },
+        ],
+      })
+    );
+
+    Test.assert(entries.length == 1, "entries should have one entry");
+    Test.assert(
+      entries.some((e) => e.key == apple.key),
+      "entries should have apple"
+    );
+
+    objectDb.deactivate();
   });
+});
 
-  await localFile.deleteFile();
+Test.define("ObjectDb prevents saving stale entries", async () => {
+  await usingTestDb(async (db) => {
+    const objectDb = new ObjectDb<TestEntryData>({
+      label: "testDb",
+      db,
+      dimensions: [],
+    });
+    objectDb.activate();
+    await objectDb.ensureIdle();
 
-  const fileDb = new ObjectDb<TestEntryData>({
-    label: "testDb",
-    localFile,
-    metricsGivenEntry: (entry) => ({}),
-    dimensions: [md],
+    const original = await objectDb.writeEntryData({
+      message: "one",
+    });
+
+    const first = await objectDb.toEntryGivenKey(original.key);
+    const second = await objectDb.toEntryGivenKey(original.key);
+
+    first.data.message = "first";
+    await objectDb.writeEntry(first);
+
+    second.data.message = "second";
+
+    await Test.assertThrows(async () => {
+      await objectDb.writeEntry(second);
+    }, "Should fail to write second entry");
   });
-  fileDb.activate();
-
-  const one = await fileDb.writeEntryData({
-    message: "one",
-  });
-
-  const two = await fileDb.writeEntryData({
-    message: "two",
-  });
-
-  await fileDb.isLoaded.toPromise((v) => v == true);
-  await md.isUpdated.toPromise((v) => v == true);
-
-  md.save();
-  fileDb.deactivate();
-
-  // ----
-
-  const md2 = new MaterializedDimension<TestEntryData>({
-    key: "message", // key needs to match the key of the first materialized dimension
-    label: "Message",
-    bucketIdentifiersGivenEntry: (entry) => {
-      return [
-        {
-          bucketKey: entry.data.message,
-          bucketLabel: entry.data.message,
-        },
-      ];
-    },
-  });
-
-  const fileDb2 = new ObjectDb<TestEntryData>({
-    label: "testDb",
-    localFile,
-    metricsGivenEntry: (entry) => ({}),
-    dimensions: [md2],
-  });
-  fileDb2.activate();
-
-  await md2.isUpdated.toPromise((v) => v == true);
-
-  const bucketOne2 = md2.toOptionalBucketGivenKey("one");
-  const bucketTwo2 = md2.toOptionalBucketGivenKey("two");
-
-  Test.assert((await bucketOne2.hasEntryKey(one.key)) == true);
-  Test.assert((await bucketOne2.hasEntryKey(two.key)) == false);
-
-  Test.assert((await bucketTwo2.hasEntryKey(one.key)) == false);
-  Test.assert((await bucketTwo2.hasEntryKey(two.key)) == true);
-
-  fileDb2.deactivate();
 });

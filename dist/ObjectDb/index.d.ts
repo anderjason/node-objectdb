@@ -1,87 +1,77 @@
-import { LocalFile } from "@anderjason/node-filesystem";
 import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
 import { Instant, Stopwatch } from "@anderjason/time";
 import { Actor } from "skytree";
-import { AbsoluteBucketIdentifier, Bucket, Dimension, DimensionProps } from "../Dimension";
+import { Bucket, BucketIdentifier, Dimension } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
-import { Metric } from "../Metric";
-import { PortableTag } from "../Tag/PortableTag";
+import { MongoDb } from "../MongoDb";
+import { Property, PropertyDefinition } from "../Property";
+import { SlowResult } from "../SlowResult";
 export interface Order {
     key: string;
     direction: "ascending" | "descending";
 }
-export declare type TagLookup = string | PortableTag;
 export interface ObjectDbReadOptions {
-    filter?: AbsoluteBucketIdentifier[];
-    orderByMetric?: Order;
+    filter?: BucketIdentifier[];
     limit?: number;
     offset?: number;
     cacheKey?: string;
+    shuffle?: boolean;
 }
 export interface ObjectDbProps<T> {
     label: string;
-    localFile: LocalFile;
-    metricsGivenEntry: (entry: Entry<T>) => Dict<string>;
+    db: MongoDb;
     cacheSize?: number;
-    dimensions?: Dimension<T, DimensionProps>[];
+    rebuildBucketSize?: number;
+    dimensions?: Dimension<T>[];
 }
 export interface EntryChange<T> {
     key: string;
+    entry: Entry<T>;
     oldData?: T;
     newData?: T;
 }
-interface BasePropertyDefinition {
-    key: string;
-    label: string;
-    listOrder: number;
-}
-export interface SelectPropertyOption {
-    key: string;
-    label: string;
-}
-export interface SelectPropertyDefinition extends BasePropertyDefinition {
-    type: "select";
-    options: SelectPropertyOption[];
-}
-export declare type PropertyDefinition = SelectPropertyDefinition;
+export declare function arrayGivenAsyncIterable<T>(asyncIterable: AsyncIterable<T>): Promise<T[]>;
+export declare function countGivenAsyncIterable<T>(asyncIterable: AsyncIterable<T>): Promise<number>;
+export declare function optionalFirstGivenAsyncIterable<T>(asyncIterable: AsyncIterable<T>): Promise<T>;
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly collectionDidChange: TypedEvent<void>;
     readonly entryWillChange: TypedEvent<EntryChange<T>>;
     readonly entryDidChange: TypedEvent<EntryChange<T>>;
-    readonly stopwatch: Stopwatch;
     protected _isLoaded: Observable<boolean>;
     readonly isLoaded: ReadOnlyObservable<boolean>;
-    private _dimensionsByKey;
-    private _metrics;
-    private _properties;
-    private _entryKeys;
+    readonly stopwatch: Stopwatch;
+    private _dimensions;
+    private _propertyByKey;
     private _caches;
+    private _mutexByEntryKey;
     private _db;
-    constructor(props: ObjectDbProps<T>);
+    get mongoDb(): MongoDb;
     onActivate(): void;
-    get metrics(): Metric[];
     private load;
-    toEntryKeys(options?: ObjectDbReadOptions): Promise<string[]>;
+    ensureIdle(): Promise<void>;
+    runExclusive<T = void>(entryKey: string, fn: () => Promise<T> | T): Promise<T>;
+    updateEntryKey(entryKey: string, partialData: Partial<T>): Promise<Entry<T>>;
+    private allEntryKeys;
+    toEntryKeys(options?: ObjectDbReadOptions): AsyncGenerator<string>;
     forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void>;
     hasEntry(entryKey: string): Promise<boolean>;
-    runTransaction(fn: () => Promise<void>): Promise<void>;
-    toEntryCount(filter?: AbsoluteBucketIdentifier[]): Promise<number>;
-    toEntries(options?: ObjectDbReadOptions): Promise<Entry<T>[]>;
+    toEntryCount(filter?: BucketIdentifier[], cacheKey?: string): Promise<number>;
+    toEntries(options?: ObjectDbReadOptions): AsyncGenerator<Entry<T>>;
     toOptionalFirstEntry(options?: ObjectDbReadOptions): Promise<Entry<T> | undefined>;
     toEntryGivenKey(entryKey: string): Promise<Entry<T>>;
     toOptionalEntryGivenKey(entryKey: string): Promise<Entry<T> | undefined>;
-    toDimensions(): IterableIterator<Dimension<T, DimensionProps>>;
-    setProperty(property: PropertyDefinition): Promise<void>;
-    deletePropertyKey(key: string): Promise<void>;
-    toPropertyGivenKey(key: string): Promise<PropertyDefinition>;
-    toProperties(): Promise<PropertyDefinition[]>;
-    removeMetadataGivenEntryKey(entryKey: string): Promise<void>;
-    rebuildMetadata(): Promise<void>;
-    toOptionalBucketGivenIdentifier(bucketIdentifier: AbsoluteBucketIdentifier): Bucket<T> | undefined;
+    toDimensions(): Promise<Dimension<T>[]>;
+    writeProperty(definition: PropertyDefinition): Promise<void>;
+    deletePropertyKey(propertyKey: string): Promise<void>;
+    toOptionalPropertyGivenKey(key: string): Promise<Property | undefined>;
+    toProperties(): Promise<Property[]>;
     rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void>;
+    rebuildMetadata(): SlowResult<any>;
+    toBuckets(): AsyncGenerator<Bucket>;
+    toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier>;
+    toOptionalDimensionGivenKey(dimensionKey: string): Promise<Dimension<T> | undefined>;
+    toOptionalBucketGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<Bucket | undefined>;
     writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void>;
-    metricGivenMetricKey(metricKey: string): Promise<Metric>;
-    writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant): Promise<Entry<T>>;
+    writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant, documentVersion?: number): Promise<Entry<T>>;
     deleteEntryKey(entryKey: string): Promise<void>;
 }
-export {};

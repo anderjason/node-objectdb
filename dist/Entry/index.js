@@ -3,8 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Entry = void 0;
 const node_crypto_1 = require("@anderjason/node-crypto");
 const time_1 = require("@anderjason/time");
-const PropsObject_1 = require("../PropsObject");
-class Entry extends PropsObject_1.PropsObject {
+const util_1 = require("@anderjason/util");
+const skytree_1 = require("skytree");
+class Entry extends skytree_1.PropsObject {
     constructor(props) {
         super(props);
         this.key = props.key || node_crypto_1.UniqueId.ofRandom().toUUIDString();
@@ -13,64 +14,57 @@ class Entry extends PropsObject_1.PropsObject {
         this.status = "unknown";
     }
     async load() {
-        const row = this.props.db.toFirstRow("SELECT data, createdAt, updatedAt FROM entries WHERE key = ?", [this.key]);
+        const row = await this.props.db.collection("entries").findOne({ key: this.key });
         if (row == null) {
             this.status = "new";
             return false;
         }
-        const propertyValues = this.props.db.prepareCached("SELECT propertyKey, propertyValue FROM propertyValues WHERE entryKey = ?").all(this.key);
-        this.data = JSON.parse(row.data);
-        this.propertyValues = {};
-        propertyValues.forEach((row) => {
-            this.propertyValues[row.propertyKey] = JSON.parse(row.propertyValue);
-        });
-        this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAt);
-        this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAt);
+        this.data = row.data;
+        this.propertyValues = row.propertyValues;
+        this.createdAt = time_1.Instant.givenEpochMilliseconds(row.createdAtEpochMs);
+        this.updatedAt = time_1.Instant.givenEpochMilliseconds(row.updatedAtEpochMs);
         this.status = "saved";
+        this.documentVersion = row.documentVersion;
         return true;
     }
     async save() {
-        const data = JSON.stringify(this.data);
+        var _a;
         this.updatedAt = time_1.Instant.ofNow();
         if (this.createdAt == null) {
             this.createdAt = this.updatedAt;
         }
         const createdAtMs = this.createdAt.toEpochMilliseconds();
         const updatedAtMs = this.updatedAt.toEpochMilliseconds();
-        this.props.db.prepareCached(`
-      INSERT INTO entries (key, data, createdAt, updatedAt)
-      VALUES(?, ?, ?, ?)
-      ON CONFLICT(key) 
-      DO UPDATE SET data=?, createdAt=?, updatedAt=?;
-      `).run([
-            this.key,
-            data,
-            createdAtMs,
-            updatedAtMs,
-            data,
-            createdAtMs,
-            updatedAtMs,
-        ]);
-        this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ?").run(this.key);
-        const insertQuery = this.props.db.prepareCached(`
-      INSERT INTO propertyValues (entryKey, propertyKey, propertyValue) 
-      VALUES (?, ?, ?)
-      ON CONFLICT(entryKey, propertyKey)
-      DO UPDATE SET propertyValue=?;
-    `);
-        const deleteQuery = this.props.db.prepareCached("DELETE FROM propertyValues WHERE entryKey = ? AND propertyKey = ?");
-        const properties = await this.props.objectDb.toProperties();
-        for (const property of properties) {
-            const value = this.propertyValues[property.key];
-            if (value != null) {
-                const valueStr = JSON.stringify(value);
-                insertQuery.run(this.key, property.key, valueStr, valueStr);
-            }
-            else {
-                deleteQuery.run(this.key, property.key);
-            }
+        const newDocumentVersion = this.documentVersion == null ? 1 : this.documentVersion + 1;
+        const result = await this.props.db.collection("entries").updateOne({ key: this.key, documentVersion: this.documentVersion }, {
+            $set: {
+                key: this.key,
+                createdAtEpochMs: createdAtMs,
+                updatedAtEpochMs: updatedAtMs,
+                data: this.data,
+                propertyValues: (_a = this.propertyValues) !== null && _a !== void 0 ? _a : {},
+                status: this.status,
+                documentVersion: newDocumentVersion
+            },
+        }, { upsert: true });
+        if (result.modifiedCount == 0 && result.upsertedCount == 0) {
+            throw new Error("Failed to save entry - could be a document version mismatch");
         }
         this.status = "saved";
+    }
+    toClone() {
+        const result = new Entry({
+            key: this.key,
+            createdAt: this.createdAt,
+            updatedAt: this.updatedAt,
+            db: this.props.db,
+            objectDb: this.props.objectDb
+        });
+        result.data = util_1.ObjectUtil.objectWithDeepMerge({}, this.data);
+        result.propertyValues = util_1.ObjectUtil.objectWithDeepMerge({}, this.propertyValues);
+        result.status = this.status;
+        result.documentVersion = this.documentVersion;
+        return result;
     }
     toPortableEntry() {
         var _a;
@@ -81,6 +75,7 @@ class Entry extends PropsObject_1.PropsObject {
             data: this.data,
             propertyValues: (_a = this.propertyValues) !== null && _a !== void 0 ? _a : {},
             status: this.status,
+            documentVersion: this.documentVersion
         };
     }
 }
