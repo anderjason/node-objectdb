@@ -75,8 +75,6 @@ export class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, TI>> {
         : defaultGetItems<TI>();
 
     for await (const item of items) {
-      console.log("item", item);
-
       if (this.isActive == false) {
         // cancelled
         break;
