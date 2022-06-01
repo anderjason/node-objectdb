@@ -3,24 +3,30 @@ import {
   Dict,
   Observable,
   ReadOnlyObservable,
-  TypedEvent
+  TypedEvent,
 } from "@anderjason/observable";
 import { Duration, Instant, Stopwatch } from "@anderjason/time";
-import { ArrayUtil, ObjectUtil, SetUtil, StringUtil } from "@anderjason/util";
+import {
+  ArrayUtil,
+  IterableUtil,
+  ObjectUtil,
+  SetUtil,
+  StringUtil,
+} from "@anderjason/util";
 import { Mutex } from "async-mutex";
 import { Actor, Timer } from "skytree";
 import {
   Bucket,
   BucketIdentifier,
   Dimension,
-  hashCodeGivenBucketIdentifier
+  hashCodeGivenBucketIdentifier,
 } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
 import { MongoDb } from "../MongoDb";
 import {
   Property,
   PropertyDefinition,
-  propertyGivenDefinition
+  propertyGivenDefinition,
 } from "../Property";
 import { SelectProperty } from "../Property/Select/SelectProperty";
 import { SlowResult } from "../SlowResult";
@@ -57,38 +63,6 @@ export interface EntryChange<T> {
 
 interface CacheData {
   entryKeys: string[];
-}
-
-export async function arrayGivenAsyncIterable<T>(
-  asyncIterable: AsyncIterable<T>
-): Promise<T[]> {
-  const result: T[] = [];
-
-  for await (const item of asyncIterable) {
-    result.push(item);
-  }
-
-  return result;
-}
-
-export async function countGivenAsyncIterable<T>(
-  asyncIterable: AsyncIterable<T>
-): Promise<number> {
-  let result: number = 0;
-
-  for await (const item of asyncIterable) {
-    result += 1;
-  }
-
-  return result;
-}
-
-export async function optionalFirstGivenAsyncIterable<T>(
-  asyncIterable: AsyncIterable<T>
-): Promise<T> {
-  const iterator = asyncIterable[Symbol.asyncIterator]();
-  const r = await iterator.next();
-  return r.value;
 }
 
 export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
@@ -190,7 +164,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return result;
   }
 
-  async updateEntryKey(entryKey: string, partialData: Partial<T>): Promise<Entry<T>> {
+  async updateEntryKey(
+    entryKey: string,
+    partialData: Partial<T>
+  ): Promise<Entry<T>> {
     if (entryKey == null) {
       throw new Error("entryKey is required");
     }
@@ -210,7 +187,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       }
 
       Object.assign(entry.data, partialData);
-      
+
       entry.status = "updated";
       await this.writeEntry(entry);
 
@@ -271,7 +248,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (entryKeys == null) {
       if (ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
-        entryKeys = await arrayGivenAsyncIterable(this.allEntryKeys());
+        entryKeys = await IterableUtil.arrayGivenAsyncIterable(
+          this.allEntryKeys()
+        );
       } else {
         const sets: Set<string>[] = [];
 
@@ -333,15 +312,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async hasEntry(entryKey: string): Promise<boolean> {
-    const keys = await arrayGivenAsyncIterable(this.toEntryKeys());
+    const keys = await IterableUtil.arrayGivenAsyncIterable(this.toEntryKeys());
     return keys.includes(entryKey);
   }
 
-  async toEntryCount(filter?: BucketIdentifier[], cacheKey?: string): Promise<number> {
-    return countGivenAsyncIterable(
+  async toEntryCount(
+    filter?: BucketIdentifier[],
+    cacheKey?: string
+  ): Promise<number> {
+    return IterableUtil.countGivenAsyncIterable(
       this.toEntryKeys({
         filter,
-        cacheKey
+        cacheKey,
       })
     );
   }
@@ -360,11 +342,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   async toOptionalFirstEntry(
     options: ObjectDbReadOptions = {}
   ): Promise<Entry<T> | undefined> {
-    return optionalFirstGivenAsyncIterable(
+    return IterableUtil.optionalNthValueGivenAsyncIterable(
       this.toEntries({
         ...options,
         limit: 1,
-      })
+      }),
+      0
     );
   }
 

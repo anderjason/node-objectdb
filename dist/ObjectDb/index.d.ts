@@ -30,9 +30,6 @@ export interface EntryChange<T> {
     oldData?: T;
     newData?: T;
 }
-export declare function arrayGivenAsyncIterable<T>(asyncIterable: AsyncIterable<T>): Promise<T[]>;
-export declare function countGivenAsyncIterable<T>(asyncIterable: AsyncIterable<T>): Promise<number>;
-export declare function optionalFirstGivenAsyncIterable<T>(asyncIterable: AsyncIterable<T>): Promise<T>;
 export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly collectionDidChange: TypedEvent<void>;
     readonly entryWillChange: TypedEvent<EntryChange<T>>;

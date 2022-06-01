@@ -1,6 +1,6 @@
 import { Test } from "@anderjason/tests";
-import { StringUtil, ValuePath } from "@anderjason/util";
-import { arrayGivenAsyncIterable, ObjectDb } from ".";
+import { IterableUtil, StringUtil, ValuePath } from "@anderjason/util";
+import { ObjectDb } from ".";
 import { MaterializedDimension } from "../Dimension/MaterializedDimension";
 import { LiveDimension } from "../Dimension/LiveDimension";
 import { MaterializedBucket } from "../Dimension/MaterializedDimension/MaterializedBucket";
@@ -448,7 +448,9 @@ Test.define(
         },
       ];
 
-      const bucketIdentifiers = await arrayGivenAsyncIterable(dim.toBucketIdentifiers());
+      const bucketIdentifiers = await IterableUtil.arrayGivenAsyncIterable(
+        dim.toBucketIdentifiers()
+      );
 
       Test.assertIsDeepEqual(
         bucketIdentifiers,
@@ -508,7 +510,9 @@ Test.define(
         };
       });
 
-      const bucketIdentifiers = await arrayGivenAsyncIterable(dim.toBucketIdentifiers());
+      const bucketIdentifiers = await IterableUtil.arrayGivenAsyncIterable(
+        dim.toBucketIdentifiers()
+      );
 
       Test.assertIsDeepEqual(
         bucketIdentifiers,
@@ -519,7 +523,7 @@ Test.define(
       const bucket = await dim.toOptionalBucketGivenKey("5");
       Test.assert(bucket != null, "bucket should not be null");
 
-      const entries = await arrayGivenAsyncIterable(
+      const entries = await IterableUtil.arrayGivenAsyncIterable(
         objectDb.toEntries({
           filter: [
             {
@@ -562,7 +566,7 @@ Test.define("ObjectDb live dimensions are case insensitive", async () => {
       message: "Apple",
     });
 
-    const entries = await arrayGivenAsyncIterable(
+    const entries = await IterableUtil.arrayGivenAsyncIterable(
       objectDb.toEntries({
         filter: [
           {
