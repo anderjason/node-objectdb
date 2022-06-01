@@ -76,6 +76,7 @@ class SlowResult extends skytree_1.Actor {
         try {
             for (var items_1 = __asyncValues(items), items_1_1; items_1_1 = await items_1.next(), !items_1_1.done;) {
                 const item = items_1_1.value;
+                console.log("item", item);
                 if (this.isActive == false) {
                     // cancelled
                     break;
