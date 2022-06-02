@@ -492,11 +492,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         const entryResult = await this.toOptionalEntryGivenKey(entryKey);
         const entry = entryResult.value;
 
-        if (entry == null) {
-          return;
+        if (entry != null) {
+          const rebuildResult = await this.rebuildMetadataGivenEntry(entry);
+          console.log(JSON.stringify(rebuildResult, null, 2));
         }
-
-        await this.rebuildMetadataGivenEntry(entry);
       },
     });
   }

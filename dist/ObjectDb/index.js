@@ -152,7 +152,6 @@ class ObjectDb extends skytree_1.Actor {
     toEntryKeys(options = {}) {
         var _a;
         return __asyncGenerator(this, arguments, function* toEntryKeys_1() {
-            const now = time_1.Instant.ofNow();
             let entryKeys = undefined;
             yield __await(this.ensureIdle());
             let fullCacheKey = undefined;
@@ -361,10 +360,10 @@ class ObjectDb extends skytree_1.Actor {
             fn: async (entryKey) => {
                 const entryResult = await this.toOptionalEntryGivenKey(entryKey);
                 const entry = entryResult.value;
-                if (entry == null) {
-                    return;
+                if (entry != null) {
+                    const rebuildResult = await this.rebuildMetadataGivenEntry(entry);
+                    console.log(JSON.stringify(rebuildResult, null, 2));
                 }
-                await this.rebuildMetadataGivenEntry(entry);
             },
         });
     }
