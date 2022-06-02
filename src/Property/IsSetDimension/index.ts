@@ -2,7 +2,7 @@ import { Stopwatch } from "@anderjason/time";
 import { ValuePath } from "@anderjason/util";
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "../../Dimension";
-import { Entry, MongoDb } from "../..";
+import { Entry, Metric, MetricResult, MongoDb } from "../..";
 import { SelectProperty } from "../Select/SelectProperty";
 import { LiveBucket } from "../../Dimension/LiveDimension/LiveBucket";
 
@@ -15,7 +15,6 @@ export class IsSetDimension<T>
   implements Dimension<T>
 {
   private _db: MongoDb;
-  private _stopwatch: Stopwatch;
 
   get key(): string {
     return `${this.props.property.definition.key}-isSet`;
@@ -25,15 +24,16 @@ export class IsSetDimension<T>
     return `${this.props.property.definition.label} is set`;
   }
 
-  async init(db: MongoDb, stopwatch: Stopwatch): Promise<void> {
+  async init(db: MongoDb): Promise<void> {
     this._db = db;
-    this._stopwatch = stopwatch;
   }
 
   async toOptionalBucketGivenKey(
     bucketKey: string,
     bucketLabel?: string
-  ): Promise<Bucket | undefined> {
+  ): Promise<MetricResult<Bucket | undefined>> {
+    const metric = new Metric("IsSetDimension.toOptionalBucketGivenKey");
+
     const identifier = {
       dimensionKey: this.key,
       bucketKey,
@@ -63,15 +63,19 @@ export class IsSetDimension<T>
       };
     }
 
-    return new LiveBucket({
+    const result = new LiveBucket({
       identifier,
       db: this._db,
       mongoFilter,
     });
+
+    return new MetricResult(metric, result);
   }
 
-  async deleteBucketKey(bucketKey: string): Promise<void> {
+  async deleteBucketKey(bucketKey: string): Promise<MetricResult<void>> {
     // empty
+
+    return new MetricResult(undefined, undefined);
   }
 
   async toBucketIdentifiers(): Promise<BucketIdentifier[]> {
@@ -92,22 +96,28 @@ export class IsSetDimension<T>
   async *toBuckets(): AsyncGenerator<Bucket> {
     // TODO optimize
     const identifiers = await this.toBucketIdentifiers();
-    
+
     for (const identifier of identifiers) {
-      const bucket = await this.toOptionalBucketGivenKey(
+      const bucketResult = await this.toOptionalBucketGivenKey(
         identifier.bucketKey,
         identifier.bucketLabel
       );
+
+      const bucket = bucketResult.value;
 
       yield bucket;
     }
   }
 
-  async deleteEntryKey(entryKey: string): Promise<void> {
+  async deleteEntryKey(entryKey: string): Promise<MetricResult<void>> {
     // empty
+
+    return new MetricResult(undefined, undefined);
   }
 
-  async rebuildEntry(entry: Entry<T>): Promise<void> {
+  async rebuildEntry(entry: Entry<T>): Promise<MetricResult<void>> {
     // empty
+
+    return new MetricResult(undefined, undefined);
   }
 }

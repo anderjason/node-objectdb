@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SelectProperty = void 0;
-const time_1 = require("@anderjason/time");
 const skytree_1 = require("skytree");
 const IsSetDimension_1 = require("../../IsSetDimension");
 const SelectDimension_1 = require("../SelectDimension");
@@ -15,12 +14,12 @@ class SelectProperty extends skytree_1.PropsObject {
         const deletedOptions = definition.options.filter((option) => option.isDeleted == true);
         const property = new SelectProperty({ definition });
         const dimension = property.toSelectDimension();
-        dimension.init(db, new time_1.Stopwatch(""));
+        dimension.init(db);
         for (const option of deletedOptions) {
             await (0, deleteSelectOption_1.deleteSelectOptionValues)(db, definition.key, option.key);
             await dimension.deleteBucketKey(option.key);
         }
-        definition.options = definition.options.filter(option => option.isDeleted != true);
+        definition.options = definition.options.filter((option) => option.isDeleted != true);
         await db
             .collection("properties")
             .updateOne({ key: definition.key }, { $set: definition }, { upsert: true });
@@ -35,8 +34,8 @@ class SelectProperty extends skytree_1.PropsObject {
         return [
             this.toSelectDimension(),
             new IsSetDimension_1.IsSetDimension({
-                property: this
-            })
+                property: this,
+            }),
         ];
     }
 }

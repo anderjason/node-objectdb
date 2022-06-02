@@ -1,6 +1,7 @@
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier } from "../..";
-import { MongoDb } from "../../..";
+import { MetricResult, MongoDb } from "../../..";
+import { Metric } from "../../../Metric";
 
 export interface LiveBucketProps {
   identifier: BucketIdentifier;
@@ -16,7 +17,9 @@ export class LiveBucket<T>
     return this.props.identifier;
   }
 
-  async toEntryKeys(): Promise<Set<string>> {
+  async toEntryKeys(): Promise<MetricResult<Set<string>>> {
+    const metric = new Metric("LiveBucket.toEntryKeys");
+
     const rows = await this.props.db
       .collection("entries")
       .find<any>(this.props.mongoFilter, {
@@ -29,15 +32,21 @@ export class LiveBucket<T>
       .toArray();
 
     const entryKeys = rows.map((row) => row.key);
-    return new Set(entryKeys);
+    const result = new Set(entryKeys);
+
+    return new MetricResult(metric, result);
   }
 
-  async hasEntryKey(entryKey: string): Promise<boolean> {
+  async hasEntryKey(entryKey: string): Promise<MetricResult<boolean>> {
+    const metric = new Metric("LiveBucket.hasEntryKey");
+
     const bucket = await this.props.db.collection("entries").findOne({
       key: entryKey,
       ...this.props.mongoFilter,
     });
 
-    return bucket != null;
+    const result = bucket != null;
+
+    return new MetricResult(metric, result);
   }
 }

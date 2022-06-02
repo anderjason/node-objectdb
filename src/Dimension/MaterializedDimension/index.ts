@@ -1,7 +1,8 @@
 import { Stopwatch } from "@anderjason/time";
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "..";
-import { Entry, MongoDb } from "../..";
+import { Entry, MetricResult, MongoDb } from "../..";
+import { Metric } from "../../Metric";
 import { MaterializedBucket } from "./MaterializedBucket";
 
 export interface MaterializedDimensionProps<T> {
@@ -17,7 +18,6 @@ export class MaterializedDimension<T>
   implements Dimension<T>
 {
   private _db: MongoDb;
-  private _stopwatch: Stopwatch;
 
   get key(): string {
     return this.props.key;
@@ -27,9 +27,8 @@ export class MaterializedDimension<T>
     return this.props.label;
   }
 
-  async init(db: MongoDb, stopwatch: Stopwatch): Promise<void> {
+  async init(db: MongoDb): Promise<void> {
     this._db = db;
-    this._stopwatch = stopwatch;
 
     await this._db.collection("buckets").createIndex({ entryKeys: 1 });
   }
@@ -37,27 +36,29 @@ export class MaterializedDimension<T>
   async toOptionalBucketGivenKey(
     bucketKey: string,
     bucketLabel?: string
-  ): Promise<Bucket | undefined> {
+  ): Promise<MetricResult<MaterializedBucket<T> | undefined>> {
+    const metric = new Metric("MaterializedDimension.toOptionalBucketGivenKey");
+
     const find = {
       "identifier.dimensionKey": this.props.key,
       "identifier.bucketKey": bucketKey,
     };
 
-    const timer = this._stopwatch.start("md-toOptionalBucketGivenKey");
     const bucketRow = await this._db.collection<any>("buckets").findOne(find);
-    timer.stop();
 
     if (bucketRow == null) {
-      return undefined;
+      return new MetricResult(metric, undefined);
     }
 
-    return new MaterializedBucket({
+    const result = new MaterializedBucket({
       identifier: {
         ...bucketRow.identifier,
         bucketLabel: bucketLabel ?? bucketRow.identifier.bucketLabel,
       },
       db: this._db,
     });
+
+    return new MetricResult(metric, result);
   }
 
   async *toBuckets(): AsyncGenerator<MaterializedBucket<T>> {
@@ -73,8 +74,9 @@ export class MaterializedDimension<T>
     }
   }
 
-  async deleteEntryKey(entryKey: string): Promise<void> {
-    const timer = this._stopwatch.start("md-deleteEntryKey");
+  async deleteEntryKey(entryKey: string): Promise<MetricResult<void>> {
+    const metric = new Metric("MaterializedDimension.deleteEntryKey");
+
     await this._db.collection("buckets").updateMany(
       {
         "identifier.dimensionKey": this.props.key,
@@ -84,25 +86,30 @@ export class MaterializedDimension<T>
         $pull: { entryKeys: entryKey },
       }
     );
-    timer.stop();
+
+    return new MetricResult(metric, undefined);
   }
 
   private async addEntryToBucket(
     entry: Entry<T>,
     bucketIdentifier: BucketIdentifier
-  ): Promise<void> {
+  ): Promise<MetricResult<void>> {
     if (bucketIdentifier.dimensionKey !== this.props.key) {
       throw new Error(
         `Received a bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`
       );
     }
 
-    const timer = this._stopwatch.start("md-addEntryToBucket");
+    const metric = new Metric("MaterializedDimension.addEntryToBucket");
 
-    let bucket = (await this.toOptionalBucketGivenKey(
-      bucketIdentifier.bucketKey,
-      bucketIdentifier.bucketLabel
-    )) as MaterializedBucket<T>;
+    const bucketResult: MetricResult<MaterializedBucket<T>> =
+      await this.toOptionalBucketGivenKey(
+        bucketIdentifier.bucketKey,
+        bucketIdentifier.bucketLabel
+      );
+    metric.addChildMetric(bucketResult.metric);
+
+    let bucket = bucketResult.value;
 
     if (bucket == null) {
       bucket = new MaterializedBucket({
@@ -111,26 +118,36 @@ export class MaterializedDimension<T>
       });
     }
 
-    await bucket.addEntryKey(entry.key);
-    timer.stop();
+    const addResult = await bucket.addEntryKey(entry.key);
+    metric.addChildMetric(addResult.metric);
+
+    return new MetricResult(metric, undefined);
   }
 
-  async rebuildEntry(entry: Entry<T>): Promise<void> {
-    const timer = this._stopwatch.start("md-rebuildEntry");
-    await this.deleteEntryKey(entry.key);
+  async rebuildEntry(entry: Entry<T>): Promise<MetricResult<void>> {
+    const metric = new Metric("MaterializedDimension.rebuildEntry");
+
+    const deleteResult = await this.deleteEntryKey(entry.key);
+    metric.addChildMetric(deleteResult.metric);
 
     const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);
 
     if (Array.isArray(bucketIdentifiers)) {
       for (const bucketIdentifier of bucketIdentifiers) {
         if (bucketIdentifier != null) {
-          await this.addEntryToBucket(entry, bucketIdentifier);
+          const addResult = await this.addEntryToBucket(
+            entry,
+            bucketIdentifier
+          );
+          metric.addChildMetric(addResult.metric);
         }
       }
     } else if (bucketIdentifiers != null) {
       // not an array, just a single object
-      await this.addEntryToBucket(entry, bucketIdentifiers);
+      const addResult = await this.addEntryToBucket(entry, bucketIdentifiers);
+      metric.addChildMetric(addResult.metric);
     }
-    timer.stop();
+
+    return new MetricResult(metric, undefined);
   }
 }

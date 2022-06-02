@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.IsSetDimension = void 0;
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
+const __1 = require("../..");
 const LiveBucket_1 = require("../../Dimension/LiveDimension/LiveBucket");
 class IsSetDimension extends skytree_1.PropsObject {
     get key() {
@@ -23,11 +24,11 @@ class IsSetDimension extends skytree_1.PropsObject {
     get label() {
         return `${this.props.property.definition.label} is set`;
     }
-    async init(db, stopwatch) {
+    async init(db) {
         this._db = db;
-        this._stopwatch = stopwatch;
     }
     async toOptionalBucketGivenKey(bucketKey, bucketLabel) {
+        const metric = new __1.Metric("IsSetDimension.toOptionalBucketGivenKey");
         const identifier = {
             dimensionKey: this.key,
             bucketKey,
@@ -55,14 +56,16 @@ class IsSetDimension extends skytree_1.PropsObject {
                 ],
             };
         }
-        return new LiveBucket_1.LiveBucket({
+        const result = new LiveBucket_1.LiveBucket({
             identifier,
             db: this._db,
             mongoFilter,
         });
+        return new __1.MetricResult(metric, result);
     }
     async deleteBucketKey(bucketKey) {
         // empty
+        return new __1.MetricResult(undefined, undefined);
     }
     async toBucketIdentifiers() {
         return [
@@ -83,16 +86,19 @@ class IsSetDimension extends skytree_1.PropsObject {
             // TODO optimize
             const identifiers = yield __await(this.toBucketIdentifiers());
             for (const identifier of identifiers) {
-                const bucket = yield __await(this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel));
+                const bucketResult = yield __await(this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel));
+                const bucket = bucketResult.value;
                 yield yield __await(bucket);
             }
         });
     }
     async deleteEntryKey(entryKey) {
         // empty
+        return new __1.MetricResult(undefined, undefined);
     }
     async rebuildEntry(entry) {
         // empty
+        return new __1.MetricResult(undefined, undefined);
     }
 }
 exports.IsSetDimension = IsSetDimension;

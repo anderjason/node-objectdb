@@ -1,4 +1,3 @@
-import { Stopwatch } from "@anderjason/time";
 import { PropsObject } from "skytree";
 import { BasePropertyDefinition, Property } from "../..";
 import { MongoDb } from "../../..";
@@ -39,15 +38,17 @@ export class SelectProperty
 
     const property = new SelectProperty({ definition });
     const dimension = property.toSelectDimension();
-    dimension.init(db, new Stopwatch(""));
+    dimension.init(db);
 
     for (const option of deletedOptions) {
       await deleteSelectOptionValues(db, definition.key, option.key);
       await dimension.deleteBucketKey(option.key);
     }
 
-    definition.options = definition.options.filter(option => option.isDeleted != true);
-    
+    definition.options = definition.options.filter(
+      (option) => option.isDeleted != true
+    );
+
     await db
       .collection("properties")
       .updateOne(
@@ -75,8 +76,8 @@ export class SelectProperty
     return [
       this.toSelectDimension(),
       new IsSetDimension({
-        property: this
-      })
+        property: this,
+      }),
     ];
   }
 }

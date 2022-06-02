@@ -2,7 +2,8 @@ import { Stopwatch } from "@anderjason/time";
 import { ObjectUtil, ValuePath } from "@anderjason/util";
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "..";
-import { Entry, MongoDb } from "../..";
+import { Entry, MetricResult, MongoDb } from "../..";
+import { Metric } from "../../Metric";
 import { LiveBucket } from "./LiveBucket";
 
 export interface LiveDimensionProps<T> {
@@ -114,7 +115,6 @@ export class LiveDimension<T>
   }
 
   private _db: MongoDb;
-  private _stopwatch: Stopwatch;
 
   get key(): string {
     return this.props.key;
@@ -124,26 +124,29 @@ export class LiveDimension<T>
     return this.props.label;
   }
 
-  async init(db: MongoDb, stopwatch: Stopwatch): Promise<void> {
+  async init(db: MongoDb): Promise<void> {
     this._db = db;
-    this._stopwatch = stopwatch;
   }
 
   async toOptionalBucketGivenKey(
     bucketKey: string,
     bucketLabel?: string
-  ): Promise<Bucket | undefined> {
+  ): Promise<MetricResult<Bucket | undefined>> {
+    const metric = new Metric("LiveDimension.toOptionalBucketGivenKey");
+
     const identifier = {
       dimensionKey: this.key,
       bucketKey,
       bucketLabel: bucketLabel ?? bucketKey,
     };
 
-    return new LiveBucket({
+    const result = new LiveBucket({
       identifier,
       db: this._db,
       mongoFilter: this.props.mongoFilterGivenBucketIdentifier(identifier),
     });
+
+    return new MetricResult(metric, result);
   }
 
   async *toBucketIdentifiers(): AsyncGenerator<BucketIdentifier> {
@@ -164,11 +167,15 @@ export class LiveDimension<T>
     }
   }
 
-  async deleteEntryKey(entryKey: string): Promise<void> {
+  async deleteEntryKey(entryKey: string): Promise<MetricResult<void>> {
     // empty
+
+    return new MetricResult(undefined, undefined);
   }
 
-  async rebuildEntry(entry: Entry<T>): Promise<void> {
+  async rebuildEntry(entry: Entry<T>): Promise<MetricResult<void>> {
     // empty
+
+    return new MetricResult(undefined, undefined);
   }
 }

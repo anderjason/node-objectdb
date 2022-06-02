@@ -2,7 +2,7 @@ import { Stopwatch } from "@anderjason/time";
 import { ValuePath } from "@anderjason/util";
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "../../../Dimension";
-import { Entry, MongoDb } from "../../..";
+import { Entry, Metric, MetricResult, MongoDb } from "../../..";
 import { SelectProperty } from "../SelectProperty";
 import { LiveBucket } from "../../../Dimension/LiveDimension/LiveBucket";
 
@@ -15,7 +15,6 @@ export class SelectDimension<T>
   implements Dimension<T>
 {
   private _db: MongoDb;
-  private _stopwatch: Stopwatch;
 
   get key(): string {
     return this.props.property.definition.key;
@@ -25,15 +24,16 @@ export class SelectDimension<T>
     return this.props.property.definition.label;
   }
 
-  async init(db: MongoDb, stopwatch: Stopwatch): Promise<void> {
+  async init(db: MongoDb): Promise<void> {
     this._db = db;
-    this._stopwatch = stopwatch;
   }
 
   async toOptionalBucketGivenKey(
     bucketKey: string,
     bucketLabel?: string
-  ): Promise<Bucket | undefined> {
+  ): Promise<MetricResult<Bucket | undefined>> {
+    const metric = new Metric("SelectDimension.toOptionalBucketGivenKey");
+
     const identifier = {
       dimensionKey: this.key,
       bucketKey,
@@ -43,32 +43,41 @@ export class SelectDimension<T>
     const fullPropertyValuePath = ValuePath.givenParts([
       "propertyValues",
       this.props.property.definition.key,
-      bucketKey
+      bucketKey,
     ]).toString();
 
-    return new LiveBucket({
+    const result = new LiveBucket({
       identifier,
       db: this._db,
       mongoFilter: {
         [fullPropertyValuePath]: 1,
       },
     });
+
+    return new MetricResult(metric, result);
   }
 
-  async deleteBucketKey(bucketKey: string): Promise<void> {
+  async deleteBucketKey(bucketKey: string): Promise<MetricResult<void>> {
+    const metric = new Metric("SelectDimension.deleteBucketKey");
+
     const fullPropertyValuePath = ValuePath.givenParts([
       "propertyValues",
       this.props.property.definition.key,
-      bucketKey
+      bucketKey,
     ]).toString();
 
-    await this._db.collection("entries").updateMany({
-      [fullPropertyValuePath]: 1
-    }, {
-      $unset: {
-        [fullPropertyValuePath]: 1
+    await this._db.collection("entries").updateMany(
+      {
+        [fullPropertyValuePath]: 1,
+      },
+      {
+        $unset: {
+          [fullPropertyValuePath]: 1,
+        },
       }
-    });
+    );
+
+    return new MetricResult(metric, undefined);
   }
 
   async *toBucketIdentifiers(): AsyncGenerator<BucketIdentifier> {
@@ -77,23 +86,32 @@ export class SelectDimension<T>
         dimensionKey: this.key,
         bucketKey: option.key,
         bucketLabel: option.label,
-      }
+      };
     }
   }
 
   async *toBuckets(): AsyncGenerator<Bucket> {
     for await (const identifier of this.toBucketIdentifiers()) {
-      const bucket = await this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel);
+      const bucketResult = await this.toOptionalBucketGivenKey(
+        identifier.bucketKey,
+        identifier.bucketLabel
+      );
+
+      const bucket = bucketResult.value;
 
       yield bucket;
     }
   }
 
-  async deleteEntryKey(entryKey: string): Promise<void> {
+  async deleteEntryKey(entryKey: string): Promise<MetricResult<void>> {
     // empty
+
+    return new MetricResult(undefined, undefined);
   }
 
-  async rebuildEntry(entry: Entry<T>): Promise<void> {
+  async rebuildEntry(entry: Entry<T>): Promise<MetricResult<void>> {
     // empty
+
+    return new MetricResult(undefined, undefined);
   }
 }

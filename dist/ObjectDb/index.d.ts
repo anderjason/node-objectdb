@@ -1,5 +1,5 @@
 import { Dict, Observable, ReadOnlyObservable, TypedEvent } from "@anderjason/observable";
-import { Instant, Stopwatch } from "@anderjason/time";
+import { Instant } from "@anderjason/time";
 import { Actor } from "skytree";
 import { Bucket, BucketIdentifier, Dimension } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
@@ -37,7 +37,6 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     readonly entryDidChange: TypedEvent<EntryChange<T>>;
     protected _isLoaded: Observable<boolean>;
     readonly isLoaded: ReadOnlyObservable<boolean>;
-    readonly stopwatch: Stopwatch;
     private _dimensions;
     private _propertyByKey;
     private _caches;
@@ -68,7 +67,7 @@ export declare class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     toBuckets(): AsyncGenerator<Bucket>;
     toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier>;
     toOptionalDimensionGivenKey(dimensionKey: string): Promise<Dimension<T> | undefined>;
-    toOptionalBucketGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<Bucket | undefined>;
+    toOptionalBucketGivenIdentifier(bucketIdentifier: BucketIdentifier): Promise<MetricResult<Bucket | undefined>>;
     writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<MetricResult<void>>;
     writeEntryData(entryData: T, propertyValues?: Dict<JSONSerializable>, entryKey?: string, createdAt?: Instant, documentVersion?: number): Promise<MetricResult<Entry<T>>>;
     deleteEntryKey(entryKey: string): Promise<MetricResult<void>>;

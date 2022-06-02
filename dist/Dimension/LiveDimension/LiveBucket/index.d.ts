@@ -1,6 +1,6 @@
 import { PropsObject } from "skytree";
 import { Bucket, BucketIdentifier } from "../..";
-import { MongoDb } from "../../..";
+import { MetricResult, MongoDb } from "../../..";
 export interface LiveBucketProps {
     identifier: BucketIdentifier;
     db: MongoDb;
@@ -8,6 +8,6 @@ export interface LiveBucketProps {
 }
 export declare class LiveBucket<T> extends PropsObject<LiveBucketProps> implements Bucket {
     get identifier(): BucketIdentifier;
-    toEntryKeys(): Promise<Set<string>>;
-    hasEntryKey(entryKey: string): Promise<boolean>;
+    toEntryKeys(): Promise<MetricResult<Set<string>>>;
+    hasEntryKey(entryKey: string): Promise<MetricResult<boolean>>;
 }

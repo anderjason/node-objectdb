@@ -22,6 +22,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LiveDimension = void 0;
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
+const __1 = require("../..");
+const Metric_1 = require("../../Metric");
 const LiveBucket_1 = require("./LiveBucket");
 class LiveDimension extends skytree_1.PropsObject {
     static ofEntry(params) {
@@ -97,21 +99,22 @@ class LiveDimension extends skytree_1.PropsObject {
     get label() {
         return this.props.label;
     }
-    async init(db, stopwatch) {
+    async init(db) {
         this._db = db;
-        this._stopwatch = stopwatch;
     }
     async toOptionalBucketGivenKey(bucketKey, bucketLabel) {
+        const metric = new Metric_1.Metric("LiveDimension.toOptionalBucketGivenKey");
         const identifier = {
             dimensionKey: this.key,
             bucketKey,
             bucketLabel: bucketLabel !== null && bucketLabel !== void 0 ? bucketLabel : bucketKey,
         };
-        return new LiveBucket_1.LiveBucket({
+        const result = new LiveBucket_1.LiveBucket({
             identifier,
             db: this._db,
             mongoFilter: this.props.mongoFilterGivenBucketIdentifier(identifier),
         });
+        return new __1.MetricResult(metric, result);
     }
     toBucketIdentifiers() {
         return __asyncGenerator(this, arguments, function* toBucketIdentifiers_1() {
@@ -146,9 +149,11 @@ class LiveDimension extends skytree_1.PropsObject {
     }
     async deleteEntryKey(entryKey) {
         // empty
+        return new __1.MetricResult(undefined, undefined);
     }
     async rebuildEntry(entry) {
         // empty
+        return new __1.MetricResult(undefined, undefined);
     }
 }
 exports.LiveDimension = LiveDimension;

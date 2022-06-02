@@ -40,7 +40,6 @@ class ObjectDb extends skytree_1.Actor {
         this.entryDidChange = new observable_1.TypedEvent();
         this._isLoaded = observable_1.Observable.givenValue(false, observable_1.Observable.isStrictEqual);
         this.isLoaded = observable_1.ReadOnlyObservable.givenObservable(this._isLoaded);
-        this.stopwatch = new time_1.Stopwatch(this.props.label);
         this._dimensions = [];
         this._propertyByKey = new Map();
         this._caches = new Map();
@@ -60,7 +59,7 @@ class ObjectDb extends skytree_1.Actor {
         await this._db.isConnected.toPromise((v) => v);
         if (this.props.dimensions != null) {
             for (const dimension of this.props.dimensions) {
-                await dimension.init(this._db, this.stopwatch);
+                await dimension.init(this._db);
                 this._dimensions.push(dimension);
             }
         }
@@ -166,7 +165,8 @@ class ObjectDb extends skytree_1.Actor {
                 const bucketIdentifiers = (_a = options.filter) !== null && _a !== void 0 ? _a : [];
                 const buckets = [];
                 for (const bucketIdentifier of bucketIdentifiers) {
-                    const bucket = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
+                    const bucketResult = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
+                    const bucket = bucketResult.value;
                     if (bucket != null) {
                         buckets.push(bucket);
                     }
@@ -188,12 +188,14 @@ class ObjectDb extends skytree_1.Actor {
                 else {
                     const sets = [];
                     for (const bucketIdentifier of options.filter) {
-                        const bucket = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
+                        const bucketResult = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
+                        const bucket = bucketResult.value;
                         if (bucket == null) {
                             sets.push(new Set());
                         }
                         else {
-                            const entryKeys = yield __await(bucket.toEntryKeys());
+                            const entryKeysResult = yield __await(bucket.toEntryKeys());
+                            const entryKeys = entryKeysResult.value;
                             sets.push(entryKeys);
                         }
                     }
@@ -311,7 +313,7 @@ class ObjectDb extends skytree_1.Actor {
             });
         }
         for (const dimension of result) {
-            await dimension.init(this._db, this.stopwatch);
+            await dimension.init(this._db);
         }
         return result;
     }
@@ -342,10 +344,11 @@ class ObjectDb extends skytree_1.Actor {
     }
     async rebuildMetadataGivenEntry(entry) {
         const metric = new Metric_1.Metric("rebuildMetadataGivenEntry");
-        const timer = this.stopwatch.start("rebuildMetadataGivenEntry");
         const dimensions = await this.toDimensions();
-        await Promise.all(dimensions.map((dimension) => dimension.rebuildEntry(entry)));
-        timer.stop();
+        const metricResults = await Promise.all(dimensions.map((dimension) => dimension.rebuildEntry(entry)));
+        for (const metricResult of metricResults) {
+            metric.addChildMetric(metricResult.metric);
+        }
         return new Metric_1.MetricResult(metric, undefined);
     }
     rebuildMetadata() {

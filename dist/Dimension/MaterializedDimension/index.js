@@ -21,6 +21,8 @@ var __asyncGenerator = (this && this.__asyncGenerator) || function (thisArg, _ar
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MaterializedDimension = void 0;
 const skytree_1 = require("skytree");
+const __1 = require("../..");
+const Metric_1 = require("../../Metric");
 const MaterializedBucket_1 = require("./MaterializedBucket");
 class MaterializedDimension extends skytree_1.PropsObject {
     get key() {
@@ -29,26 +31,25 @@ class MaterializedDimension extends skytree_1.PropsObject {
     get label() {
         return this.props.label;
     }
-    async init(db, stopwatch) {
+    async init(db) {
         this._db = db;
-        this._stopwatch = stopwatch;
         await this._db.collection("buckets").createIndex({ entryKeys: 1 });
     }
     async toOptionalBucketGivenKey(bucketKey, bucketLabel) {
+        const metric = new Metric_1.Metric("MaterializedDimension.toOptionalBucketGivenKey");
         const find = {
             "identifier.dimensionKey": this.props.key,
             "identifier.bucketKey": bucketKey,
         };
-        const timer = this._stopwatch.start("md-toOptionalBucketGivenKey");
         const bucketRow = await this._db.collection("buckets").findOne(find);
-        timer.stop();
         if (bucketRow == null) {
-            return undefined;
+            return new __1.MetricResult(metric, undefined);
         }
-        return new MaterializedBucket_1.MaterializedBucket({
+        const result = new MaterializedBucket_1.MaterializedBucket({
             identifier: Object.assign(Object.assign({}, bucketRow.identifier), { bucketLabel: bucketLabel !== null && bucketLabel !== void 0 ? bucketLabel : bucketRow.identifier.bucketLabel }),
             db: this._db,
         });
+        return new __1.MetricResult(metric, result);
     }
     toBuckets() {
         return __asyncGenerator(this, arguments, function* toBuckets_1() {
@@ -75,46 +76,52 @@ class MaterializedDimension extends skytree_1.PropsObject {
         });
     }
     async deleteEntryKey(entryKey) {
-        const timer = this._stopwatch.start("md-deleteEntryKey");
+        const metric = new Metric_1.Metric("MaterializedDimension.deleteEntryKey");
         await this._db.collection("buckets").updateMany({
             "identifier.dimensionKey": this.props.key,
             entryKeys: entryKey,
         }, {
             $pull: { entryKeys: entryKey },
         });
-        timer.stop();
+        return new __1.MetricResult(metric, undefined);
     }
     async addEntryToBucket(entry, bucketIdentifier) {
         if (bucketIdentifier.dimensionKey !== this.props.key) {
             throw new Error(`Received a bucket identifier for a different dimension (expected {${this.props.key}}, got {${bucketIdentifier.dimensionKey}})`);
         }
-        const timer = this._stopwatch.start("md-addEntryToBucket");
-        let bucket = (await this.toOptionalBucketGivenKey(bucketIdentifier.bucketKey, bucketIdentifier.bucketLabel));
+        const metric = new Metric_1.Metric("MaterializedDimension.addEntryToBucket");
+        const bucketResult = await this.toOptionalBucketGivenKey(bucketIdentifier.bucketKey, bucketIdentifier.bucketLabel);
+        metric.addChildMetric(bucketResult.metric);
+        let bucket = bucketResult.value;
         if (bucket == null) {
             bucket = new MaterializedBucket_1.MaterializedBucket({
                 identifier: bucketIdentifier,
                 db: this._db,
             });
         }
-        await bucket.addEntryKey(entry.key);
-        timer.stop();
+        const addResult = await bucket.addEntryKey(entry.key);
+        metric.addChildMetric(addResult.metric);
+        return new __1.MetricResult(metric, undefined);
     }
     async rebuildEntry(entry) {
-        const timer = this._stopwatch.start("md-rebuildEntry");
-        await this.deleteEntryKey(entry.key);
+        const metric = new Metric_1.Metric("MaterializedDimension.rebuildEntry");
+        const deleteResult = await this.deleteEntryKey(entry.key);
+        metric.addChildMetric(deleteResult.metric);
         const bucketIdentifiers = this.props.bucketIdentifiersGivenEntry(entry);
         if (Array.isArray(bucketIdentifiers)) {
             for (const bucketIdentifier of bucketIdentifiers) {
                 if (bucketIdentifier != null) {
-                    await this.addEntryToBucket(entry, bucketIdentifier);
+                    const addResult = await this.addEntryToBucket(entry, bucketIdentifier);
+                    metric.addChildMetric(addResult.metric);
                 }
             }
         }
         else if (bucketIdentifiers != null) {
             // not an array, just a single object
-            await this.addEntryToBucket(entry, bucketIdentifiers);
+            const addResult = await this.addEntryToBucket(entry, bucketIdentifiers);
+            metric.addChildMetric(addResult.metric);
         }
-        timer.stop();
+        return new __1.MetricResult(metric, undefined);
     }
 }
 exports.MaterializedDimension = MaterializedDimension;

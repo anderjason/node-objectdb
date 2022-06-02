@@ -74,8 +74,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   protected _isLoaded = Observable.givenValue(false, Observable.isStrictEqual);
   readonly isLoaded = ReadOnlyObservable.givenObservable(this._isLoaded);
 
-  readonly stopwatch = new Stopwatch(this.props.label);
-
   private _dimensions: Dimension<T>[] = [];
   private _propertyByKey: Map<string, Property> = new Map();
   private _caches = new Map<number, CacheData>();
@@ -101,7 +99,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (this.props.dimensions != null) {
       for (const dimension of this.props.dimensions) {
-        await dimension.init(this._db, this.stopwatch);
+        await dimension.init(this._db);
 
         this._dimensions.push(dimension);
       }
@@ -236,9 +234,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       const buckets: Bucket[] = [];
 
       for (const bucketIdentifier of bucketIdentifiers) {
-        const bucket = await this.toOptionalBucketGivenIdentifier(
+        const bucketResult = await this.toOptionalBucketGivenIdentifier(
           bucketIdentifier
         );
+        const bucket = bucketResult.value;
+
         if (bucket != null) {
           buckets.push(bucket);
         }
@@ -268,13 +268,17 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
         const sets: Set<string>[] = [];
 
         for (const bucketIdentifier of options.filter) {
-          const bucket = await this.toOptionalBucketGivenIdentifier(
+          const bucketResult = await this.toOptionalBucketGivenIdentifier(
             bucketIdentifier
           );
+          const bucket = bucketResult.value;
+
           if (bucket == null) {
             sets.push(new Set<string>());
           } else {
-            const entryKeys: Set<string> = await bucket.toEntryKeys();
+            const entryKeysResult = await bucket.toEntryKeys();
+            const entryKeys = entryKeysResult.value;
+
             sets.push(entryKeys);
           }
         }
@@ -413,7 +417,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     for (const dimension of result) {
-      await dimension.init(this._db, this.stopwatch);
+      await dimension.init(this._db);
     }
 
     return result;
@@ -461,13 +465,16 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entry: Entry<T>
   ): Promise<MetricResult<void>> {
     const metric = new Metric("rebuildMetadataGivenEntry");
-    const timer = this.stopwatch.start("rebuildMetadataGivenEntry");
+
     const dimensions = await this.toDimensions();
 
-    await Promise.all(
+    const metricResults = await Promise.all(
       dimensions.map((dimension) => dimension.rebuildEntry(entry))
     );
-    timer.stop();
+
+    for (const metricResult of metricResults) {
+      metric.addChildMetric(metricResult.metric);
+    }
 
     return new MetricResult(metric, undefined);
   }
@@ -523,7 +530,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   async toOptionalBucketGivenIdentifier(
     bucketIdentifier: BucketIdentifier
-  ): Promise<Bucket | undefined> {
+  ): Promise<MetricResult<Bucket | undefined>> {
     const dimension = await this.toOptionalDimensionGivenKey(
       bucketIdentifier.dimensionKey
     );
