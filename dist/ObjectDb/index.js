@@ -92,13 +92,12 @@ class ObjectDb extends skytree_1.Actor {
             this._mutexByEntryKey.set(entryKey, new async_mutex_1.Mutex());
         }
         const mutex = this._mutexByEntryKey.get(entryKey);
-        let fnResult;
-        let result = undefined;
         try {
-            await mutex.runExclusive(async () => {
-                fnResult = await fn();
+            return mutex.runExclusive(async () => {
+                const fnResult = await fn();
                 metric.addChildMetric(fnResult.metric);
-                result = fnResult.value;
+                const result = fnResult.value;
+                return new Metric_1.MetricResult(metric, result);
             });
         }
         finally {
@@ -106,10 +105,6 @@ class ObjectDb extends skytree_1.Actor {
                 this._mutexByEntryKey.delete(entryKey);
             }
         }
-        if (result == null) {
-            throw new Error("Missing result in runExclusive");
-        }
-        return new Metric_1.MetricResult(metric, result);
     }
     async updateEntryKey(entryKey, partialData) {
         if (entryKey == null) {

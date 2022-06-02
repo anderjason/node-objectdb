@@ -5,7 +5,7 @@ import {
   ReadOnlyObservable,
   TypedEvent,
 } from "@anderjason/observable";
-import { Instant, Stopwatch } from "@anderjason/time";
+import { Instant } from "@anderjason/time";
 import {
   ArrayUtil,
   IterableUtil,
@@ -151,26 +151,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const mutex = this._mutexByEntryKey.get(entryKey)!;
 
-    let fnResult: MetricResult<T>;
-    let result: T | undefined = undefined;
-
     try {
-      await mutex.runExclusive(async () => {
-        fnResult = await fn();
+      return mutex.runExclusive(async () => {
+        const fnResult = await fn();
         metric.addChildMetric(fnResult.metric);
-        result = fnResult.value;
+        const result = fnResult.value;
+
+        return new MetricResult(metric, result);
       });
     } finally {
       if (mutex.isLocked() == false) {
         this._mutexByEntryKey.delete(entryKey);
       }
     }
-
-    if (result == null) {
-      throw new Error("Missing result in runExclusive");
-    }
-
-    return new MetricResult(metric, result);
   }
 
   async updateEntryKey(
@@ -222,8 +215,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   async *toEntryKeys(
     options: ObjectDbReadOptions = {}
   ): AsyncGenerator<string> {
-    const now = Instant.ofNow();
-
     let entryKeys: string[] | undefined = undefined;
 
     await this.ensureIdle();
