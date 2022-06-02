@@ -158,7 +158,7 @@ class ObjectDb extends skytree_1.Actor {
         var _a;
         return __asyncGenerator(this, arguments, function* toEntryKeys_1() {
             const now = time_1.Instant.ofNow();
-            let entryKeys = [];
+            let entryKeys = undefined;
             yield __await(this.ensureIdle());
             let fullCacheKey = undefined;
             if (options.cacheKey != null) {
@@ -187,18 +187,16 @@ class ObjectDb extends skytree_1.Actor {
                 }
                 else {
                     const sets = [];
-                    if (options.filter != null) {
-                        for (const bucketIdentifier of options.filter) {
-                            const bucketResult = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
-                            const bucket = bucketResult.value;
-                            if (bucket == null) {
-                                sets.push(new Set());
-                            }
-                            else {
-                                const entryKeysResult = yield __await(bucket.toEntryKeys());
-                                const entryKeys = entryKeysResult.value;
-                                sets.push(entryKeys);
-                            }
+                    for (const bucketIdentifier of options.filter) {
+                        const bucketResult = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
+                        const bucket = bucketResult.value;
+                        if (bucket == null) {
+                            sets.push(new Set());
+                        }
+                        else {
+                            const entryKeysResult = yield __await(bucket.toEntryKeys());
+                            const entryKeys = entryKeysResult.value;
+                            sets.push(entryKeys);
                         }
                     }
                     entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));

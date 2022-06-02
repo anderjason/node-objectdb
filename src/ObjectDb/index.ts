@@ -224,7 +224,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   ): AsyncGenerator<string> {
     const now = Instant.ofNow();
 
-    let entryKeys: string[] = [];
+    let entryKeys: string[] | undefined = undefined;
 
     await this.ensureIdle();
 
@@ -267,21 +267,19 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       } else {
         const sets: Set<string>[] = [];
 
-        if (options.filter != null) {
-          for (const bucketIdentifier of options.filter) {
-            const bucketResult = await this.toOptionalBucketGivenIdentifier(
-              bucketIdentifier
-            );
-            const bucket = bucketResult.value;
+        for (const bucketIdentifier of options.filter!) {
+          const bucketResult = await this.toOptionalBucketGivenIdentifier(
+            bucketIdentifier
+          );
+          const bucket = bucketResult.value;
 
-            if (bucket == null) {
-              sets.push(new Set<string>());
-            } else {
-              const entryKeysResult = await bucket.toEntryKeys();
-              const entryKeys = entryKeysResult.value;
+          if (bucket == null) {
+            sets.push(new Set<string>());
+          } else {
+            const entryKeysResult = await bucket.toEntryKeys();
+            const entryKeys = entryKeysResult.value;
 
-              sets.push(entryKeys);
-            }
+            sets.push(entryKeys);
           }
         }
 
