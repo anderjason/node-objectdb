@@ -36,10 +36,7 @@ class MaterializedDimension extends skytree_1.PropsObject {
         await this._db.collection("buckets").createIndex({ entryKeys: 1 });
         await this._db
             .collection("buckets")
-            .createIndex({ "identifier.bucketKey": 1 });
-        await this._db
-            .collection("buckets")
-            .createIndex({ "identifier.dimensionKey": 1 });
+            .createIndex({ "identifier.dimensionKey": 1, "identifier.bucketKey": 1 });
     }
     async toOptionalBucketGivenKey(bucketKey, bucketLabel) {
         const metric = new Metric_1.Metric("MaterializedDimension.toOptionalBucketGivenKey");

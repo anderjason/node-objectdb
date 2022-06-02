@@ -33,10 +33,7 @@ export class MaterializedDimension<T>
     await this._db.collection("buckets").createIndex({ entryKeys: 1 });
     await this._db
       .collection("buckets")
-      .createIndex({ "identifier.bucketKey": 1 });
-    await this._db
-      .collection("buckets")
-      .createIndex({ "identifier.dimensionKey": 1 });
+      .createIndex({ "identifier.dimensionKey": 1, "identifier.bucketKey": 1 });
   }
 
   async toOptionalBucketGivenKey(
