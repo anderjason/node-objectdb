@@ -28,6 +28,7 @@ const async_mutex_1 = require("async-mutex");
 const skytree_1 = require("skytree");
 const Dimension_1 = require("../Dimension");
 const Entry_1 = require("../Entry");
+const Metric_1 = require("../Metric");
 const Property_1 = require("../Property");
 const SelectProperty_1 = require("../Property/Select/SelectProperty");
 const SlowResult_1 = require("../SlowResult");
@@ -76,9 +77,9 @@ class ObjectDb extends skytree_1.Actor {
         this._isLoaded.setValue(true);
     }
     async ensureIdle() {
-        // console.log(`Waiting for ObjectDB idle in ${this.props.label}...`);
+        const metric = new Metric_1.Metric("ensureIdle");
         await this._isLoaded.toPromise((v) => v);
-        // console.log(`ObjectDb is idle in ${this.props.label}`);
+        return new Metric_1.MetricResult(metric, undefined);
     }
     async runExclusive(entryKey, fn) {
         if (entryKey == null) {
@@ -87,14 +88,18 @@ class ObjectDb extends skytree_1.Actor {
         if (fn == null) {
             throw new Error("fn is required");
         }
+        const metric = new Metric_1.Metric("runExclusive");
         if (!this._mutexByEntryKey.has(entryKey)) {
             this._mutexByEntryKey.set(entryKey, new async_mutex_1.Mutex());
         }
         const mutex = this._mutexByEntryKey.get(entryKey);
+        let fnResult;
         let result;
         try {
             await mutex.runExclusive(async () => {
-                result = await fn();
+                fnResult = await fn();
+                metric.addChildMetric(fnResult.metric);
+                result = fnResult.value;
             });
         }
         finally {
@@ -102,7 +107,7 @@ class ObjectDb extends skytree_1.Actor {
                 this._mutexByEntryKey.delete(entryKey);
             }
         }
-        return result;
+        return new Metric_1.MetricResult(metric, result);
     }
     async updateEntryKey(entryKey, partialData) {
         if (entryKey == null) {
@@ -115,14 +120,18 @@ class ObjectDb extends skytree_1.Actor {
             return;
         }
         return this.runExclusive(entryKey, async () => {
-            const entry = await this.toEntryGivenKey(entryKey);
-            if (entry == null) {
+            const metric = new Metric_1.Metric("updateEntryKey");
+            const entryResult = await this.toEntryGivenKey(entryKey);
+            if (entryResult.value == null) {
                 throw new Error("Entry not found in updateEntryKey");
             }
+            const entry = entryResult.value;
+            metric.addChildMetric(entryResult.metric);
             Object.assign(entry.data, partialData);
             entry.status = "updated";
-            await this.writeEntry(entry);
-            return entry;
+            const writeResult = await this.writeEntry(entry);
+            metric.addChildMetric(writeResult.metric);
+            return new Metric_1.MetricResult(metric, entry);
         });
     }
     allEntryKeys() {
@@ -221,7 +230,7 @@ class ObjectDb extends skytree_1.Actor {
             for (var entryKeys_1 = __asyncValues(entryKeys), entryKeys_1_1; entryKeys_1_1 = await entryKeys_1.next(), !entryKeys_1_1.done;) {
                 const entryKey = entryKeys_1_1.value;
                 const entry = await this.toOptionalEntryGivenKey(entryKey);
-                await fn(entry);
+                await fn(entry.value);
             }
         }
         catch (e_2_1) { e_2 = { error: e_2_1 }; }
@@ -250,7 +259,7 @@ class ObjectDb extends skytree_1.Actor {
                     const entryKey = _c.value;
                     const entry = yield __await(this.toOptionalEntryGivenKey(entryKey));
                     if (entry != null) {
-                        yield yield __await(entry);
+                        yield yield __await(entry.value);
                     }
                 }
             }
@@ -280,16 +289,18 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
+        const metric = new Metric_1.Metric("toOptionalEntryGivenKey");
         const result = new Entry_1.Entry({
             key: entryKey,
             db: this._db,
             objectDb: this,
         });
-        const didLoad = await result.load();
-        if (!didLoad) {
-            return undefined;
+        const didLoadResult = await result.load();
+        metric.addChildMetric(didLoadResult.metric);
+        if (!didLoadResult.value) {
+            return new Metric_1.MetricResult(metric, undefined);
         }
-        return result;
+        return new Metric_1.MetricResult(metric, result);
     }
     async toDimensions() {
         const result = [...this._dimensions];
@@ -330,10 +341,12 @@ class ObjectDb extends skytree_1.Actor {
         return Array.from(this._propertyByKey.values());
     }
     async rebuildMetadataGivenEntry(entry) {
+        const metric = new Metric_1.Metric("rebuildMetadataGivenEntry");
         const timer = this.stopwatch.start("rebuildMetadataGivenEntry");
         const dimensions = await this.toDimensions();
         await Promise.all(dimensions.map((dimension) => dimension.rebuildEntry(entry)));
         timer.stop();
+        return new Metric_1.MetricResult(metric, undefined);
     }
     rebuildMetadata() {
         console.log(`Rebuilding metadata for ${this.props.label}...`);
@@ -341,7 +354,8 @@ class ObjectDb extends skytree_1.Actor {
             getItems: () => this.allEntryKeys(),
             getTotalCount: () => this.toEntryCount(),
             fn: async (entryKey) => {
-                const entry = await this.toOptionalEntryGivenKey(entryKey);
+                const entryResult = await this.toOptionalEntryGivenKey(entryKey);
+                const entry = entryResult.value;
                 if (entry == null) {
                     return;
                 }
@@ -409,22 +423,22 @@ class ObjectDb extends skytree_1.Actor {
         }
         switch (entry.status) {
             case "deleted":
-                await this.deleteEntryKey(entry.key);
-                break;
+                return this.deleteEntryKey(entry.key);
             case "new":
             case "saved":
             case "updated":
             case "unknown":
                 if ("createdAt" in entry) {
-                    await this.writeEntryData(entry.data, entry.propertyValues, entry.key, entry.createdAt, entry.documentVersion);
+                    const writeResult = await this.writeEntryData(entry.data, entry.propertyValues, entry.key, entry.createdAt, entry.documentVersion);
+                    return new Metric_1.MetricResult(writeResult.metric, undefined);
                 }
                 else {
                     const createdAt = entry.createdAtEpochMs != null
                         ? time_1.Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
                         : undefined;
-                    await this.writeEntryData(entry.data, entry.propertyValues, entry.key, createdAt, entry.documentVersion);
+                    const writeResult = await this.writeEntryData(entry.data, entry.propertyValues, entry.key, createdAt, entry.documentVersion);
+                    return new Metric_1.MetricResult(writeResult.metric, undefined);
                 }
-                break;
             default:
                 throw new Error(`Unsupported entry status '${entry.status}'`);
         }
@@ -436,7 +450,10 @@ class ObjectDb extends skytree_1.Actor {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        let entry = await this.toOptionalEntryGivenKey(entryKey);
+        const metric = new Metric_1.Metric("writeEntryData");
+        const entryResult = await this.toOptionalEntryGivenKey(entryKey);
+        let entry = entryResult.value;
+        metric.addChildMetric(entryResult.metric);
         const oldDocumentVersion = entry === null || entry === void 0 ? void 0 : entry.documentVersion;
         if (oldDocumentVersion != null &&
             documentVersion != null &&
@@ -475,20 +492,26 @@ class ObjectDb extends skytree_1.Actor {
             newData: entryData,
         };
         this.entryWillChange.emit(change);
-        await entry.save();
-        await this.rebuildMetadataGivenEntry(entry);
+        const saveResult = await entry.save();
+        metric.addChildMetric(saveResult.metric);
+        const rebuildResult = await this.rebuildMetadataGivenEntry(entry);
+        metric.addChildMetric(rebuildResult.metric);
         if (didCreateNewEntry) {
             this.collectionDidChange.emit();
         }
         this.entryDidChange.emit(change);
-        await this.ensureIdle();
-        return entry;
+        const ensureIdleResult = await this.ensureIdle();
+        metric.addChildMetric(ensureIdleResult.metric);
+        return new Metric_1.MetricResult(metric, entry);
     }
     async deleteEntryKey(entryKey) {
         if (entryKey.length < 5) {
             throw new Error("Entry key length must be at least 5 characters");
         }
-        const existingRecord = await this.toOptionalEntryGivenKey(entryKey);
+        const metric = new Metric_1.Metric("deleteEntryKey");
+        const existingRecordResult = await this.toOptionalEntryGivenKey(entryKey);
+        const existingRecord = existingRecordResult.value;
+        metric.addChildMetric(existingRecordResult.metric);
         if (existingRecord == null) {
             return;
         }
@@ -505,6 +528,7 @@ class ObjectDb extends skytree_1.Actor {
         await this._db.collection("entries").deleteOne({ key: entryKey });
         this.entryDidChange.emit(change);
         this.collectionDidChange.emit();
+        return new Metric_1.MetricResult(metric, undefined);
     }
 }
 exports.ObjectDb = ObjectDb;

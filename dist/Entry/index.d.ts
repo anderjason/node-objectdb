@@ -2,6 +2,7 @@ import { Dict } from "@anderjason/observable";
 import { Instant } from "@anderjason/time";
 import { PropsObject } from "skytree";
 import { ObjectDb } from "..";
+import { MetricResult } from "../Metric";
 import { MongoDb } from "../MongoDb";
 export declare type EntryStatus = "unknown" | "new" | "saved" | "updated" | "deleted";
 export declare type JSONSerializable = string | number | boolean | null | JSONSerializable[] | {
@@ -32,8 +33,8 @@ export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     status: EntryStatus;
     documentVersion: number | undefined;
     constructor(props: EntryProps<T>);
-    load(): Promise<boolean>;
-    save(): Promise<void>;
+    load(): Promise<MetricResult<boolean>>;
+    save(): Promise<MetricResult<void>>;
     toClone(): Entry<T>;
     toPortableEntry(): PortableEntry<T>;
 }

@@ -89,9 +89,10 @@ Test.define("ObjectDb can write and read a row", async () => {
     objectDb.activate();
     await objectDb.ensureIdle();
 
-    const entry = await objectDb.writeEntryData({
+    let entryResult = await objectDb.writeEntryData({
       message: "hello world",
     });
+    const entry = entryResult.value;
 
     Test.assert(entry.key != null, "entry.key should not be null");
     Test.assert(entry.key.length == 36, "entry.key should be 36 characters");
@@ -102,7 +103,9 @@ Test.define("ObjectDb can write and read a row", async () => {
       "entry.data.message should be 'hello world'"
     );
 
-    const result = await objectDb.toEntryGivenKey(entry.key);
+    entryResult = await objectDb.toEntryGivenKey(entry.key);
+    const result = entryResult.value;
+
     Test.assertIsDeepEqual(
       result.data,
       entry.data,
@@ -135,13 +138,15 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
     objectDb.activate();
     await objectDb.ensureIdle();
 
-    const one = await objectDb.writeEntryData({
+    const oneResult = await objectDb.writeEntryData({
       message: "one",
     });
+    const one = oneResult.value;
 
-    const two = await objectDb.writeEntryData({
+    const twoResult = await objectDb.writeEntryData({
       message: "two",
     });
+    const two = twoResult.value;
 
     Test.assert(one.key !== two.key, "Keys should be equal");
 
@@ -262,13 +267,15 @@ Test.define("ObjectDb supports materialized dimensions", async () => {
     objectDb.activate();
     await objectDb.ensureIdle();
 
-    const objA = await objectDb.writeEntryData({
+    const objAResult = await objectDb.writeEntryData({
       message: "A",
     });
+    const objA = objAResult.value;
 
-    const objB = await objectDb.writeEntryData({
+    const objBResult = await objectDb.writeEntryData({
       message: "B",
     });
+    const objB = objBResult.value;
 
     await objectDb.ensureIdle();
 
@@ -346,13 +353,15 @@ Test.define("ObjectDb materialized dimensions save their state", async () => {
     objectDb.activate();
     await objectDb.ensureIdle();
 
-    const one = await objectDb.writeEntryData({
+    const oneResult = await objectDb.writeEntryData({
       message: "one",
     });
+    const one = oneResult.value;
 
-    const two = await objectDb.writeEntryData({
+    const twoResult = await objectDb.writeEntryData({
       message: "two",
     });
+    const two = twoResult.value;
 
     objectDb.deactivate();
 
@@ -427,11 +436,12 @@ Test.define(
       objectDb.activate();
       await objectDb.ensureIdle();
 
-      const one = await objectDb.writeEntryData({
+      const oneResult = await objectDb.writeEntryData({
         message: "one",
       });
+      const one = oneResult.value;
 
-      const two = await objectDb.writeEntryData({
+      const twoResult = await objectDb.writeEntryData({
         message: "two",
       });
 
@@ -490,10 +500,11 @@ Test.define(
       objectDb.activate();
       await objectDb.ensureIdle();
 
-      const odd = await objectDb.writeEntryData({
+      const oddResult = await objectDb.writeEntryData({
         message: "odd",
         numbers: [1, 3, 5, 7, 9],
       });
+      const odd = oddResult.value;
 
       const even = await objectDb.writeEntryData({
         message: "even",
@@ -562,9 +573,10 @@ Test.define("ObjectDb live dimensions are case insensitive", async () => {
     objectDb.activate();
     await objectDb.ensureIdle();
 
-    const apple = await objectDb.writeEntryData({
+    const appleResult = await objectDb.writeEntryData({
       message: "Apple",
     });
+    const apple = appleResult.value;
 
     const entries = await IterableUtil.arrayGivenAsyncIterable(
       objectDb.toEntries({
@@ -598,12 +610,16 @@ Test.define("ObjectDb prevents saving stale entries", async () => {
     objectDb.activate();
     await objectDb.ensureIdle();
 
-    const original = await objectDb.writeEntryData({
+    const originalResult = await objectDb.writeEntryData({
       message: "one",
     });
+    const original = originalResult.value;
 
-    const first = await objectDb.toEntryGivenKey(original.key);
-    const second = await objectDb.toEntryGivenKey(original.key);
+    const firstResult = await objectDb.toEntryGivenKey(original.key);
+    const secondResult = await objectDb.toEntryGivenKey(original.key);
+
+    const first = firstResult.value;
+    const second = secondResult.value;
 
     first.data.message = "first";
     await objectDb.writeEntry(first);

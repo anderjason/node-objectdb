@@ -5,7 +5,7 @@ import {
   ReadOnlyObservable,
   TypedEvent,
 } from "@anderjason/observable";
-import { Duration, Instant, Stopwatch } from "@anderjason/time";
+import { Instant, Stopwatch } from "@anderjason/time";
 import {
   ArrayUtil,
   IterableUtil,
@@ -14,7 +14,7 @@ import {
   StringUtil,
 } from "@anderjason/util";
 import { Mutex } from "async-mutex";
-import { Actor, Timer } from "skytree";
+import { Actor } from "skytree";
 import {
   Bucket,
   BucketIdentifier,
@@ -22,6 +22,7 @@ import {
   hashCodeGivenBucketIdentifier,
 } from "../Dimension";
 import { Entry, JSONSerializable, PortableEntry } from "../Entry";
+import { Metric, MetricResult } from "../Metric";
 import { MongoDb } from "../MongoDb";
 import {
   Property,
@@ -124,17 +125,18 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     this._isLoaded.setValue(true);
   }
 
-  async ensureIdle(): Promise<void> {
-    // console.log(`Waiting for ObjectDB idle in ${this.props.label}...`);
+  async ensureIdle(): Promise<MetricResult<void>> {
+    const metric = new Metric("ensureIdle");
+
     await this._isLoaded.toPromise((v) => v);
 
-    // console.log(`ObjectDb is idle in ${this.props.label}`);
+    return new MetricResult(metric, undefined);
   }
 
   async runExclusive<T = void>(
     entryKey: string,
-    fn: () => Promise<T> | T
-  ): Promise<T> {
+    fn: () => Promise<MetricResult<T>> | MetricResult<T>
+  ): Promise<MetricResult<T>> {
     if (entryKey == null) {
       throw new Error("entryKey is required");
     }
@@ -143,17 +145,22 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("fn is required");
     }
 
+    const metric = new Metric("runExclusive");
+
     if (!this._mutexByEntryKey.has(entryKey)) {
       this._mutexByEntryKey.set(entryKey, new Mutex());
     }
 
     const mutex = this._mutexByEntryKey.get(entryKey);
 
+    let fnResult: MetricResult<T>;
     let result: T;
 
     try {
       await mutex.runExclusive(async () => {
-        result = await fn();
+        fnResult = await fn();
+        metric.addChildMetric(fnResult.metric);
+        result = fnResult.value;
       });
     } finally {
       if (mutex.isLocked() == false) {
@@ -161,13 +168,13 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       }
     }
 
-    return result;
+    return new MetricResult(metric, result);
   }
 
   async updateEntryKey(
     entryKey: string,
     partialData: Partial<T>
-  ): Promise<Entry<T>> {
+  ): Promise<MetricResult<Entry<T>>> {
     if (entryKey == null) {
       throw new Error("entryKey is required");
     }
@@ -181,17 +188,23 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
 
     return this.runExclusive<Entry<T>>(entryKey, async () => {
-      const entry = await this.toEntryGivenKey(entryKey);
-      if (entry == null) {
+      const metric = new Metric("updateEntryKey");
+
+      const entryResult = await this.toEntryGivenKey(entryKey);
+      if (entryResult.value == null) {
         throw new Error("Entry not found in updateEntryKey");
       }
+
+      const entry = entryResult.value;
+      metric.addChildMetric(entryResult.metric);
 
       Object.assign(entry.data, partialData);
 
       entry.status = "updated";
-      await this.writeEntry(entry);
+      const writeResult = await this.writeEntry(entry);
+      metric.addChildMetric(writeResult.metric);
 
-      return entry;
+      return new MetricResult(metric, entry);
     });
   }
 
@@ -307,7 +320,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     const entryKeys = this.allEntryKeys();
     for await (const entryKey of entryKeys) {
       const entry = await this.toOptionalEntryGivenKey(entryKey);
-      await fn(entry);
+      await fn(entry.value);
     }
   }
 
@@ -334,7 +347,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     for await (const entryKey of this.toEntryKeys(options)) {
       const entry = await this.toOptionalEntryGivenKey(entryKey);
       if (entry != null) {
-        yield entry;
+        yield entry.value;
       }
     }
   }
@@ -351,7 +364,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     );
   }
 
-  async toEntryGivenKey(entryKey: string): Promise<Entry<T>> {
+  async toEntryGivenKey(entryKey: string): Promise<MetricResult<Entry<T>>> {
     const result = await this.toOptionalEntryGivenKey(entryKey);
     if (result == null) {
       throw new Error(`Entry not found for key '${entryKey}'`);
@@ -362,7 +375,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   async toOptionalEntryGivenKey(
     entryKey: string
-  ): Promise<Entry<T> | undefined> {
+  ): Promise<MetricResult<Entry<T> | undefined>> {
     if (entryKey == null) {
       throw new Error("Entry key is required");
     }
@@ -371,19 +384,22 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
+    const metric = new Metric("toOptionalEntryGivenKey");
+
     const result: Entry<T> = new Entry<T>({
       key: entryKey,
       db: this._db,
       objectDb: this,
     });
 
-    const didLoad = await result.load();
+    const didLoadResult = await result.load();
+    metric.addChildMetric(didLoadResult.metric);
 
-    if (!didLoad) {
-      return undefined;
+    if (!didLoadResult.value) {
+      return new MetricResult(metric, undefined);
     }
 
-    return result;
+    return new MetricResult(metric, result);
   }
 
   async toDimensions(): Promise<Dimension<T>[]> {
@@ -441,7 +457,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return Array.from(this._propertyByKey.values());
   }
 
-  async rebuildMetadataGivenEntry(entry: Entry<T>): Promise<void> {
+  async rebuildMetadataGivenEntry(
+    entry: Entry<T>
+  ): Promise<MetricResult<void>> {
+    const metric = new Metric("rebuildMetadataGivenEntry");
     const timer = this.stopwatch.start("rebuildMetadataGivenEntry");
     const dimensions = await this.toDimensions();
 
@@ -449,6 +468,8 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       dimensions.map((dimension) => dimension.rebuildEntry(entry))
     );
     timer.stop();
+
+    return new MetricResult(metric, undefined);
   }
 
   rebuildMetadata(): SlowResult<any> {
@@ -458,7 +479,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       getItems: () => this.allEntryKeys(),
       getTotalCount: () => this.toEntryCount(),
       fn: async (entryKey) => {
-        const entry = await this.toOptionalEntryGivenKey(entryKey);
+        const entryResult = await this.toOptionalEntryGivenKey(entryKey);
+        const entry = entryResult.value;
+
         if (entry == null) {
           return;
         }
@@ -514,43 +537,44 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     );
   }
 
-  async writeEntry(entry: Entry<T> | PortableEntry<T>): Promise<void> {
+  async writeEntry(
+    entry: Entry<T> | PortableEntry<T>
+  ): Promise<MetricResult<void>> {
     if (entry == null) {
       throw new Error("Entry is required");
     }
 
     switch (entry.status) {
       case "deleted":
-        await this.deleteEntryKey(entry.key);
-        break;
+        return this.deleteEntryKey(entry.key);
       case "new":
       case "saved":
       case "updated":
       case "unknown":
         if ("createdAt" in entry) {
-          await this.writeEntryData(
+          const writeResult = await this.writeEntryData(
             entry.data,
             entry.propertyValues,
             entry.key,
             entry.createdAt,
             entry.documentVersion
           );
+          return new MetricResult(writeResult.metric, undefined);
         } else {
           const createdAt =
             entry.createdAtEpochMs != null
               ? Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
               : undefined;
 
-          await this.writeEntryData(
+          const writeResult = await this.writeEntryData(
             entry.data,
             entry.propertyValues,
             entry.key,
             createdAt,
             entry.documentVersion
           );
+          return new MetricResult(writeResult.metric, undefined);
         }
-
-        break;
       default:
         throw new Error(`Unsupported entry status '${entry.status}'`);
     }
@@ -562,7 +586,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     entryKey?: string,
     createdAt?: Instant,
     documentVersion?: number
-  ): Promise<Entry<T>> {
+  ): Promise<MetricResult<Entry<T>>> {
     if (entryKey == null) {
       entryKey = UniqueId.ofRandom().toUUIDString();
     }
@@ -571,7 +595,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    let entry = await this.toOptionalEntryGivenKey(entryKey);
+    const metric = new Metric("writeEntryData");
+
+    const entryResult = await this.toOptionalEntryGivenKey(entryKey);
+    let entry = entryResult.value;
+    metric.addChildMetric(entryResult.metric);
 
     const oldDocumentVersion = entry?.documentVersion;
     if (
@@ -624,8 +652,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.entryWillChange.emit(change);
 
-    await entry.save();
-    await this.rebuildMetadataGivenEntry(entry);
+    const saveResult = await entry.save();
+    metric.addChildMetric(saveResult.metric);
+
+    const rebuildResult = await this.rebuildMetadataGivenEntry(entry);
+    metric.addChildMetric(rebuildResult.metric);
 
     if (didCreateNewEntry) {
       this.collectionDidChange.emit();
@@ -633,17 +664,23 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.entryDidChange.emit(change);
 
-    await this.ensureIdle();
+    const ensureIdleResult = await this.ensureIdle();
+    metric.addChildMetric(ensureIdleResult.metric);
 
-    return entry;
+    return new MetricResult(metric, entry);
   }
 
-  async deleteEntryKey(entryKey: string): Promise<void> {
+  async deleteEntryKey(entryKey: string): Promise<MetricResult<void>> {
     if (entryKey.length < 5) {
       throw new Error("Entry key length must be at least 5 characters");
     }
 
-    const existingRecord = await this.toOptionalEntryGivenKey(entryKey);
+    const metric = new Metric("deleteEntryKey");
+
+    const existingRecordResult = await this.toOptionalEntryGivenKey(entryKey);
+    const existingRecord = existingRecordResult.value;
+    metric.addChildMetric(existingRecordResult.metric);
+
     if (existingRecord == null) {
       return;
     }
@@ -665,5 +702,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.entryDidChange.emit(change);
     this.collectionDidChange.emit();
+
+    return new MetricResult(metric, undefined);
   }
 }

@@ -4,6 +4,7 @@ import { Instant } from "@anderjason/time";
 import { ObjectUtil } from "@anderjason/util";
 import { PropsObject } from "skytree";
 import { ObjectDb } from "..";
+import { Metric, MetricResult } from "../Metric";
 import { MongoDb } from "../MongoDb";
 
 export type EntryStatus = "unknown" | "new" | "saved" | "updated" | "deleted";
@@ -53,12 +54,16 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.status = "unknown";
   }
 
-  async load(): Promise<boolean> {
-    const row = await this.props.db.collection<PortableEntry<T>>("entries").findOne({ key: this.key });
-    
+  async load(): Promise<MetricResult<boolean>> {
+    const metric = new Metric("Entry.load");
+
+    const row = await this.props.db
+      .collection<PortableEntry<T>>("entries")
+      .findOne({ key: this.key });
+
     if (row == null) {
       this.status = "new";
-      return false;
+      return new MetricResult(metric, false);
     }
 
     this.data = row.data;
@@ -68,10 +73,12 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     this.status = "saved";
     this.documentVersion = row.documentVersion;
 
-    return true;
+    return new MetricResult(metric, true);
   }
 
-  async save(): Promise<void> {
+  async save(): Promise<MetricResult<void>> {
+    const metric = new Metric("Entry.save");
+
     this.updatedAt = Instant.ofNow();
 
     if (this.createdAt == null) {
@@ -81,29 +88,36 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
     const createdAtMs = this.createdAt.toEpochMilliseconds();
     const updatedAtMs = this.updatedAt.toEpochMilliseconds();
 
-    const newDocumentVersion = this.documentVersion == null ? 1 : this.documentVersion + 1;
+    const newDocumentVersion =
+      this.documentVersion == null ? 1 : this.documentVersion + 1;
 
-    const result = await this.props.db.collection<PortableEntry<T>>("entries").updateOne(
-      { key: this.key, documentVersion: this.documentVersion },
-      {
-        $set: {
-          key: this.key,
-          createdAtEpochMs: createdAtMs,
-          updatedAtEpochMs: updatedAtMs,
-          data: this.data,
-          propertyValues: this.propertyValues ?? {},
-          status: this.status,
-          documentVersion: newDocumentVersion
+    const result = await this.props.db
+      .collection<PortableEntry<T>>("entries")
+      .updateOne(
+        { key: this.key, documentVersion: this.documentVersion },
+        {
+          $set: {
+            key: this.key,
+            createdAtEpochMs: createdAtMs,
+            updatedAtEpochMs: updatedAtMs,
+            data: this.data,
+            propertyValues: this.propertyValues ?? {},
+            status: this.status,
+            documentVersion: newDocumentVersion,
+          },
         },
-      },
-      { upsert: true }
-    );
+        { upsert: true }
+      );
 
     if (result.modifiedCount == 0 && result.upsertedCount == 0) {
-      throw new Error("Failed to save entry - could be a document version mismatch");
+      throw new Error(
+        "Failed to save entry - could be a document version mismatch"
+      );
     }
 
     this.status = "saved";
+
+    return new MetricResult(metric, undefined);
   }
 
   toClone(): Entry<T> {
@@ -112,10 +126,13 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       db: this.props.db,
-      objectDb: this.props.objectDb
+      objectDb: this.props.objectDb,
     });
     result.data = ObjectUtil.objectWithDeepMerge({}, this.data);
-    result.propertyValues = ObjectUtil.objectWithDeepMerge({}, this.propertyValues);
+    result.propertyValues = ObjectUtil.objectWithDeepMerge(
+      {},
+      this.propertyValues
+    );
     result.status = this.status;
     result.documentVersion = this.documentVersion;
 
@@ -130,7 +147,7 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
       data: this.data,
       propertyValues: this.propertyValues ?? {},
       status: this.status,
-      documentVersion: this.documentVersion
+      documentVersion: this.documentVersion,
     };
   }
 }
