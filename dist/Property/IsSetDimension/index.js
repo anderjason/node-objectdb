@@ -88,7 +88,9 @@ class IsSetDimension extends skytree_1.PropsObject {
             for (const identifier of identifiers) {
                 const bucketResult = yield __await(this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel));
                 const bucket = bucketResult.value;
-                yield yield __await(bucket);
+                if (bucket != null) {
+                    yield yield __await(bucket);
+                }
             }
         });
     }

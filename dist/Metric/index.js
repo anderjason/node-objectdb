@@ -28,12 +28,12 @@ class Metric {
         this._startTime = undefined;
     }
     toPortableObject() {
-        if (this.isRunning) {
+        if (this._durationMs == null) {
             throw new Error("Cannot serialize a metric that is still running");
         }
         const result = {
             name: this.name,
-            durationMs: this.durationMs,
+            durationMs: this._durationMs,
         };
         if (this.children.length > 0) {
             result.children = this.children.map((child) => child.toPortableObject());

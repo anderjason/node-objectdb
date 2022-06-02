@@ -4,7 +4,7 @@ export declare class Benchmark {
     private bucketSize;
     private startTime;
     private durationPerBucket;
-    private bucketDidFinish;
+    private bucketDidFinish?;
     private countSize;
     constructor(totalCount: number, bucketSize?: number, bucketDidFinish?: () => void);
     log(message: string): void;

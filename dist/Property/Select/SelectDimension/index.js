@@ -90,7 +90,9 @@ class SelectDimension extends skytree_1.PropsObject {
                     const identifier = _c.value;
                     const bucketResult = yield __await(this.toOptionalBucketGivenKey(identifier.bucketKey, identifier.bucketLabel));
                     const bucket = bucketResult.value;
-                    yield yield __await(bucket);
+                    if (bucket != null) {
+                        yield yield __await(bucket);
+                    }
                 }
             }
             catch (e_1_1) { e_1 = { error: e_1_1 }; }

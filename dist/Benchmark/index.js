@@ -15,7 +15,8 @@ class Benchmark {
         this.counted += 1;
         const countedStr = String(this.counted).padStart(this.countSize);
         console.log(`${message} (${countedStr}/${this.totalCount}, ${this.durationPerBucket}ms per ${this.bucketSize})`);
-        if (this.counted === this.totalCount || this.counted % this.bucketSize === 0) {
+        if (this.counted === this.totalCount ||
+            this.counted % this.bucketSize === 0) {
             const now = new Date().getTime();
             this.durationPerBucket = now - this.startTime;
             this.startTime = now;

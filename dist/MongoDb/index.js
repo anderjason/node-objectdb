@@ -12,6 +12,9 @@ class MongoDb extends skytree_1.Actor {
         this.isConnected = observable_1.ReadOnlyObservable.givenObservable(this._isConnected);
     }
     get client() {
+        if (this._db == null) {
+            throw new Error("DB is not set");
+        }
         return this._db;
     }
     onActivate() {
@@ -36,12 +39,16 @@ class MongoDb extends skytree_1.Actor {
             const file = node_filesystem_1.LocalFile.givenAbsolutePath(this.props.certPath);
             cert = await file.toContentString();
         }
-        const client = new mongodb_1.MongoClient((_a = this.props.url) !== null && _a !== void 0 ? _a : process.env.MONGODB_URL, {
+        const url = (_a = this.props.url) !== null && _a !== void 0 ? _a : process.env.MONGODB_URL;
+        if (url == null) {
+            throw new Error("MongoDb url is not set");
+        }
+        const client = new mongodb_1.MongoClient(url, {
             cert,
             tlsAllowInvalidCertificates: true,
             keepAlive: true,
             retryWrites: true,
-            retryReads: true
+            retryReads: true,
         });
         this._db = client.db(this.props.dbName);
         client.connect().then(() => {
@@ -49,7 +56,7 @@ class MongoDb extends skytree_1.Actor {
         });
     }
     async ensureConnected() {
-        await this._isConnected.toPromise(v => v == true);
+        await this._isConnected.toPromise((v) => v == true);
     }
     async dropDatabase() {
         if (this._db == null) {

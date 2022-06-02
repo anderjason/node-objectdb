@@ -10,8 +10,8 @@ export declare type JSONSerializable = string | number | boolean | null | JSONSe
 };
 export interface PortableEntry<T> {
     key: string;
-    createdAtEpochMs: number;
-    updatedAtEpochMs: number;
+    createdAtEpochMs?: number;
+    updatedAtEpochMs?: number;
     data: T;
     propertyValues: Dict<JSONSerializable>;
     status: EntryStatus;
@@ -26,8 +26,8 @@ export interface EntryProps<T> {
 }
 export declare class Entry<T> extends PropsObject<EntryProps<T>> {
     readonly key: string;
-    createdAt: Instant;
-    updatedAt: Instant;
+    createdAt?: Instant;
+    updatedAt?: Instant;
     data: T;
     propertyValues: Dict<JSONSerializable>;
     status: EntryStatus;

@@ -19,8 +19,8 @@ export type JSONSerializable =
 
 export interface PortableEntry<T> {
   key: string;
-  createdAtEpochMs: number;
-  updatedAtEpochMs: number;
+  createdAtEpochMs?: number;
+  updatedAtEpochMs?: number;
   data: T;
   propertyValues: Dict<JSONSerializable>;
   status: EntryStatus;
@@ -38,8 +38,8 @@ export interface EntryProps<T> {
 export class Entry<T> extends PropsObject<EntryProps<T>> {
   readonly key: string;
 
-  createdAt: Instant;
-  updatedAt: Instant;
+  createdAt?: Instant;
+  updatedAt?: Instant;
   data: T;
   propertyValues: Dict<JSONSerializable>;
   status: EntryStatus;
@@ -68,8 +68,8 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
 
     this.data = row.data;
     this.propertyValues = row.propertyValues;
-    this.createdAt = Instant.givenEpochMilliseconds(row.createdAtEpochMs);
-    this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAtEpochMs);
+    this.createdAt = Instant.givenEpochMilliseconds(row.createdAtEpochMs!);
+    this.updatedAt = Instant.givenEpochMilliseconds(row.updatedAtEpochMs!);
     this.status = "saved";
     this.documentVersion = row.documentVersion;
 
@@ -142,8 +142,14 @@ export class Entry<T> extends PropsObject<EntryProps<T>> {
   toPortableEntry(): PortableEntry<T> {
     return {
       key: this.key,
-      createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
-      updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
+      createdAtEpochMs:
+        this.createdAt != null
+          ? this.createdAt.toEpochMilliseconds()
+          : undefined,
+      updatedAtEpochMs:
+        this.updatedAt != null
+          ? this.updatedAt.toEpochMilliseconds()
+          : undefined,
       data: this.data,
       propertyValues: this.propertyValues ?? {},
       status: this.status,

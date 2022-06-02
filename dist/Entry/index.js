@@ -78,8 +78,12 @@ class Entry extends skytree_1.PropsObject {
         var _a;
         return {
             key: this.key,
-            createdAtEpochMs: this.createdAt.toEpochMilliseconds(),
-            updatedAtEpochMs: this.updatedAt.toEpochMilliseconds(),
+            createdAtEpochMs: this.createdAt != null
+                ? this.createdAt.toEpochMilliseconds()
+                : undefined,
+            updatedAtEpochMs: this.updatedAt != null
+                ? this.updatedAt.toEpochMilliseconds()
+                : undefined,
             data: this.data,
             propertyValues: (_a = this.propertyValues) !== null && _a !== void 0 ? _a : {},
             status: this.status,

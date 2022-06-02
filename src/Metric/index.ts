@@ -24,7 +24,7 @@ export class Metric {
     this._startTime = new Date().getTime();
   }
 
-  addChildMetric(metric?: Metric): Metric {
+  addChildMetric(metric?: Metric): void {
     if (metric == null) {
       return;
     }
@@ -43,13 +43,13 @@ export class Metric {
   }
 
   toPortableObject(): PortableMetric {
-    if (this.isRunning) {
+    if (this._durationMs == null) {
       throw new Error("Cannot serialize a metric that is still running");
     }
 
     const result: PortableMetric = {
       name: this.name,
-      durationMs: this.durationMs,
+      durationMs: this._durationMs,
     };
 
     if (this.children.length > 0) {

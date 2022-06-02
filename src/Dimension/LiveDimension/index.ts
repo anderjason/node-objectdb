@@ -96,6 +96,8 @@ export class LiveDimension<T>
               bucketLabel: label,
             };
           });
+        } else {
+          throw new Error("Unsupported value type");
         }
       },
       mongoFilterGivenBucketIdentifier: (

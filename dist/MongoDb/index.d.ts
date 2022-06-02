@@ -10,8 +10,8 @@ export interface MongoDbProps {
 export declare class MongoDb extends Actor<MongoDbProps> {
     private _isConnected;
     readonly isConnected: ReadOnlyObservable<boolean>;
-    private _mongoClient;
-    private _db;
+    private _mongoClient?;
+    private _db?;
     get client(): Db;
     onActivate(): void;
     private connect;

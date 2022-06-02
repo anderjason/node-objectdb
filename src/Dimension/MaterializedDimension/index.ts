@@ -105,11 +105,10 @@ export class MaterializedDimension<T>
 
     const metric = new Metric("MaterializedDimension.addEntryToBucket");
 
-    const bucketResult: MetricResult<MaterializedBucket<T>> =
-      await this.toOptionalBucketGivenKey(
-        bucketIdentifier.bucketKey,
-        bucketIdentifier.bucketLabel
-      );
+    const bucketResult = await this.toOptionalBucketGivenKey(
+      bucketIdentifier.bucketKey,
+      bucketIdentifier.bucketLabel
+    );
     metric.addChildMetric(bucketResult.metric);
 
     let bucket = bucketResult.value;

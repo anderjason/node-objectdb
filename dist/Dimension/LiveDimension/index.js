@@ -81,6 +81,9 @@ class LiveDimension extends skytree_1.PropsObject {
                         };
                     });
                 }
+                else {
+                    throw new Error("Unsupported value type");
+                }
             },
             mongoFilterGivenBucketIdentifier: (bucketIdentifier) => {
                 const key = bucketIdentifier.bucketKey;

@@ -149,10 +149,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       this._mutexByEntryKey.set(entryKey, new Mutex());
     }
 
-    const mutex = this._mutexByEntryKey.get(entryKey);
+    const mutex = this._mutexByEntryKey.get(entryKey)!;
 
     let fnResult: MetricResult<T>;
-    let result: T;
+    let result: T | undefined = undefined;
 
     try {
       await mutex.runExclusive(async () => {
@@ -164,6 +164,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       if (mutex.isLocked() == false) {
         this._mutexByEntryKey.delete(entryKey);
       }
+    }
+
+    if (result == null) {
+      throw new Error("Missing result in runExclusive");
     }
 
     return new MetricResult(metric, result);
@@ -179,10 +183,6 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (partialData == null) {
       throw new Error("partialData is required");
-    }
-
-    if (Object.keys(partialData).length === 0) {
-      return;
     }
 
     return this.runExclusive<Entry<T>>(entryKey, async () => {
@@ -224,11 +224,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   ): AsyncGenerator<string> {
     const now = Instant.ofNow();
 
-    let entryKeys: string[] = undefined;
+    let entryKeys: string[] = [];
 
     await this.ensureIdle();
 
-    let fullCacheKey: number = undefined;
+    let fullCacheKey: number | undefined = undefined;
     if (options.cacheKey != null) {
       const bucketIdentifiers: BucketIdentifier[] = options.filter ?? [];
       const buckets: Bucket[] = [];
@@ -267,19 +267,21 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       } else {
         const sets: Set<string>[] = [];
 
-        for (const bucketIdentifier of options.filter) {
-          const bucketResult = await this.toOptionalBucketGivenIdentifier(
-            bucketIdentifier
-          );
-          const bucket = bucketResult.value;
+        if (options.filter != null) {
+          for (const bucketIdentifier of options.filter) {
+            const bucketResult = await this.toOptionalBucketGivenIdentifier(
+              bucketIdentifier
+            );
+            const bucket = bucketResult.value;
 
-          if (bucket == null) {
-            sets.push(new Set<string>());
-          } else {
-            const entryKeysResult = await bucket.toEntryKeys();
-            const entryKeys = entryKeysResult.value;
+            if (bucket == null) {
+              sets.push(new Set<string>());
+            } else {
+              const entryKeysResult = await bucket.toEntryKeys();
+              const entryKeys = entryKeysResult.value;
 
-            sets.push(entryKeys);
+              sets.push(entryKeys);
+            }
           }
         }
 
@@ -295,7 +297,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       }
     }
 
-    if (options.cacheKey != null && !this._caches.has(fullCacheKey)) {
+    if (
+      options.cacheKey != null &&
+      fullCacheKey != null &&
+      !this._caches.has(fullCacheKey)
+    ) {
       this._caches.set(fullCacheKey, {
         entryKeys,
       });
@@ -323,8 +329,12 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   async forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void> {
     const entryKeys = this.allEntryKeys();
     for await (const entryKey of entryKeys) {
-      const entry = await this.toOptionalEntryGivenKey(entryKey);
-      await fn(entry.value);
+      const entryResult = await this.toOptionalEntryGivenKey(entryKey);
+      const entry = entryResult.value;
+
+      if (entry != null) {
+        await fn(entry);
+      }
     }
   }
 
@@ -349,9 +359,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     options: ObjectDbReadOptions = {}
   ): AsyncGenerator<Entry<T>> {
     for await (const entryKey of this.toEntryKeys(options)) {
-      const entry = await this.toOptionalEntryGivenKey(entryKey);
+      const entryResult = await this.toOptionalEntryGivenKey(entryKey);
+      const entry = entryResult.value;
+
       if (entry != null) {
-        yield entry.value;
+        yield entry;
       }
     }
   }
@@ -369,12 +381,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   }
 
   async toEntryGivenKey(entryKey: string): Promise<MetricResult<Entry<T>>> {
-    const result = await this.toOptionalEntryGivenKey(entryKey);
-    if (result == null) {
+    const entryResult = await this.toOptionalEntryGivenKey(entryKey);
+    const entry = entryResult.value;
+
+    if (entry == null) {
       throw new Error(`Entry not found for key '${entryKey}'`);
     }
 
-    return result;
+    return new MetricResult(entryResult.metric, entry);
   }
 
   async toOptionalEntryGivenKey(
@@ -535,7 +549,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       bucketIdentifier.dimensionKey
     );
     if (dimension == null) {
-      return undefined;
+      return new MetricResult(undefined, undefined);
     }
 
     return dimension.toOptionalBucketGivenKey(
@@ -568,9 +582,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
           );
           return new MetricResult(writeResult.metric, undefined);
         } else {
+          const createdAtEpochMs = (entry as PortableEntry<T>).createdAtEpochMs;
           const createdAt =
-            entry.createdAtEpochMs != null
-              ? Instant.givenEpochMilliseconds(entry.createdAtEpochMs)
+            createdAtEpochMs != null
+              ? Instant.givenEpochMilliseconds(createdAtEpochMs)
               : undefined;
 
           const writeResult = await this.writeEntryData(
@@ -630,7 +645,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       ObjectUtil.objectIsDeepEqual(oldPropertyValues, propertyValues)
     ) {
       // nothing changed
-      return;
+      return new MetricResult(metric, entry!);
     }
 
     const now = Instant.ofNow();
@@ -689,7 +704,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     metric.addChildMetric(existingRecordResult.metric);
 
     if (existingRecord == null) {
-      return;
+      return new MetricResult(metric, undefined);
     }
 
     const change: EntryChange<T> = {

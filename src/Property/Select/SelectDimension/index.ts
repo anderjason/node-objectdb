@@ -98,8 +98,9 @@ export class SelectDimension<T>
       );
 
       const bucket = bucketResult.value;
-
-      yield bucket;
+      if (bucket != null) {
+        yield bucket;
+      }
     }
   }
 

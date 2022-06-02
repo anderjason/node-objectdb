@@ -5,10 +5,14 @@ export class Benchmark {
   private bucketSize: number;
   private startTime: number;
   private durationPerBucket: number = 0;
-  private bucketDidFinish: () => void;
+  private bucketDidFinish?: () => void;
   private countSize: number;
 
-  constructor(totalCount: number, bucketSize?: number, bucketDidFinish?: () => void) {
+  constructor(
+    totalCount: number,
+    bucketSize?: number,
+    bucketDidFinish?: () => void
+  ) {
     this.totalCount = totalCount;
     this.countSize = String(totalCount).length;
     this.counted = 0;
@@ -20,10 +24,15 @@ export class Benchmark {
   log(message: string): void {
     this.counted += 1;
     const countedStr = String(this.counted).padStart(this.countSize);
-        
-    console.log(`${message} (${countedStr}/${this.totalCount}, ${this.durationPerBucket}ms per ${this.bucketSize})`);
 
-    if (this.counted === this.totalCount || this.counted % this.bucketSize === 0) {
+    console.log(
+      `${message} (${countedStr}/${this.totalCount}, ${this.durationPerBucket}ms per ${this.bucketSize})`
+    );
+
+    if (
+      this.counted === this.totalCount ||
+      this.counted % this.bucketSize === 0
+    ) {
       const now = new Date().getTime();
 
       this.durationPerBucket = now - this.startTime;

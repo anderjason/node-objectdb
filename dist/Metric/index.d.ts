@@ -11,7 +11,7 @@ export declare class Metric {
     get isRunning(): boolean;
     get durationMs(): number | undefined;
     constructor(name: string);
-    addChildMetric(metric?: Metric): Metric;
+    addChildMetric(metric?: Metric): void;
     stop(): void;
     toPortableObject(): PortableMetric;
 }
