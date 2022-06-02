@@ -36,9 +36,9 @@ class MaterializedBucket extends skytree_1.PropsObject {
             },
             $push: { entryKeys: entryKey },
         }, { upsert: true });
-        await this.props.db
-            .collection("buckets")
-            .findOne({ key: this.props.identifier.bucketKey });
+        // await this.props.db
+        //   .collection<any>("buckets")
+        //   .findOne({ key: this.props.identifier.bucketKey });
         return new __1.MetricResult(metric, undefined);
     }
     async deleteEntryKey(entryKey) {

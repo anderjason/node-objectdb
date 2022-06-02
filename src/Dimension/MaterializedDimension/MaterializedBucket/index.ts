@@ -57,9 +57,9 @@ export class MaterializedBucket<T>
       { upsert: true }
     );
 
-    await this.props.db
-      .collection<any>("buckets")
-      .findOne({ key: this.props.identifier.bucketKey });
+    // await this.props.db
+    //   .collection<any>("buckets")
+    //   .findOne({ key: this.props.identifier.bucketKey });
 
     return new MetricResult(metric, undefined);
   }
