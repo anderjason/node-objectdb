@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SlowResult = exports.MaterializedDimension = exports.LiveDimension = exports.ObjectDb = exports.MongoDb = exports.Entry = exports.Benchmark = void 0;
+exports.SlowResult = exports.MaterializedDimension = exports.LiveDimension = exports.MetricResult = exports.Metric = exports.ObjectDb = exports.MongoDb = exports.Entry = exports.Benchmark = void 0;
 const Entry_1 = require("./Entry");
 Object.defineProperty(exports, "Entry", { enumerable: true, get: function () { return Entry_1.Entry; } });
 const ObjectDb_1 = require("./ObjectDb");
@@ -15,4 +15,7 @@ const MaterializedDimension_1 = require("./Dimension/MaterializedDimension");
 Object.defineProperty(exports, "MaterializedDimension", { enumerable: true, get: function () { return MaterializedDimension_1.MaterializedDimension; } });
 const SlowResult_1 = require("./SlowResult");
 Object.defineProperty(exports, "SlowResult", { enumerable: true, get: function () { return SlowResult_1.SlowResult; } });
+const Metric_1 = require("./Metric");
+Object.defineProperty(exports, "Metric", { enumerable: true, get: function () { return Metric_1.Metric; } });
+Object.defineProperty(exports, "MetricResult", { enumerable: true, get: function () { return Metric_1.MetricResult; } });
 //# sourceMappingURL=index.js.map

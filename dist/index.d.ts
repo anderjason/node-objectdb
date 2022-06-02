@@ -6,4 +6,5 @@ import { Bucket } from "./Dimension";
 import { LiveDimension } from "./Dimension/LiveDimension";
 import { MaterializedDimension } from "./Dimension/MaterializedDimension";
 import { SlowResult } from "./SlowResult";
-export { Benchmark, Entry, MongoDb, ObjectDb, LiveDimension, MaterializedDimension, Bucket, SlowResult, };
+import { Metric, MetricResult } from "./Metric";
+export { Benchmark, Entry, MongoDb, ObjectDb, Metric, MetricResult, LiveDimension, MaterializedDimension, Bucket, SlowResult, };
