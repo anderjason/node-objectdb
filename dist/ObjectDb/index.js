@@ -403,8 +403,9 @@ class ObjectDb extends skytree_1.Actor {
         return new SlowResult_1.SlowResult({
             getItems: () => this.toBuckets(),
             fn: async (bucket) => {
-                const hasItem = await bucket.hasEntryKey(entryKey);
-                return hasItem ? bucket.identifier : undefined;
+                const hasItemResult = await bucket.hasEntryKey(entryKey);
+                const hasItem = hasItemResult.value;
+                return hasItem == true ? bucket.identifier : undefined;
             },
         });
     }
