@@ -494,7 +494,9 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
         if (entry != null) {
           const rebuildResult = await this.rebuildMetadataGivenEntry(entry);
-          console.log(JSON.stringify(rebuildResult, null, 2));
+          console.log(
+            JSON.stringify(rebuildResult.metric?.toPortableObject(), null, 2)
+          );
         }
       },
     });

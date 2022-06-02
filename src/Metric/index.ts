@@ -43,13 +43,11 @@ export class Metric {
   }
 
   toPortableObject(): PortableMetric {
-    if (this._durationMs == null) {
-      throw new Error("Cannot serialize a metric that is still running");
-    }
+    this.stop();
 
     const result: PortableMetric = {
       name: this.name,
-      durationMs: this._durationMs,
+      durationMs: this._durationMs!,
     };
 
     if (this.children.length > 0) {

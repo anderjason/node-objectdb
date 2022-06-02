@@ -28,9 +28,7 @@ class Metric {
         this._startTime = undefined;
     }
     toPortableObject() {
-        if (this._durationMs == null) {
-            throw new Error("Cannot serialize a metric that is still running");
-        }
+        this.stop();
         const result = {
             name: this.name,
             durationMs: this._durationMs,

@@ -358,11 +358,12 @@ class ObjectDb extends skytree_1.Actor {
             getItems: () => this.allEntryKeys(),
             getTotalCount: () => this.toEntryCount(),
             fn: async (entryKey) => {
+                var _a;
                 const entryResult = await this.toOptionalEntryGivenKey(entryKey);
                 const entry = entryResult.value;
                 if (entry != null) {
                     const rebuildResult = await this.rebuildMetadataGivenEntry(entry);
-                    console.log(JSON.stringify(rebuildResult, null, 2));
+                    console.log(JSON.stringify((_a = rebuildResult.metric) === null || _a === void 0 ? void 0 : _a.toPortableObject(), null, 2));
                 }
             },
         });
