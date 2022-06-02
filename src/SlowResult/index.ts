@@ -16,7 +16,10 @@ export interface SlowResultProps<TO, TI = any> {
 
 export type SlowResultStatus = "busy" | "done" | "error";
 
-async function* defaultGetItems<TI>(): AsyncGenerator<TI> {}
+async function* defaultGetItems<TI>(): AsyncGenerator<TI> {
+  // return one item, even though the type doesn't match
+  yield undefined as any;
+}
 
 export class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, TI>> {
   readonly key = StringUtil.stringOfRandomCharacters(8);

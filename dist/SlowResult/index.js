@@ -23,7 +23,12 @@ exports.SlowResult = void 0;
 const observable_1 = require("@anderjason/observable");
 const util_1 = require("@anderjason/util");
 const skytree_1 = require("skytree");
-function defaultGetItems() { return __asyncGenerator(this, arguments, function* defaultGetItems_1() { }); }
+function defaultGetItems() {
+    return __asyncGenerator(this, arguments, function* defaultGetItems_1() {
+        // return one item, even though the type doesn't match
+        yield yield __await(undefined);
+    });
+}
 class SlowResult extends skytree_1.Actor {
     constructor() {
         super(...arguments);
