@@ -199,25 +199,37 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
   }
 
-  private async *allEntryKeys(): AsyncGenerator<string> {
-    const entries = this._db.collection<PortableEntry<any>>("entries").find(
+  private async allEntryKeys(): Promise<MetricResult<AsyncGenerator<string>>> {
+    const metric = new Metric("allEntryKeys");
+
+    const collection = this._db.collection<PortableEntry<any>>("entries");
+    const entries = collection.find(
       {},
       {
         projection: { key: 1 },
       }
     );
 
-    for await (const document of entries) {
-      yield document.key;
+    async function* inner() {
+      for await (const document of entries) {
+        yield document.key;
+      }
+
+      await entries.close();
     }
+
+    return new MetricResult(metric, inner());
   }
 
-  async *toEntryKeys(
+  async toEntryKeys(
     options: ObjectDbReadOptions = {}
-  ): AsyncGenerator<string> {
+  ): Promise<MetricResult<AsyncGenerator<string>>> {
+    const metric = new Metric("toEntryKeys");
+
     let entryKeys: string[] | undefined = undefined;
 
-    await this.ensureIdle();
+    const ensureIdleResult = await this.ensureIdle();
+    metric.addChildMetric(ensureIdleResult.metric);
 
     let fullCacheKey: number | undefined = undefined;
     if (options.cacheKey != null) {
@@ -229,6 +241,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
           bucketIdentifier
         );
         const bucket = bucketResult.value;
+        metric.addChildMetric(bucketResult.metric);
 
         if (bucket != null) {
           buckets.push(bucket);
@@ -252,8 +265,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     if (entryKeys == null) {
       if (ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
+        const entryKeysResult = await this.allEntryKeys();
+        metric.addChildMetric(entryKeysResult.metric);
+
         entryKeys = await IterableUtil.arrayGivenAsyncIterable(
-          this.allEntryKeys()
+          entryKeysResult.value
         );
       } else {
         const sets: Set<string>[] = [];
@@ -309,15 +325,20 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     const result = entryKeys.slice(start, end);
 
-    for (const i of result) {
-      yield i;
+    async function* inner() {
+      for (const i of result) {
+        yield i;
+      }
     }
+
+    return new MetricResult(metric, inner());
   }
 
   // TC: O(N)
   async forEach(fn: (entry: Entry<T>) => Promise<void>): Promise<void> {
-    const entryKeys = this.allEntryKeys();
-    for await (const entryKey of entryKeys) {
+    const entryKeysResult = await this.allEntryKeys();
+
+    for await (const entryKey of entryKeysResult.value) {
       const entryResult = await this.toOptionalEntryGivenKey(entryKey);
       const entry = entryResult.value;
 
@@ -327,46 +348,80 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     }
   }
 
-  async hasEntry(entryKey: string): Promise<boolean> {
-    const keys = await IterableUtil.arrayGivenAsyncIterable(this.toEntryKeys());
-    return keys.includes(entryKey);
+  async hasEntry(entryKey: string): Promise<MetricResult<boolean>> {
+    const metric = new Metric("hasEntry");
+
+    const entryKeysResult = await this.toEntryKeys();
+    metric.addChildMetric(entryKeysResult.metric);
+
+    const keys = await IterableUtil.arrayGivenAsyncIterable(
+      entryKeysResult.value
+    );
+    const value = keys.includes(entryKey);
+
+    return new MetricResult(metric, value);
   }
 
   async toEntryCount(
     filter?: BucketIdentifier[],
     cacheKey?: string
-  ): Promise<number> {
-    return IterableUtil.countGivenAsyncIterable(
-      this.toEntryKeys({
-        filter,
-        cacheKey,
-      })
+  ): Promise<MetricResult<number>> {
+    const metric = new Metric("toEntryCount");
+
+    const entryKeysResult = await this.toEntryKeys({
+      filter,
+      cacheKey,
+    });
+    metric.addChildMetric(entryKeysResult.metric);
+
+    const value = await IterableUtil.countGivenAsyncIterable(
+      entryKeysResult.value
     );
+
+    return new MetricResult(metric, value);
   }
 
-  async *toEntries(
+  async toEntries(
     options: ObjectDbReadOptions = {}
-  ): AsyncGenerator<Entry<T>> {
-    for await (const entryKey of this.toEntryKeys(options)) {
-      const entryResult = await this.toOptionalEntryGivenKey(entryKey);
-      const entry = entryResult.value;
+  ): Promise<MetricResult<AsyncGenerator<Entry<T>>>> {
+    const metric = new Metric("toEntries");
 
-      if (entry != null) {
-        yield entry;
+    const entryKeysResult = await this.toEntryKeys(options);
+    metric.addChildMetric(metric);
+
+    const self = this;
+    async function* inner() {
+      for await (const entryKey of entryKeysResult.value) {
+        const entryResult = await self.toOptionalEntryGivenKey(entryKey);
+        const entry = entryResult.value;
+        metric.addChildMetric(entryResult.metric);
+
+        if (entry != null) {
+          yield entry;
+        }
       }
     }
+
+    return new MetricResult(metric, inner());
   }
 
   async toOptionalFirstEntry(
     options: ObjectDbReadOptions = {}
-  ): Promise<Entry<T> | undefined> {
-    return IterableUtil.optionalNthValueGivenAsyncIterable(
-      this.toEntries({
-        ...options,
-        limit: 1,
-      }),
+  ): Promise<MetricResult<Entry<T> | undefined>> {
+    const metric = new Metric("toOptionalFirstEntry");
+
+    const entriesResult = await this.toEntries({
+      ...options,
+      limit: 1,
+    });
+    metric.addChildMetric(entriesResult.metric);
+
+    const result = await IterableUtil.optionalNthValueGivenAsyncIterable(
+      entriesResult.value,
       0
     );
+
+    return new MetricResult(metric, result);
   }
 
   async toEntryGivenKey(entryKey: string): Promise<MetricResult<Entry<T>>> {
@@ -409,8 +464,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     return new MetricResult(metric, result);
   }
 
-  async toDimensions(): Promise<Dimension<T>[]> {
-    const result = [...this._dimensions];
+  async toDimensions(): Promise<MetricResult<Dimension<T>[]>> {
+    const metric = new Metric("toDimensions");
+
+    const result: Dimension<T>[] = [...this._dimensions];
 
     for (const property of this._propertyByKey.values()) {
       const propertyDimensions = await property.toDimensions();
@@ -423,7 +480,7 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
       await dimension.init(this._db);
     }
 
-    return result;
+    return new MetricResult(metric, result);
   }
 
   async writeProperty(definition: PropertyDefinition): Promise<void> {
@@ -469,10 +526,11 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
   ): Promise<MetricResult<void>> {
     const metric = new Metric("rebuildMetadataGivenEntry");
 
-    const dimensions = await this.toDimensions();
+    const dimensionsResult = await this.toDimensions();
+    metric.addChildMetric(dimensionsResult.metric);
 
     const metricResults = await Promise.all(
-      dimensions.map((dimension) => dimension.rebuildEntry(entry))
+      dimensionsResult.value.map((dimension) => dimension.rebuildEntry(entry))
     );
 
     for (const metricResult of metricResults) {
@@ -486,8 +544,14 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     console.log(`Rebuilding metadata for ${this.props.label}...`);
 
     return new SlowResult({
-      getItems: () => this.allEntryKeys(),
-      getTotalCount: () => this.toEntryCount(),
+      getItems: async () => {
+        const entryKeysResult = await this.allEntryKeys();
+        return entryKeysResult.value;
+      },
+      getTotalCount: async () => {
+        const entryCountResult = await this.toEntryCount();
+        return entryCountResult.value;
+      },
       fn: async (entryKey) => {
         const entryResult = await this.toOptionalEntryGivenKey(entryKey);
         const entry = entryResult.value;
@@ -502,18 +566,29 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
     });
   }
 
-  async *toBuckets(): AsyncGenerator<Bucket> {
-    const dimensions = await this.toDimensions();
-    for await (const dimension of dimensions) {
-      for await (const bucket of dimension.toBuckets()) {
-        yield bucket;
+  async toBuckets(): Promise<MetricResult<AsyncGenerator<Bucket>>> {
+    const metric = new Metric("toBuckets");
+
+    const dimensionsResult = await this.toDimensions();
+    metric.addChildMetric(dimensionsResult.metric);
+
+    async function* inner() {
+      for await (const dimension of dimensionsResult.value) {
+        for await (const bucket of dimension.toBuckets()) {
+          yield bucket;
+        }
       }
     }
+
+    return new MetricResult(metric, inner());
   }
 
   toBucketsGivenEntryKey(entryKey: string): SlowResult<BucketIdentifier> {
     return new SlowResult({
-      getItems: () => this.toBuckets(),
+      getItems: async () => {
+        const bucketsResult = await this.toBuckets();
+        return bucketsResult.value;
+      },
       fn: async (bucket) => {
         const hasItemResult = await bucket.hasEntryKey(entryKey);
         const hasItem = hasItemResult.value;
@@ -524,29 +599,42 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
   async toOptionalDimensionGivenKey(
     dimensionKey: string
-  ): Promise<Dimension<T> | undefined> {
+  ): Promise<MetricResult<Dimension<T> | undefined>> {
+    const metric = new Metric("dimensionKey");
+
     if (dimensionKey == null) {
-      return undefined;
+      return new MetricResult(metric, undefined);
     }
 
-    const dimensions = await this.toDimensions();
-    return dimensions.find((d) => d.key === dimensionKey);
+    const dimensionsResult = await this.toDimensions();
+    metric.addChildMetric(dimensionsResult.metric);
+
+    const result = dimensionsResult.value.find((d) => d.key === dimensionKey);
+
+    return new MetricResult(metric, result);
   }
 
   async toOptionalBucketGivenIdentifier(
     bucketIdentifier: BucketIdentifier
   ): Promise<MetricResult<Bucket | undefined>> {
-    const dimension = await this.toOptionalDimensionGivenKey(
+    const metric = new Metric("toOptionalBucketGivenIdentifier");
+
+    const dimensionResult = await this.toOptionalDimensionGivenKey(
       bucketIdentifier.dimensionKey
     );
-    if (dimension == null) {
-      return new MetricResult(undefined, undefined);
+    metric.addChildMetric(dimensionResult.metric);
+
+    if (dimensionResult.value == null) {
+      return new MetricResult(metric, undefined);
     }
 
-    return dimension.toOptionalBucketGivenKey(
+    const bucketResult = await dimensionResult.value.toOptionalBucketGivenKey(
       bucketIdentifier.bucketKey,
       bucketIdentifier.bucketLabel
     );
+    metric.addChildMetric(bucketResult.metric);
+
+    return new MetricResult(metric, bucketResult.value);
   }
 
   async writeEntry(
@@ -706,8 +794,10 @@ export class ObjectDb<T> extends Actor<ObjectDbProps<T>> {
 
     this.entryWillChange.emit(change);
 
-    const dimensions = await this.toDimensions();
-    for (const dimension of dimensions) {
+    const dimensionsResult = await this.toDimensions();
+    metric.addChildMetric(dimensionsResult.metric);
+
+    for (const dimension of dimensionsResult.value) {
       await dimension.deleteEntryKey(entryKey);
     }
 

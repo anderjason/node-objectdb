@@ -71,9 +71,9 @@ class SlowResult extends skytree_1.Actor {
             this._totalCount = await this.props.getTotalCount();
         }
         // if getItems is not provided, fn will be called one time with an undefined item
-        let items = this.props.getItems != null
+        let items = await (this.props.getItems != null
             ? this.props.getItems()
-            : defaultGetItems();
+            : defaultGetItems());
         try {
             for (var items_1 = __asyncValues(items), items_1_1; items_1_1 = await items_1.next(), !items_1_1.done;) {
                 const item = items_1_1.value;

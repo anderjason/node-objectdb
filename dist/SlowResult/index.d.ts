@@ -3,7 +3,7 @@ import { Actor } from "skytree";
 export interface SlowResultProps<TO, TI = any> {
     fn: (item: TI) => Promise<TO | undefined>;
     label?: string;
-    getItems?: () => AsyncGenerator<TI>;
+    getItems?: () => Promise<AsyncGenerator<TI>>;
     getTotalCount?: () => Promise<number>;
 }
 export declare type SlowResultStatus = "busy" | "done" | "error";

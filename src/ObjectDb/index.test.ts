@@ -185,11 +185,17 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
       ],
     });
 
-    Test.assert(resultOne != null, "Result one should not be null");
-    Test.assert(resultTwo != null, "Result two should not be null");
-    Test.assert(resultThree == null, "Result three should be null");
-    Test.assert(resultOne!.key === one.key, "Result one key should be equal");
-    Test.assert(resultTwo!.key === two.key, "Result two key should be equal");
+    Test.assert(resultOne.value != null, "Result one should not be null");
+    Test.assert(resultTwo.value != null, "Result two should not be null");
+    Test.assert(resultThree.value == null, "Result three should be null");
+    Test.assert(
+      resultOne!.value!.key === one.key,
+      "Result one key should be equal"
+    );
+    Test.assert(
+      resultTwo!.value!.key === two.key,
+      "Result two key should be equal"
+    );
 
     const count = await objectDb.toEntryCount([
       {
@@ -198,7 +204,7 @@ Test.define("ObjectDb can find entries by bucket identifier", async () => {
         bucketLabel: "two",
       },
     ]);
-    Test.assert(count === 1, "Count should be 1");
+    Test.assert(count.value === 1, "Count should be 1");
 
     objectDb.deactivate();
   });
@@ -244,7 +250,7 @@ Test.define("ObjectDb can find entry count by bucket identifier", async () => {
       },
     ]);
 
-    Test.assertIsEqual(count, 2, "Count should be equal");
+    Test.assertIsEqual(count.value, 2, "Count should be equal");
 
     objectDb.deactivate();
   });
@@ -544,17 +550,20 @@ Test.define(
       const bucket = await dim.toOptionalBucketGivenKey("5");
       Test.assert(bucket != null, "bucket should not be null");
 
+      const entriesResult = await objectDb.toEntries({
+        filter: [
+          {
+            dimensionKey: "number",
+            bucketKey: "5",
+            bucketLabel: "5",
+          },
+        ],
+      });
+
       const entries = await IterableUtil.arrayGivenAsyncIterable(
-        objectDb.toEntries({
-          filter: [
-            {
-              dimensionKey: "number",
-              bucketKey: "5",
-              bucketLabel: "5",
-            },
-          ],
-        })
+        entriesResult.value
       );
+
       Test.assert(entries.length == 1, "entries should have one entry");
       Test.assert(
         entries.some((e) => e.key == odd.key),
@@ -588,16 +597,18 @@ Test.define("ObjectDb live dimensions are case insensitive", async () => {
     });
     const apple = appleResult.value;
 
+    const entriesResult = await objectDb.toEntries({
+      filter: [
+        {
+          dimensionKey: "message",
+          bucketKey: "apple",
+          bucketLabel: "Apple",
+        },
+      ],
+    });
+
     const entries = await IterableUtil.arrayGivenAsyncIterable(
-      objectDb.toEntries({
-        filter: [
-          {
-            dimensionKey: "message",
-            bucketKey: "apple",
-            bucketLabel: "Apple",
-          },
-        ],
-      })
+      entriesResult.value
     );
 
     Test.assert(entries.length == 1, "entries should have one entry");

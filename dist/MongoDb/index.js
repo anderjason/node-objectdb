@@ -54,6 +54,10 @@ class MongoDb extends skytree_1.Actor {
         client.connect().then(() => {
             this._isConnected.setValue(true);
         });
+        client.addListener("close", () => {
+            console.log("Detected disconnection in MongoDb/index.ts");
+            this._isConnected.setValue(false);
+        });
     }
     async ensureConnected() {
         await this._isConnected.toPromise((v) => v == true);

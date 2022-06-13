@@ -128,105 +128,119 @@ class ObjectDb extends skytree_1.Actor {
             return new Metric_1.MetricResult(metric, entry);
         });
     }
-    allEntryKeys() {
-        return __asyncGenerator(this, arguments, function* allEntryKeys_1() {
-            var e_1, _a;
-            const entries = this._db.collection("entries").find({}, {
-                projection: { key: 1 },
-            });
-            try {
-                for (var entries_1 = __asyncValues(entries), entries_1_1; entries_1_1 = yield __await(entries_1.next()), !entries_1_1.done;) {
-                    const document = entries_1_1.value;
-                    yield yield __await(document.key);
-                }
-            }
-            catch (e_1_1) { e_1 = { error: e_1_1 }; }
-            finally {
+    async allEntryKeys() {
+        const metric = new Metric_1.Metric("allEntryKeys");
+        const collection = this._db.collection("entries");
+        const entries = collection.find({}, {
+            projection: { key: 1 },
+        });
+        function inner() {
+            return __asyncGenerator(this, arguments, function* inner_1() {
+                var e_1, _a;
                 try {
-                    if (entries_1_1 && !entries_1_1.done && (_a = entries_1.return)) yield __await(_a.call(entries_1));
+                    for (var entries_1 = __asyncValues(entries), entries_1_1; entries_1_1 = yield __await(entries_1.next()), !entries_1_1.done;) {
+                        const document = entries_1_1.value;
+                        yield yield __await(document.key);
+                    }
                 }
-                finally { if (e_1) throw e_1.error; }
-            }
-        });
+                catch (e_1_1) { e_1 = { error: e_1_1 }; }
+                finally {
+                    try {
+                        if (entries_1_1 && !entries_1_1.done && (_a = entries_1.return)) yield __await(_a.call(entries_1));
+                    }
+                    finally { if (e_1) throw e_1.error; }
+                }
+                yield __await(entries.close());
+            });
+        }
+        return new Metric_1.MetricResult(metric, inner());
     }
-    toEntryKeys(options = {}) {
+    async toEntryKeys(options = {}) {
         var _a;
-        return __asyncGenerator(this, arguments, function* toEntryKeys_1() {
-            let entryKeys = undefined;
-            yield __await(this.ensureIdle());
-            let fullCacheKey = undefined;
-            if (options.cacheKey != null) {
-                const bucketIdentifiers = (_a = options.filter) !== null && _a !== void 0 ? _a : [];
-                const buckets = [];
-                for (const bucketIdentifier of bucketIdentifiers) {
-                    const bucketResult = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
+        const metric = new Metric_1.Metric("toEntryKeys");
+        let entryKeys = undefined;
+        const ensureIdleResult = await this.ensureIdle();
+        metric.addChildMetric(ensureIdleResult.metric);
+        let fullCacheKey = undefined;
+        if (options.cacheKey != null) {
+            const bucketIdentifiers = (_a = options.filter) !== null && _a !== void 0 ? _a : [];
+            const buckets = [];
+            for (const bucketIdentifier of bucketIdentifiers) {
+                const bucketResult = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
+                const bucket = bucketResult.value;
+                metric.addChildMetric(bucketResult.metric);
+                if (bucket != null) {
+                    buckets.push(bucket);
+                }
+            }
+            const hashCodes = buckets.map((bucket) => (0, Dimension_1.hashCodeGivenBucketIdentifier)(bucket.identifier));
+            const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
+            fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
+        }
+        if (fullCacheKey != null) {
+            const cacheData = this._caches.get(fullCacheKey);
+            if (cacheData != null) {
+                entryKeys = cacheData.entryKeys;
+            }
+        }
+        if (entryKeys == null) {
+            if (util_1.ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
+                const entryKeysResult = await this.allEntryKeys();
+                metric.addChildMetric(entryKeysResult.metric);
+                entryKeys = await util_1.IterableUtil.arrayGivenAsyncIterable(entryKeysResult.value);
+            }
+            else {
+                const sets = [];
+                for (const bucketIdentifier of options.filter) {
+                    const bucketResult = await this.toOptionalBucketGivenIdentifier(bucketIdentifier);
                     const bucket = bucketResult.value;
-                    if (bucket != null) {
-                        buckets.push(bucket);
+                    if (bucket == null) {
+                        sets.push(new Set());
+                    }
+                    else {
+                        const entryKeysResult = await bucket.toEntryKeys();
+                        const entryKeys = entryKeysResult.value;
+                        sets.push(entryKeys);
                     }
                 }
-                const hashCodes = buckets.map((bucket) => (0, Dimension_1.hashCodeGivenBucketIdentifier)(bucket.identifier));
-                const cacheKeyData = `${options.cacheKey}:${hashCodes.join(",")}`;
-                fullCacheKey = util_1.StringUtil.hashCodeGivenString(cacheKeyData);
+                entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
             }
-            if (fullCacheKey != null) {
-                const cacheData = this._caches.get(fullCacheKey);
-                if (cacheData != null) {
-                    entryKeys = cacheData.entryKeys;
+            if (options.shuffle == true) {
+                entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (e) => Math.random(), "ascending");
+            }
+        }
+        if (options.cacheKey != null &&
+            fullCacheKey != null &&
+            !this._caches.has(fullCacheKey)) {
+            this._caches.set(fullCacheKey, {
+                entryKeys,
+            });
+        }
+        let start = 0;
+        let end = entryKeys.length;
+        if (options.offset != null) {
+            start = parseInt(options.offset, 10);
+        }
+        if (options.limit != null) {
+            end = Math.min(end, start + parseInt(options.limit, 10));
+        }
+        const result = entryKeys.slice(start, end);
+        function inner() {
+            return __asyncGenerator(this, arguments, function* inner_2() {
+                for (const i of result) {
+                    yield yield __await(i);
                 }
-            }
-            if (entryKeys == null) {
-                if (util_1.ArrayUtil.arrayIsEmptyOrNull(options.filter)) {
-                    entryKeys = yield __await(util_1.IterableUtil.arrayGivenAsyncIterable(this.allEntryKeys()));
-                }
-                else {
-                    const sets = [];
-                    for (const bucketIdentifier of options.filter) {
-                        const bucketResult = yield __await(this.toOptionalBucketGivenIdentifier(bucketIdentifier));
-                        const bucket = bucketResult.value;
-                        if (bucket == null) {
-                            sets.push(new Set());
-                        }
-                        else {
-                            const entryKeysResult = yield __await(bucket.toEntryKeys());
-                            const entryKeys = entryKeysResult.value;
-                            sets.push(entryKeys);
-                        }
-                    }
-                    entryKeys = Array.from(util_1.SetUtil.intersectionGivenSets(sets));
-                }
-                if (options.shuffle == true) {
-                    entryKeys = util_1.ArrayUtil.arrayWithOrderFromValue(entryKeys, (e) => Math.random(), "ascending");
-                }
-            }
-            if (options.cacheKey != null &&
-                fullCacheKey != null &&
-                !this._caches.has(fullCacheKey)) {
-                this._caches.set(fullCacheKey, {
-                    entryKeys,
-                });
-            }
-            let start = 0;
-            let end = entryKeys.length;
-            if (options.offset != null) {
-                start = parseInt(options.offset, 10);
-            }
-            if (options.limit != null) {
-                end = Math.min(end, start + parseInt(options.limit, 10));
-            }
-            const result = entryKeys.slice(start, end);
-            for (const i of result) {
-                yield yield __await(i);
-            }
-        });
+            });
+        }
+        return new Metric_1.MetricResult(metric, inner());
     }
     // TC: O(N)
     async forEach(fn) {
         var e_2, _a;
-        const entryKeys = this.allEntryKeys();
+        const entryKeysResult = await this.allEntryKeys();
         try {
-            for (var entryKeys_1 = __asyncValues(entryKeys), entryKeys_1_1; entryKeys_1_1 = await entryKeys_1.next(), !entryKeys_1_1.done;) {
-                const entryKey = entryKeys_1_1.value;
+            for (var _b = __asyncValues(entryKeysResult.value), _c; _c = await _b.next(), !_c.done;) {
+                const entryKey = _c.value;
                 const entryResult = await this.toOptionalEntryGivenKey(entryKey);
                 const entry = entryResult.value;
                 if (entry != null) {
@@ -237,45 +251,65 @@ class ObjectDb extends skytree_1.Actor {
         catch (e_2_1) { e_2 = { error: e_2_1 }; }
         finally {
             try {
-                if (entryKeys_1_1 && !entryKeys_1_1.done && (_a = entryKeys_1.return)) await _a.call(entryKeys_1);
+                if (_c && !_c.done && (_a = _b.return)) await _a.call(_b);
             }
             finally { if (e_2) throw e_2.error; }
         }
     }
     async hasEntry(entryKey) {
-        const keys = await util_1.IterableUtil.arrayGivenAsyncIterable(this.toEntryKeys());
-        return keys.includes(entryKey);
+        const metric = new Metric_1.Metric("hasEntry");
+        const entryKeysResult = await this.toEntryKeys();
+        metric.addChildMetric(entryKeysResult.metric);
+        const keys = await util_1.IterableUtil.arrayGivenAsyncIterable(entryKeysResult.value);
+        const value = keys.includes(entryKey);
+        return new Metric_1.MetricResult(metric, value);
     }
     async toEntryCount(filter, cacheKey) {
-        return util_1.IterableUtil.countGivenAsyncIterable(this.toEntryKeys({
+        const metric = new Metric_1.Metric("toEntryCount");
+        const entryKeysResult = await this.toEntryKeys({
             filter,
             cacheKey,
-        }));
+        });
+        metric.addChildMetric(entryKeysResult.metric);
+        const value = await util_1.IterableUtil.countGivenAsyncIterable(entryKeysResult.value);
+        return new Metric_1.MetricResult(metric, value);
     }
-    toEntries(options = {}) {
-        return __asyncGenerator(this, arguments, function* toEntries_1() {
-            var e_3, _a;
-            try {
-                for (var _b = __asyncValues(this.toEntryKeys(options)), _c; _c = yield __await(_b.next()), !_c.done;) {
-                    const entryKey = _c.value;
-                    const entryResult = yield __await(this.toOptionalEntryGivenKey(entryKey));
-                    const entry = entryResult.value;
-                    if (entry != null) {
-                        yield yield __await(entry);
+    async toEntries(options = {}) {
+        const metric = new Metric_1.Metric("toEntries");
+        const entryKeysResult = await this.toEntryKeys(options);
+        metric.addChildMetric(metric);
+        const self = this;
+        function inner() {
+            return __asyncGenerator(this, arguments, function* inner_3() {
+                var e_3, _a;
+                try {
+                    for (var _b = __asyncValues(entryKeysResult.value), _c; _c = yield __await(_b.next()), !_c.done;) {
+                        const entryKey = _c.value;
+                        const entryResult = yield __await(self.toOptionalEntryGivenKey(entryKey));
+                        const entry = entryResult.value;
+                        metric.addChildMetric(entryResult.metric);
+                        if (entry != null) {
+                            yield yield __await(entry);
+                        }
                     }
                 }
-            }
-            catch (e_3_1) { e_3 = { error: e_3_1 }; }
-            finally {
-                try {
-                    if (_c && !_c.done && (_a = _b.return)) yield __await(_a.call(_b));
+                catch (e_3_1) { e_3 = { error: e_3_1 }; }
+                finally {
+                    try {
+                        if (_c && !_c.done && (_a = _b.return)) yield __await(_a.call(_b));
+                    }
+                    finally { if (e_3) throw e_3.error; }
                 }
-                finally { if (e_3) throw e_3.error; }
-            }
-        });
+            });
+        }
+        return new Metric_1.MetricResult(metric, inner());
     }
     async toOptionalFirstEntry(options = {}) {
-        return util_1.IterableUtil.optionalNthValueGivenAsyncIterable(this.toEntries(Object.assign(Object.assign({}, options), { limit: 1 })), 0);
+        const metric = new Metric_1.Metric("toOptionalFirstEntry");
+        const entriesResult = await this.toEntries(Object.assign(Object.assign({}, options), { limit: 1 }));
+        metric.addChildMetric(entriesResult.metric);
+        const result = await util_1.IterableUtil.optionalNthValueGivenAsyncIterable(entriesResult.value, 0);
+        return new Metric_1.MetricResult(metric, result);
     }
     async toEntryGivenKey(entryKey) {
         const entryResult = await this.toOptionalEntryGivenKey(entryKey);
@@ -306,6 +340,7 @@ class ObjectDb extends skytree_1.Actor {
         return new Metric_1.MetricResult(metric, result);
     }
     async toDimensions() {
+        const metric = new Metric_1.Metric("toDimensions");
         const result = [...this._dimensions];
         for (const property of this._propertyByKey.values()) {
             const propertyDimensions = await property.toDimensions();
@@ -316,7 +351,7 @@ class ObjectDb extends skytree_1.Actor {
         for (const dimension of result) {
             await dimension.init(this._db);
         }
-        return result;
+        return new Metric_1.MetricResult(metric, result);
     }
     async writeProperty(definition) {
         let property;
@@ -345,8 +380,9 @@ class ObjectDb extends skytree_1.Actor {
     }
     async rebuildMetadataGivenEntry(entry) {
         const metric = new Metric_1.Metric("rebuildMetadataGivenEntry");
-        const dimensions = await this.toDimensions();
-        const metricResults = await Promise.all(dimensions.map((dimension) => dimension.rebuildEntry(entry)));
+        const dimensionsResult = await this.toDimensions();
+        metric.addChildMetric(dimensionsResult.metric);
+        const metricResults = await Promise.all(dimensionsResult.value.map((dimension) => dimension.rebuildEntry(entry)));
         for (const metricResult of metricResults) {
             metric.addChildMetric(metricResult.metric);
         }
@@ -355,8 +391,14 @@ class ObjectDb extends skytree_1.Actor {
     rebuildMetadata() {
         console.log(`Rebuilding metadata for ${this.props.label}...`);
         return new SlowResult_1.SlowResult({
-            getItems: () => this.allEntryKeys(),
-            getTotalCount: () => this.toEntryCount(),
+            getItems: async () => {
+                const entryKeysResult = await this.allEntryKeys();
+                return entryKeysResult.value;
+            },
+            getTotalCount: async () => {
+                const entryCountResult = await this.toEntryCount();
+                return entryCountResult.value;
+            },
             fn: async (entryKey) => {
                 var _a;
                 const entryResult = await this.toOptionalEntryGivenKey(entryKey);
@@ -368,40 +410,48 @@ class ObjectDb extends skytree_1.Actor {
             },
         });
     }
-    toBuckets() {
-        return __asyncGenerator(this, arguments, function* toBuckets_1() {
-            var e_4, _a, e_5, _b;
-            const dimensions = yield __await(this.toDimensions());
-            try {
-                for (var dimensions_1 = __asyncValues(dimensions), dimensions_1_1; dimensions_1_1 = yield __await(dimensions_1.next()), !dimensions_1_1.done;) {
-                    const dimension = dimensions_1_1.value;
-                    try {
-                        for (var _c = (e_5 = void 0, __asyncValues(dimension.toBuckets())), _d; _d = yield __await(_c.next()), !_d.done;) {
-                            const bucket = _d.value;
-                            yield yield __await(bucket);
-                        }
-                    }
-                    catch (e_5_1) { e_5 = { error: e_5_1 }; }
-                    finally {
-                        try {
-                            if (_d && !_d.done && (_b = _c.return)) yield __await(_b.call(_c));
-                        }
-                        finally { if (e_5) throw e_5.error; }
-                    }
-                }
-            }
-            catch (e_4_1) { e_4 = { error: e_4_1 }; }
-            finally {
+    async toBuckets() {
+        const metric = new Metric_1.Metric("toBuckets");
+        const dimensionsResult = await this.toDimensions();
+        metric.addChildMetric(dimensionsResult.metric);
+        function inner() {
+            return __asyncGenerator(this, arguments, function* inner_4() {
+                var e_4, _a, e_5, _b;
                 try {
-                    if (dimensions_1_1 && !dimensions_1_1.done && (_a = dimensions_1.return)) yield __await(_a.call(dimensions_1));
+                    for (var _c = __asyncValues(dimensionsResult.value), _d; _d = yield __await(_c.next()), !_d.done;) {
+                        const dimension = _d.value;
+                        try {
+                            for (var _e = (e_5 = void 0, __asyncValues(dimension.toBuckets())), _f; _f = yield __await(_e.next()), !_f.done;) {
+                                const bucket = _f.value;
+                                yield yield __await(bucket);
+                            }
+                        }
+                        catch (e_5_1) { e_5 = { error: e_5_1 }; }
+                        finally {
+                            try {
+                                if (_f && !_f.done && (_b = _e.return)) yield __await(_b.call(_e));
+                            }
+                            finally { if (e_5) throw e_5.error; }
+                        }
+                    }
                 }
-                finally { if (e_4) throw e_4.error; }
-            }
-        });
+                catch (e_4_1) { e_4 = { error: e_4_1 }; }
+                finally {
+                    try {
+                        if (_d && !_d.done && (_a = _c.return)) yield __await(_a.call(_c));
+                    }
+                    finally { if (e_4) throw e_4.error; }
+                }
+            });
+        }
+        return new Metric_1.MetricResult(metric, inner());
     }
     toBucketsGivenEntryKey(entryKey) {
         return new SlowResult_1.SlowResult({
-            getItems: () => this.toBuckets(),
+            getItems: async () => {
+                const bucketsResult = await this.toBuckets();
+                return bucketsResult.value;
+            },
             fn: async (bucket) => {
                 const hasItemResult = await bucket.hasEntryKey(entryKey);
                 const hasItem = hasItemResult.value;
@@ -410,18 +460,25 @@ class ObjectDb extends skytree_1.Actor {
         });
     }
     async toOptionalDimensionGivenKey(dimensionKey) {
+        const metric = new Metric_1.Metric("dimensionKey");
         if (dimensionKey == null) {
-            return undefined;
+            return new Metric_1.MetricResult(metric, undefined);
         }
-        const dimensions = await this.toDimensions();
-        return dimensions.find((d) => d.key === dimensionKey);
+        const dimensionsResult = await this.toDimensions();
+        metric.addChildMetric(dimensionsResult.metric);
+        const result = dimensionsResult.value.find((d) => d.key === dimensionKey);
+        return new Metric_1.MetricResult(metric, result);
     }
     async toOptionalBucketGivenIdentifier(bucketIdentifier) {
-        const dimension = await this.toOptionalDimensionGivenKey(bucketIdentifier.dimensionKey);
-        if (dimension == null) {
-            return new Metric_1.MetricResult(undefined, undefined);
+        const metric = new Metric_1.Metric("toOptionalBucketGivenIdentifier");
+        const dimensionResult = await this.toOptionalDimensionGivenKey(bucketIdentifier.dimensionKey);
+        metric.addChildMetric(dimensionResult.metric);
+        if (dimensionResult.value == null) {
+            return new Metric_1.MetricResult(metric, undefined);
         }
-        return dimension.toOptionalBucketGivenKey(bucketIdentifier.bucketKey, bucketIdentifier.bucketLabel);
+        const bucketResult = await dimensionResult.value.toOptionalBucketGivenKey(bucketIdentifier.bucketKey, bucketIdentifier.bucketLabel);
+        metric.addChildMetric(bucketResult.metric);
+        return new Metric_1.MetricResult(metric, bucketResult.value);
     }
     async writeEntry(entry) {
         if (entry == null) {
@@ -528,8 +585,9 @@ class ObjectDb extends skytree_1.Actor {
             oldData: existingRecord.data,
         };
         this.entryWillChange.emit(change);
-        const dimensions = await this.toDimensions();
-        for (const dimension of dimensions) {
+        const dimensionsResult = await this.toDimensions();
+        metric.addChildMetric(dimensionsResult.metric);
+        for (const dimension of dimensionsResult.value) {
             await dimension.deleteEntryKey(entryKey);
         }
         await this._db.collection("entries").deleteOne({ key: entryKey });

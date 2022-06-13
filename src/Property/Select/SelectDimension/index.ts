@@ -1,10 +1,9 @@
-import { Stopwatch } from "@anderjason/time";
 import { ValuePath } from "@anderjason/util";
 import { PropsObject } from "skytree";
-import { Bucket, BucketIdentifier, Dimension } from "../../../Dimension";
 import { Entry, Metric, MetricResult, MongoDb } from "../../..";
-import { SelectProperty } from "../SelectProperty";
+import { Bucket, BucketIdentifier, Dimension } from "../../../Dimension";
 import { LiveBucket } from "../../../Dimension/LiveDimension/LiveBucket";
+import { SelectProperty } from "../SelectProperty";
 
 export interface SelectDimensionProps {
   property: SelectProperty;

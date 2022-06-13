@@ -1,6 +1,6 @@
 import { PropsObject } from "skytree";
-import { Bucket, BucketIdentifier, Dimension } from "../../../Dimension";
 import { Entry, MetricResult, MongoDb } from "../../..";
+import { Bucket, BucketIdentifier, Dimension } from "../../../Dimension";
 import { SelectProperty } from "../SelectProperty";
 export interface SelectDimensionProps {
     property: SelectProperty;

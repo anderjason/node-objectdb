@@ -48,7 +48,7 @@ export class MongoDb extends Actor<MongoDbProps> {
     this.connect();
   }
 
-  private async connect() {
+  private async connect(): Promise<void> {
     let cert: string | undefined = undefined;
 
     if (process.env.MONGODB_CERT) {
@@ -75,6 +75,11 @@ export class MongoDb extends Actor<MongoDbProps> {
 
     client.connect().then(() => {
       this._isConnected.setValue(true);
+    });
+
+    client.addListener("close", () => {
+      console.log("Detected disconnection in MongoDb/index.ts");
+      this._isConnected.setValue(false);
     });
   }
 

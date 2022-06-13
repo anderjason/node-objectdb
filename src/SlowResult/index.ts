@@ -10,7 +10,7 @@ export interface SlowResultProps<TO, TI = any> {
   fn: (item: TI) => Promise<TO | undefined>;
 
   label?: string;
-  getItems?: () => AsyncGenerator<TI>;
+  getItems?: () => Promise<AsyncGenerator<TI>>;
   getTotalCount?: () => Promise<number>;
 }
 
@@ -70,10 +70,9 @@ export class SlowResult<TO, TI = any> extends Actor<SlowResultProps<TO, TI>> {
     }
 
     // if getItems is not provided, fn will be called one time with an undefined item
-    let items =
-      this.props.getItems != null
-        ? this.props.getItems()
-        : defaultGetItems<TI>();
+    let items = await (this.props.getItems != null
+      ? this.props.getItems()
+      : defaultGetItems<TI>());
 
     for await (const item of items) {
       if (this.isActive == false) {
